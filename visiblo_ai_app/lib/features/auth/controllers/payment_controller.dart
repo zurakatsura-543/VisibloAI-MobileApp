@@ -1,0 +1,1246 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+
+import '../../../app/services/local_auth_service.dart';
+import '../models/auth_me_response.dart';
+import '../models/payment_models.dart';
+import '../models/settings_models.dart';
+import '../models/subscription_payment_record.dart';
+import '../models/test_account.dart';
+import '../services/auth_api_service.dart';
+
+class PaymentController extends GetxController {
+  PaymentController({
+    AuthApiService? authApiService,
+    LocalAuthService? localAuthService,
+  }) : _authApiService = authApiService ?? Get.find<AuthApiService>(),
+       _localAuthService = localAuthService ?? Get.find<LocalAuthService>();
+
+  static const _gstRate = 0.18;
+
+  final AuthApiService _authApiService;
+  final LocalAuthService _localAuthService;
+
+  final isLoading = true.obs;
+  final isRefreshing = false.obs;
+  final isApplyingCoupon = false.obs;
+  final isVerifyingPayment = false.obs;
+  final errorMessage = RxnString();
+  final infoMessage = RxnString();
+  final selectedPlanCode = 'PRO'.obs;
+  final selectedBillingCycle = 'monthly'.obs;
+  final selectedBillingMode = 'MANUAL'.obs;
+  final checkoutPlanCode = RxnString();
+  final couponCode = ''.obs;
+  final remoteProfile = Rxn<AuthMeResponse>();
+  final workspaceSettings = Rxn<WorkspaceSettingsResponse>();
+  final couponResult = Rxn<BillingCouponValidationResult>();
+  final checkoutContext = Rxn<BillingCheckoutContext>();
+  final subscriptionStatus = Rxn<BillingSubscriptionStatus>();
+  final billingUsage = Rxn<BillingUsageInfo>();
+
+  final couponCodeController = TextEditingController();
+
+  Razorpay? _razorpay;
+  BillingPlanDefinition? _pendingPlan;
+  BillingOrderResponse? _pendingOrder;
+  BillingSubscriptionCheckoutResponse? _pendingSubscriptionCheckout;
+  String _pendingBillingCycle = 'monthly';
+  bool _isSyncingCouponInput = false;
+  bool _hasUserOverriddenBillingCycle = false;
+  bool _hasUserOverriddenBillingMode = false;
+
+  @override
+  void onInit() {
+    super.onInit();
+    couponCodeController.addListener(_handleCouponChanged);
+    _setupRazorpay();
+    unawaited(loadInitialData());
+  }
+
+  @override
+  void onClose() {
+    couponCodeController
+      ..removeListener(_handleCouponChanged)
+      ..dispose();
+    _razorpay?.clear();
+    super.onClose();
+  }
+
+  TestAccount? get currentUser => _localAuthService.currentUser.value;
+
+  List<BillingPlanDefinition> get plans {
+    final catalogs = checkoutContext.value?.plans ?? const <BillingPlanCatalog>[];
+    if (catalogs.isEmpty) {
+      return BillingPlanDefinition.plans;
+    }
+    return catalogs.map(BillingPlanDefinition.fromCatalog).toList(growable: false);
+  }
+
+  BillingPlanDefinition get selectedPlan {
+    return BillingPlanDefinition.forCode(selectedPlanCode.value);
+  }
+
+  String get activePlanCode {
+    final remotePlan = _firstNonEmpty(<String>[
+      checkoutContext.value?.subscription?.plan ?? '',
+      subscriptionStatus.value?.subscription?.plan ?? '',
+      _stringValue(remoteProfile.value?.subscription['plan']),
+    ]);
+    if (remotePlan.isNotEmpty) {
+      return remotePlan.toUpperCase();
+    }
+    return recommendedPlanCode;
+  }
+
+  BillingPlanDefinition get activePlan {
+    return BillingPlanDefinition.forCode(activePlanCode);
+  }
+
+  int get managedProfilesCount {
+    final profileCount = remoteProfile.value?.availableBusinesses.length ?? 0;
+    return profileCount <= 0 ? 1 : profileCount;
+  }
+
+  String get recommendedPlanCode {
+    return BillingPlanDefinition.recommendedCodeForProfileCount(
+      managedProfilesCount,
+    );
+  }
+
+  String get businessName {
+    final values = <String>[
+      checkoutContext.value?.business.name ?? '',
+      workspaceSettings.value?.business.name ?? '',
+      remoteProfile.value?.businessName ?? '',
+      currentUser?.businessName ?? '',
+      'Your Business',
+    ];
+    return _firstNonEmpty(values);
+  }
+
+  String get ownerName {
+    final values = <String>[
+      workspaceSettings.value?.user.name ?? '',
+      currentUser?.fullName ?? '',
+      businessName,
+    ];
+    return _firstNonEmpty(values);
+  }
+
+  String get customerEmail {
+    final values = <String>[
+      workspaceSettings.value?.user.email ?? '',
+      remoteProfile.value?.email ?? '',
+      currentUser?.email ?? '',
+    ];
+    return _firstNonEmpty(values);
+  }
+
+  String get customerPhone {
+    final values = <String>[
+      workspaceSettings.value?.location.phone ?? '',
+      currentUser?.phoneNumber ?? '',
+    ];
+    return _firstNonEmpty(values);
+  }
+
+  bool get supportsNativeCheckout {
+    return !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
+  }
+
+  String get subscriptionStatusRaw {
+    final subStatus = _firstNonEmpty(<String>[
+      checkoutContext.value?.subscription?.status ?? '',
+      subscriptionStatus.value?.subscription?.status ?? '',
+      _stringValue(remoteProfile.value?.subscription['status']),
+    ]);
+    if (subStatus.isNotEmpty) {
+      return subStatus.toUpperCase();
+    }
+    return billingUiState.state;
+  }
+
+  bool get hasActiveSubscription {
+    const inactiveStates = <String>{
+      'NOT_ACTIVATED',
+      'PAYMENT_REQUIRED',
+      'CANCELLED',
+      'AUTOPAY_PAYMENT_FAILED',
+    };
+    if (inactiveStates.contains(billingUiState.state)) {
+      return false;
+    }
+    if (billingUiState.state.isNotEmpty) {
+      return true;
+    }
+    final status = subscriptionStatusRaw.toUpperCase();
+    return status == 'ACTIVE' ||
+        status == 'TRIAL_ACTIVE' ||
+        status == 'TRIALING' ||
+        remoteProfile.value?.subscriptionActive == true;
+  }
+
+  String get subscriptionStatusLabel {
+    final status = billingUiState.state.isNotEmpty
+        ? billingUiState.state
+        : subscriptionStatusRaw;
+    if (status.isEmpty) {
+      return 'Not activated';
+    }
+    return status.replaceAll('_', ' ').toLowerCase();
+  }
+
+  String get activeBillingCycle {
+    final cycle = _firstNonEmpty(<String>[
+      checkoutContext.value?.subscription?.billingCycle ?? '',
+      subscriptionStatus.value?.subscription?.billingCycle ?? '',
+      _stringValue(remoteProfile.value?.subscription['billingCycle']),
+    ]);
+    if (cycle.isNotEmpty) {
+      return normalizeBillingCycle(cycle);
+    }
+    return normalizeBillingCycle(selectedBillingCycle.value);
+  }
+
+  String get activeBillingMode {
+    final mode = _firstNonEmpty(<String>[
+      checkoutContext.value?.subscription?.billingMode ?? '',
+      subscriptionStatus.value?.autopay?.enabled == true ? 'AUTOPAY' : '',
+    ]);
+    return mode.isEmpty ? 'MANUAL' : mode.toUpperCase();
+  }
+
+  String get renewalLabel {
+    final parsed = renewalDate;
+    if (parsed == null) {
+      return 'Not scheduled';
+    }
+    return _formatDate(parsed);
+  }
+
+  DateTime? get renewalDate {
+    final rawValue = _firstNonEmpty(<String>[
+      subscriptionStatus.value?.autopay?.nextBillingAt ?? '',
+      checkoutContext.value?.subscription?.expiresAt ?? '',
+      subscriptionStatus.value?.subscription?.expiresAt ?? '',
+      _stringValue(remoteProfile.value?.subscription['expiresAt']),
+      _stringValue(remoteProfile.value?.subscription['trialEndsAt']),
+      currentUser?.subscriptionRenewalDateIso ?? '',
+    ]);
+    if (rawValue.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(rawValue);
+  }
+
+  String get compactRenewalLabel {
+    final parsed = renewalDate;
+    if (parsed == null) {
+      return 'Not scheduled';
+    }
+    return _formatMonthDay(parsed);
+  }
+
+  int get daysRemaining {
+    final parsed = renewalDate;
+    if (parsed == null) {
+      return 0;
+    }
+    return parsed.difference(DateTime.now()).inDays.clamp(0, 999);
+  }
+
+  double get renewalProgress {
+    final totalDays = activeBillingCycle == 'yearly' ? 365 : 30;
+    final remaining = daysRemaining.clamp(0, totalDays);
+    final consumed = totalDays - remaining;
+    final progress = consumed / totalDays;
+    return progress.clamp(0.08, 1.0);
+  }
+
+  int get activePlanMonthlyDisplayInr {
+    return activePlan.priceFor(activeBillingCycle);
+  }
+
+  int get currentSubscriptionAmountPaise {
+    return _intValue(remoteProfile.value?.subscription['amount']);
+  }
+
+  List<SubscriptionPaymentRecord> get paymentHistory {
+    final localHistory = currentUser?.subscriptionPaymentHistory ?? const [];
+    if (localHistory.isNotEmpty) {
+      final sorted = List<SubscriptionPaymentRecord>.from(localHistory)
+        ..sort((a, b) => b.paidOnIso.compareTo(a.paidOnIso));
+      return List<SubscriptionPaymentRecord>.unmodifiable(sorted);
+    }
+
+    final amountPaise = currentSubscriptionAmountPaise;
+    if (amountPaise <= 0) {
+      return const <SubscriptionPaymentRecord>[];
+    }
+
+    final paidOn = renewalDate?.subtract(
+      Duration(days: activeBillingCycle == 'yearly' ? 365 : 30),
+    );
+    return <SubscriptionPaymentRecord>[
+      SubscriptionPaymentRecord(
+        planId: _localPlanIdFor(activePlanCode),
+        billingCycle: activeBillingCycle,
+        amountInr: (amountPaise / 100).round(),
+        paidOnIso: (paidOn ?? DateTime.now()).toIso8601String(),
+      ),
+    ];
+  }
+
+  bool get autoRenewEnabled {
+    final status = subscriptionStatus.value?.autopay;
+    if (status != null) {
+      return status.enabled && !status.cancelRequested;
+    }
+    final checkoutSubscription = checkoutContext.value?.subscription;
+    if (checkoutSubscription != null) {
+      return checkoutSubscription.autopayEnabled &&
+          !checkoutSubscription.cancelAtPeriodEnd;
+    }
+    return false;
+  }
+
+  String get selectedPaymentMethodId {
+    final method = currentUser?.subscriptionPaymentMethodId.trim() ?? '';
+    if (method.isNotEmpty) {
+      return method.toLowerCase();
+    }
+    return 'visa';
+  }
+
+  int get estimatedSubtotalInr {
+    return selectedPlan.subtotalFor(selectedBillingCycle.value);
+  }
+
+  int get estimatedDiscountInr {
+    return (couponResult.value?.discountAmountPaise ?? 0) ~/ 100;
+  }
+
+  int get estimatedDiscountedSubtotalInr {
+    final discounted = estimatedSubtotalInr - estimatedDiscountInr;
+    if (discounted < 0) {
+      return 0;
+    }
+    return discounted;
+  }
+
+  int get estimatedGstInr {
+    return (estimatedDiscountedSubtotalInr * _gstRate).round();
+  }
+
+  int get estimatedTotalInr {
+    if (couponResult.value?.skipPayment == true) {
+      return 0;
+    }
+    return estimatedDiscountedSubtotalInr + estimatedGstInr;
+  }
+
+  bool get hasAppliedCoupon => couponResult.value != null;
+
+  bool get isCheckoutBusy {
+    return checkoutPlanCode.value != null || isVerifyingPayment.value;
+  }
+
+  bool get isSelectedPlanBusy {
+    return isVerifyingPayment.value ||
+        checkoutPlanCode.value == selectedPlan.code;
+  }
+
+  BillingUiState get billingUiState {
+    return checkoutContext.value?.uiState ??
+        subscriptionStatus.value?.uiState ??
+        const BillingUiState(
+          state: 'NOT_ACTIVATED',
+          tone: 'warning',
+          warnings: <BillingWarning>[],
+          actions: BillingUiActions(
+            canStartTrial: false,
+            canPayManual: true,
+            canEnableAutopay: true,
+            canCancelAutopay: false,
+            canResumeAutopay: false,
+            canRetryPayment: false,
+            canUpgrade: true,
+          ),
+        );
+  }
+
+  List<BillingWarning> get billingWarnings => billingUiState.warnings;
+
+  bool get supportsManualCheckout =>
+      checkoutContext.value?.paymentModes.manual.available ?? true;
+
+  bool get supportsAutopayCheckout =>
+      supportsNativeCheckout &&
+      (checkoutContext.value?.paymentModes.autopay.available ?? true);
+
+  bool get canCancelAutopay => billingUiState.actions.canCancelAutopay;
+
+  bool get canResumeAutopay => billingUiState.actions.canResumeAutopay;
+
+  String get checkoutButtonLabel {
+    if (isVerifyingPayment.value) {
+      return 'Verifying payment...';
+    }
+    if (checkoutPlanCode.value == selectedPlan.code) {
+      return selectedBillingMode.value == 'AUTOPAY'
+          ? 'Opening AutoPay...'
+          : 'Opening Razorpay...';
+    }
+    if (couponResult.value?.skipPayment == true) {
+      return 'Apply free coupon';
+    }
+    if (selectedBillingMode.value == 'AUTOPAY') {
+      if (!supportsAutopayCheckout) {
+        return 'AutoPay available on Android or iPhone';
+      }
+      if (canResumeAutopay) {
+        return 'Resume AutoPay';
+      }
+      return 'Enable AutoPay with Razorpay';
+    }
+    if (!supportsNativeCheckout) {
+      return 'Checkout available on Android or iPhone';
+    }
+    if (selectedPlan.code == activePlanCode && hasActiveSubscription) {
+      return 'Renew this plan';
+    }
+    return 'Pay securely with Razorpay';
+  }
+
+  Future<void> loadInitialData({
+    bool manualRefresh = false,
+    bool preserveInfoMessage = false,
+    bool syncSelectionToActivePlan = false,
+  }) async {
+    if (manualRefresh) {
+      isRefreshing.value = true;
+    } else {
+      isLoading.value = true;
+    }
+
+    errorMessage.value = null;
+    if (!preserveInfoMessage) {
+      infoMessage.value = null;
+    }
+
+    try {
+      final results = await Future.wait<dynamic>(<Future<dynamic>>[
+        _settle(_authApiService.fetchMyData()),
+        _settle(_authApiService.fetchWorkspaceSettings()),
+        _settle(_authApiService.fetchBillingCheckoutContext()),
+        _settle(_authApiService.fetchBillingSubscriptionStatus()),
+        _settle(_authApiService.fetchBillingUsage()),
+      ]);
+
+      final profileResult = results[0] as _SettledResult<AuthMeResponse>;
+      final settingsResult =
+          results[1] as _SettledResult<WorkspaceSettingsResponse>;
+      final checkoutContextResult =
+          results[2] as _SettledResult<BillingCheckoutContext>;
+      final subscriptionStatusResult =
+          results[3] as _SettledResult<BillingSubscriptionStatus>;
+      final usageResult = results[4] as _SettledResult<BillingUsageInfo>;
+
+      final profile = profileResult.value;
+      if (profile == null) {
+        throw profileResult.error ??
+            Exception('Unable to load your billing details right now.');
+      }
+
+      final checkout = checkoutContextResult.value;
+      if (checkout == null) {
+        throw checkoutContextResult.error ??
+            Exception('Unable to load your billing checkout details right now.');
+      }
+
+      remoteProfile.value = profile;
+      checkoutContext.value = checkout;
+      subscriptionStatus.value = subscriptionStatusResult.value;
+      billingUsage.value = usageResult.value;
+      if (settingsResult.value != null) {
+        workspaceSettings.value = settingsResult.value;
+      }
+
+      final nextCycle = normalizeBillingCycle(
+        _firstNonEmpty(<String>[
+          checkout.subscription?.billingCycle ?? '',
+          subscriptionStatus.value?.subscription?.billingCycle ?? '',
+          _stringValue(profile.subscription['billingCycle']),
+          selectedBillingCycle.value,
+        ]),
+      );
+      if (syncSelectionToActivePlan ||
+          !_hasUserOverriddenBillingCycle ||
+          selectedBillingCycle.value.trim().isEmpty) {
+        selectedBillingCycle.value = nextCycle;
+        if (syncSelectionToActivePlan) {
+          _hasUserOverriddenBillingCycle = false;
+        }
+      }
+
+      final nextPlanCode = _firstNonEmpty(<String>[
+        checkout.subscription?.plan ?? '',
+        subscriptionStatus.value?.subscription?.plan ?? '',
+        _stringValue(profile.subscription['plan']).toUpperCase(),
+        recommendedPlanCode,
+      ]).toUpperCase();
+      if (syncSelectionToActivePlan || selectedPlanCode.value.trim().isEmpty) {
+        selectedPlanCode.value = nextPlanCode;
+      } else {
+        final current = selectedPlanCode.value.trim().toUpperCase();
+        final exists = plans.any((plan) => plan.code == current);
+        if (!exists) {
+          selectedPlanCode.value = nextPlanCode;
+        }
+      }
+
+      final nextMode = _firstNonEmpty(<String>[
+        checkout.recommendedMode,
+        checkout.subscription?.billingMode ?? '',
+        'MANUAL',
+      ]).toUpperCase();
+      if (syncSelectionToActivePlan ||
+          !_hasUserOverriddenBillingMode ||
+          selectedBillingMode.value.trim().isEmpty) {
+        selectedBillingMode.value = nextMode;
+        if (syncSelectionToActivePlan) {
+          _hasUserOverriddenBillingMode = false;
+        }
+      }
+
+      await _syncLocalUser(profile);
+    } catch (error) {
+      errorMessage.value = _humanizeError(
+        error,
+        fallback: 'Failed to load billing details.',
+      );
+    } finally {
+      isLoading.value = false;
+      isRefreshing.value = false;
+    }
+  }
+
+  Future<void> refreshData() async {
+    await loadInitialData(manualRefresh: true, preserveInfoMessage: true);
+  }
+
+  void selectPlan(String planCode) {
+    final normalized = planCode.trim().toUpperCase();
+    if (normalized.isEmpty || normalized == selectedPlanCode.value) {
+      return;
+    }
+    selectedPlanCode.value = normalized;
+    _clearCouponState();
+  }
+
+  void setBillingCycle(String cycle) {
+    final normalized = normalizeBillingCycle(cycle);
+    if (normalized == selectedBillingCycle.value) {
+      return;
+    }
+    _hasUserOverriddenBillingCycle = true;
+    selectedBillingCycle.value = normalized;
+    _clearCouponState();
+  }
+
+  void setBillingMode(String mode) {
+    final normalized = mode.trim().toUpperCase();
+    if (normalized.isEmpty || normalized == selectedBillingMode.value) {
+      return;
+    }
+    _hasUserOverriddenBillingMode = true;
+    selectedBillingMode.value = normalized == 'AUTOPAY' ? 'AUTOPAY' : 'MANUAL';
+    _clearCouponState();
+  }
+
+  Future<void> applyCoupon() async {
+    if (isApplyingCoupon.value || isCheckoutBusy) {
+      return;
+    }
+
+    final code = couponCode.value.trim().toUpperCase();
+    if (code.isEmpty) {
+      errorMessage.value = 'Enter a coupon code first.';
+      return;
+    }
+
+    isApplyingCoupon.value = true;
+    errorMessage.value = null;
+    infoMessage.value = null;
+
+    try {
+      final result = await _authApiService.validateBillingCoupon(
+        code: code,
+        plan: selectedPlan.code,
+        billingCycle: selectedBillingCycle.value,
+      );
+
+      if (!result.valid) {
+        couponResult.value = null;
+        errorMessage.value = result.errorMessage.isNotEmpty
+            ? result.errorMessage
+            : 'This coupon is not valid for the selected plan.';
+        return;
+      }
+
+      couponResult.value = result;
+      final couponCodeLabel = result.coupon?.code.isNotEmpty == true
+          ? result.coupon!.code
+          : code;
+      if (result.skipPayment) {
+        infoMessage.value =
+            'Coupon $couponCodeLabel covers the full amount. You can activate the plan without opening Razorpay.';
+      } else {
+        infoMessage.value =
+            'Coupon $couponCodeLabel applied. The final checkout amount will be confirmed by the server order.';
+      }
+    } catch (error) {
+      errorMessage.value = _humanizeError(
+        error,
+        fallback: 'Unable to validate this coupon right now.',
+      );
+    } finally {
+      isApplyingCoupon.value = false;
+    }
+  }
+
+  void removeCoupon() {
+    _clearCouponState(clearInput: true);
+    infoMessage.value = 'Coupon removed.';
+  }
+
+  Future<void> checkoutSelectedPlan() async {
+    if (isCheckoutBusy) {
+      return;
+    }
+
+    if (selectedBillingMode.value == 'AUTOPAY') {
+      await _startAutopayCheckout();
+      return;
+    }
+
+    if (couponResult.value?.skipPayment == true) {
+      await _applyFreeCoupon();
+      return;
+    }
+
+    if (!supportsNativeCheckout) {
+      errorMessage.value =
+          'Razorpay mobile checkout is available on Android and iPhone only.';
+      return;
+    }
+
+    final plan = selectedPlan;
+    checkoutPlanCode.value = plan.code;
+    errorMessage.value = null;
+    infoMessage.value = null;
+
+    try {
+      final order = await _authApiService.createBillingOrder(
+        plan: plan.code,
+        billingCycle: selectedBillingCycle.value,
+        couponCode: hasAppliedCoupon ? couponCode.value : null,
+        businessId: checkoutContext.value?.business.id,
+      );
+
+      if (order.orderId.trim().isEmpty ||
+          order.razorpayKeyId.trim().isEmpty ||
+          order.amount <= 0) {
+        throw Exception(
+          'The backend returned an incomplete Razorpay order payload.',
+        );
+      }
+
+      _pendingPlan = plan;
+      _pendingOrder = order;
+      _pendingBillingCycle = selectedBillingCycle.value;
+
+      final prefill = <String, dynamic>{};
+      final name = ownerName.trim();
+      final email = customerEmail.trim();
+      final phone = customerPhone.trim();
+      if (name.isNotEmpty) {
+        prefill['name'] = name;
+      }
+      if (email.isNotEmpty) {
+        prefill['email'] = email;
+      }
+      if (phone.isNotEmpty) {
+        prefill['contact'] = phone;
+      }
+
+      final options = <String, dynamic>{
+        'key': order.razorpayKeyId,
+        'amount': order.amount,
+        'currency': order.currency,
+        'name': 'VisibloAI',
+        'description':
+            '${plan.name} - ${selectedBillingCycle.value == 'yearly' ? 'Annual' : 'Monthly'} Plan',
+        'order_id': order.orderId,
+        'prefill': prefill,
+        'theme': <String, dynamic>{'color': '#17A2B8'},
+        'retry': <String, dynamic>{'enabled': true, 'max_count': 4},
+        'send_sms_hash': true,
+      };
+
+      _razorpay?.open(options);
+    } catch (error) {
+      _clearPendingCheckout();
+      errorMessage.value = _humanizeError(
+        error,
+        fallback: 'Failed to initiate Razorpay checkout. Please try again.',
+      );
+    } finally {
+      if (checkoutPlanCode.value == plan.code && _pendingOrder == null) {
+        checkoutPlanCode.value = null;
+      }
+    }
+  }
+
+  void clearError() {
+    errorMessage.value = null;
+  }
+
+  void clearInfo() {
+    infoMessage.value = null;
+  }
+
+  Future<void> updateAutoRenew(bool enabled) async {
+    if (enabled == autoRenewEnabled) {
+      return;
+    }
+    if (enabled) {
+      await resumeAutopay();
+      return;
+    }
+    await cancelAutopay();
+  }
+
+  Future<void> updatePreferredPaymentMethod(String methodId) async {
+    final savedUser = currentUser;
+    final normalized = methodId.trim().toLowerCase();
+    if (savedUser == null ||
+        normalized.isEmpty ||
+        savedUser.subscriptionPaymentMethodId.toLowerCase() == normalized) {
+      return;
+    }
+
+    await _localAuthService.updateCurrentUser(
+      savedUser.copyWith(subscriptionPaymentMethodId: normalized),
+    );
+    infoMessage.value =
+        '${_paymentMethodLabel(normalized)} selected for your next checkout.';
+  }
+
+  void _handleCouponChanged() {
+    if (_isSyncingCouponInput) {
+      return;
+    }
+    couponCode.value = couponCodeController.text.trim().toUpperCase();
+    if (errorMessage.value != null) {
+      errorMessage.value = null;
+    }
+  }
+
+  void _setupRazorpay() {
+    if (!supportsNativeCheckout) {
+      return;
+    }
+    final razorpay = Razorpay();
+    razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+    razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+    razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+    _razorpay = razorpay;
+  }
+
+  Future<void> _applyFreeCoupon() async {
+    if (isCheckoutBusy) {
+      return;
+    }
+
+    final code = couponCode.value.trim().toUpperCase();
+    if (code.isEmpty) {
+      errorMessage.value =
+          'A valid coupon code is required to activate the free checkout path.';
+      return;
+    }
+
+    checkoutPlanCode.value = selectedPlan.code;
+    errorMessage.value = null;
+    infoMessage.value = null;
+
+    try {
+      await _authApiService.applyBillingCoupon(
+        code: code,
+        plan: selectedPlan.code,
+        billingCycle: selectedBillingCycle.value,
+      );
+      _clearCouponState(clearInput: true);
+      infoMessage.value =
+          'Plan activated successfully with coupon $code. Refreshing your account now...';
+      await loadInitialData(
+        manualRefresh: true,
+        preserveInfoMessage: true,
+        syncSelectionToActivePlan: true,
+      );
+      infoMessage.value =
+          'Coupon applied successfully. ${selectedPlan.name} is now active.';
+    } catch (error) {
+      errorMessage.value = _humanizeError(
+        error,
+        fallback: 'Unable to activate this coupon right now.',
+      );
+    } finally {
+      checkoutPlanCode.value = null;
+    }
+  }
+
+  Future<void> _startAutopayCheckout() async {
+    if (isCheckoutBusy) {
+      return;
+    }
+    if (!supportsAutopayCheckout) {
+      errorMessage.value =
+          'AutoPay checkout is available on Android and iPhone only.';
+      return;
+    }
+
+    if (couponResult.value?.skipPayment == true) {
+      errorMessage.value =
+          'AutoPay cannot be started with a 100% coupon. Use the free activation flow instead.';
+      return;
+    }
+
+    final plan = selectedPlan;
+    checkoutPlanCode.value = plan.code;
+    errorMessage.value = null;
+    infoMessage.value = null;
+
+    try {
+      final response = canResumeAutopay
+          ? await _authApiService.resumeBillingSubscription(
+              businessId: checkoutContext.value?.business.id,
+            )
+          : await _authApiService.createBillingSubscription(
+              plan: plan.code,
+              billingCycle: selectedBillingCycle.value,
+              couponCode: hasAppliedCoupon ? couponCode.value : null,
+              businessId: checkoutContext.value?.business.id,
+            );
+
+      if (response.alreadyActive && response.subscription != null) {
+        infoMessage.value =
+            'AutoPay is already active for this business. Refreshing billing details...';
+        await loadInitialData(
+          manualRefresh: true,
+          preserveInfoMessage: true,
+          syncSelectionToActivePlan: true,
+        );
+        return;
+      }
+
+      if (response.razorpaySubscriptionId.trim().isEmpty ||
+          response.razorpayKeyId.trim().isEmpty) {
+        throw Exception('The backend returned an incomplete AutoPay payload.');
+      }
+
+      _pendingPlan = plan;
+      _pendingBillingCycle = selectedBillingCycle.value;
+      _pendingSubscriptionCheckout = response;
+
+      final prefill = <String, dynamic>{};
+      final name = ownerName.trim();
+      final email = customerEmail.trim();
+      final phone = customerPhone.trim();
+      if (name.isNotEmpty) {
+        prefill['name'] = name;
+      }
+      if (email.isNotEmpty) {
+        prefill['email'] = email;
+      }
+      if (phone.isNotEmpty) {
+        prefill['contact'] = phone;
+      }
+
+      final options = <String, dynamic>{
+        'key': response.razorpayKeyId,
+        'subscription_id': response.razorpaySubscriptionId,
+        'name': 'VisibloAI',
+        'description':
+            '${plan.name} AutoPay - ${selectedBillingCycle.value == 'yearly' ? 'Annual' : 'Monthly'}',
+        'prefill': prefill,
+        'theme': <String, dynamic>{'color': '#17A2B8'},
+        'retry': <String, dynamic>{'enabled': true, 'max_count': 4},
+        'send_sms_hash': true,
+      };
+
+      _razorpay?.open(options);
+    } catch (error) {
+      _clearPendingCheckout();
+      errorMessage.value = _humanizeError(
+        error,
+        fallback: 'Unable to start AutoPay right now.',
+      );
+    } finally {
+      if (checkoutPlanCode.value == plan.code &&
+          _pendingSubscriptionCheckout == null &&
+          _pendingOrder == null) {
+        checkoutPlanCode.value = null;
+      }
+    }
+  }
+
+  Future<void> _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    final plan = _pendingPlan;
+    final order = _pendingOrder;
+    final autopayCheckout = _pendingSubscriptionCheckout;
+    final billingCycle = _pendingBillingCycle;
+    if (plan == null || (order == null && autopayCheckout == null)) {
+      _clearPendingCheckout();
+      errorMessage.value =
+          'Payment completed, but the checkout session could not be verified locally.';
+      return;
+    }
+
+    isVerifyingPayment.value = true;
+    errorMessage.value = null;
+    infoMessage.value = 'Payment received. Verifying with the server...';
+
+    try {
+      if (autopayCheckout != null) {
+        await _authApiService.verifyBillingSubscription(
+          razorpayPaymentId: response.paymentId?.trim() ?? '',
+          razorpaySubscriptionId: autopayCheckout.razorpaySubscriptionId,
+          razorpaySignature: response.signature?.trim() ?? '',
+          plan: plan.code,
+          billingCycle: billingCycle,
+          businessId: checkoutContext.value?.business.id,
+        );
+      } else {
+        await _authApiService.verifyBillingPayment(
+          razorpayOrderId: response.orderId?.trim().isNotEmpty == true
+              ? response.orderId!.trim()
+              : order!.orderId,
+          razorpayPaymentId: response.paymentId?.trim() ?? '',
+          razorpaySignature: response.signature?.trim() ?? '',
+          plan: plan.code,
+          billingCycle: billingCycle,
+          businessId: checkoutContext.value?.business.id,
+        );
+      }
+
+      await _recordSuccessfulLocalPayment(
+        plan: plan,
+        billingCycle: billingCycle,
+        amountPaise: order?.amount ?? selectedPlan.subtotalFor(billingCycle) * 100,
+      );
+      _clearCouponState(clearInput: true);
+      infoMessage.value =
+          'Payment confirmed. Refreshing your subscription details...';
+      await loadInitialData(
+        manualRefresh: true,
+        preserveInfoMessage: true,
+        syncSelectionToActivePlan: true,
+      );
+      infoMessage.value = autopayCheckout != null
+          ? 'AutoPay confirmed. ${plan.name} is now active.'
+          : 'Payment confirmed. ${plan.name} is now active.';
+    } catch (error) {
+      errorMessage.value = _humanizeError(
+        error,
+        fallback: 'Payment verification failed. Please contact support.',
+      );
+    } finally {
+      isVerifyingPayment.value = false;
+      _clearPendingCheckout();
+    }
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    final message = _stringValue(response.message);
+    if (message.toLowerCase().contains('cancel')) {
+      infoMessage.value = 'Payment cancelled. You can try again when ready.';
+    } else {
+      errorMessage.value = message.isNotEmpty
+          ? message
+          : 'Razorpay could not complete the payment.';
+    }
+    _clearPendingCheckout();
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    final walletName = _stringValue(response.walletName);
+    infoMessage.value = walletName.isEmpty
+        ? 'External wallet selected. Complete the flow to continue.'
+        : 'Continue the payment in $walletName to finish checkout.';
+    _clearPendingCheckout();
+  }
+
+  Future<void> _recordSuccessfulLocalPayment({
+    required BillingPlanDefinition plan,
+    required String billingCycle,
+    required int amountPaise,
+  }) async {
+    final savedUser = currentUser;
+    if (savedUser == null) {
+      return;
+    }
+
+    final localPlanId = _localPlanIdFor(plan.code);
+    final record = SubscriptionPaymentRecord(
+      planId: localPlanId,
+      billingCycle: normalizeBillingCycle(billingCycle),
+      amountInr: (amountPaise / 100).round(),
+      paidOnIso: DateTime.now().toIso8601String(),
+    );
+    final updatedHistory = <SubscriptionPaymentRecord>[
+      record,
+      ...savedUser.subscriptionPaymentHistory,
+    ].take(12).toList(growable: false);
+
+    await _localAuthService.updateCurrentUser(
+      savedUser.copyWith(
+        subscriptionPlanId: localPlanId,
+        subscriptionBillingCycle: normalizeBillingCycle(billingCycle),
+        subscriptionPaymentHistory: updatedHistory,
+      ),
+    );
+  }
+
+  Future<void> _syncLocalUser(AuthMeResponse profile) async {
+    final savedUser = currentUser;
+    if (savedUser == null) {
+      return;
+    }
+
+    final remotePlanCode = _stringValue(
+      checkoutContext.value?.subscription?.plan ??
+          subscriptionStatus.value?.subscription?.plan ??
+          profile.subscription['plan'],
+    ).toUpperCase();
+    final remoteCycle = normalizeBillingCycle(_firstNonEmpty(<String>[
+      checkoutContext.value?.subscription?.billingCycle ?? '',
+      subscriptionStatus.value?.subscription?.billingCycle ?? '',
+      _stringValue(profile.subscription['billingCycle']),
+    ]));
+    final renewalIso = _firstNonEmpty(<String>[
+      subscriptionStatus.value?.autopay?.nextBillingAt ?? '',
+      checkoutContext.value?.subscription?.expiresAt ?? '',
+      subscriptionStatus.value?.subscription?.expiresAt ?? '',
+      _stringValue(profile.subscription['expiresAt']),
+      _stringValue(profile.subscription['trialEndsAt']),
+      savedUser.subscriptionRenewalDateIso,
+    ]);
+
+    final updatedUser = savedUser.copyWith(
+      email: _firstNonEmpty(<String>[profile.email, savedUser.email]),
+      businessName: _firstNonEmpty(<String>[
+        profile.businessName,
+        savedUser.businessName,
+      ]),
+      googleBusinessProfileConnected:
+          profile.googleConnected || savedUser.googleBusinessProfileConnected,
+      backendUserId: profile.userId,
+      backendBusinessId: profile.businessId,
+      backendAuthenticated: profile.authenticated,
+      backendAvailableBusinesses: profile.availableBusinesses,
+      subscriptionPlanId: _localPlanIdFor(remotePlanCode),
+      subscriptionBillingCycle: remoteCycle,
+      subscriptionRenewalDateIso: renewalIso,
+    );
+
+    await _localAuthService.updateCurrentUser(updatedUser);
+  }
+
+  void _clearCouponState({bool clearInput = false}) {
+    couponResult.value = null;
+    if (clearInput) {
+      _isSyncingCouponInput = true;
+      couponCodeController.text = '';
+      _isSyncingCouponInput = false;
+      couponCode.value = '';
+    }
+  }
+
+  void _clearPendingCheckout() {
+    checkoutPlanCode.value = null;
+    _pendingPlan = null;
+    _pendingOrder = null;
+    _pendingSubscriptionCheckout = null;
+    _pendingBillingCycle = selectedBillingCycle.value;
+  }
+
+  Future<void> cancelAutopay({bool cancelAtPeriodEnd = true}) async {
+    if (!canCancelAutopay || isCheckoutBusy) {
+      return;
+    }
+    checkoutPlanCode.value = activePlanCode;
+    errorMessage.value = null;
+    infoMessage.value = null;
+    try {
+      await _authApiService.cancelBillingSubscription(
+        businessId: checkoutContext.value?.business.id,
+        cancelAtPeriodEnd: cancelAtPeriodEnd,
+      );
+      infoMessage.value = cancelAtPeriodEnd
+          ? 'AutoPay will stop after the current billing period ends.'
+          : 'AutoPay cancelled successfully.';
+      await loadInitialData(
+        manualRefresh: true,
+        preserveInfoMessage: true,
+        syncSelectionToActivePlan: true,
+      );
+    } catch (error) {
+      errorMessage.value = _humanizeError(
+        error,
+        fallback: 'Unable to cancel AutoPay right now.',
+      );
+    } finally {
+      if (_pendingOrder == null && _pendingSubscriptionCheckout == null) {
+        checkoutPlanCode.value = null;
+      }
+    }
+  }
+
+  Future<void> resumeAutopay() async {
+    if (isCheckoutBusy) {
+      return;
+    }
+    if (!canResumeAutopay && autoRenewEnabled) {
+      return;
+    }
+    if (canResumeAutopay) {
+      selectedBillingMode.value = 'AUTOPAY';
+    }
+    await _startAutopayCheckout();
+  }
+
+  Future<_SettledResult<T>> _settle<T>(Future<T> future) async {
+    try {
+      return _SettledResult<T>(value: await future);
+    } catch (error) {
+      return _SettledResult<T>(error: error);
+    }
+  }
+
+  String _localPlanIdFor(String rawPlanCode) {
+    switch (rawPlanCode.trim().toUpperCase()) {
+      case 'SINGLE':
+        return 'starter';
+      case 'PREMIUM':
+        return 'premium';
+      case 'ENTERPRISE':
+        return 'enterprise';
+      case 'PRO':
+      default:
+        return 'growth';
+    }
+  }
+
+  String _humanizeError(Object error, {required String fallback}) {
+    final message = error.toString().trim();
+    if (message.isEmpty) {
+      return fallback;
+    }
+    if (message.startsWith('Exception: ')) {
+      return message.replaceFirst('Exception: ', '');
+    }
+    return message;
+  }
+
+  String _firstNonEmpty(List<String> values) {
+    for (final value in values) {
+      final trimmed = value.trim();
+      if (trimmed.isNotEmpty) {
+        return trimmed;
+      }
+    }
+    return '';
+  }
+
+  String _formatDate(DateTime date) {
+    const months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
+  }
+
+  String _formatMonthDay(DateTime date) {
+    const months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[date.month - 1]} ${date.day}';
+  }
+
+  String _paymentMethodLabel(String methodId) {
+    switch (methodId.trim().toLowerCase()) {
+      case 'mc':
+        return 'Mastercard';
+      case 'amex':
+        return 'Amex';
+      case 'apple_pay':
+        return 'Apple Pay';
+      case 'upi':
+        return 'UPI';
+      case 'visa':
+      default:
+        return 'Visa';
+    }
+  }
+
+  String _stringValue(Object? value) {
+    return value?.toString().trim() ?? '';
+  }
+
+  int _intValue(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(_stringValue(value)) ?? 0;
+  }
+
+}
+
+class _SettledResult<T> {
+  const _SettledResult({this.value, this.error});
+
+  final T? value;
+  final Object? error;
+}

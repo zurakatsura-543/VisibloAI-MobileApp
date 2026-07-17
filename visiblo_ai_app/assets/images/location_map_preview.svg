@@ -1,0 +1,105 @@
+<svg width="680" height="390" viewBox="0 0 680 390" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="680" height="390" fill="#F4F2EA"/>
+
+  <g opacity="0.92">
+    <rect x="0" y="0" width="156" height="120" fill="#EEF0F2"/>
+    <rect x="494" y="0" width="186" height="112" fill="#EEF1F4"/>
+    <rect x="0" y="286" width="154" height="104" fill="#E9ECE1"/>
+    <rect x="532" y="266" width="148" height="124" fill="#EFF1F4"/>
+    <rect x="108" y="164" width="124" height="96" fill="#E7ECD9"/>
+    <rect x="430" y="134" width="122" height="88" fill="#E7ECD8"/>
+    <rect x="276" y="206" width="110" height="96" fill="#EEF1E3"/>
+  </g>
+
+  <g opacity="0.5" stroke="#D7D9DE" stroke-width="1.5">
+    <path d="M52 0V390"/>
+    <path d="M110 0V390"/>
+    <path d="M168 0V390"/>
+    <path d="M226 0V390"/>
+    <path d="M284 0V390"/>
+    <path d="M342 0V390"/>
+    <path d="M400 0V390"/>
+    <path d="M458 0V390"/>
+    <path d="M516 0V390"/>
+    <path d="M574 0V390"/>
+    <path d="M632 0V390"/>
+    <path d="M0 48H680"/>
+    <path d="M0 106H680"/>
+    <path d="M0 164H680"/>
+    <path d="M0 222H680"/>
+    <path d="M0 280H680"/>
+    <path d="M0 338H680"/>
+  </g>
+
+  <g stroke-linecap="round">
+    <path d="M336 -12C338 58 340 122 338 174C336 244 332 314 328 402" stroke="#F1B049" stroke-width="26"/>
+    <path d="M336 -10C338 60 340 122 338 174C336 244 332 314 328 400" stroke="#F9D26B" stroke-width="14"/>
+
+    <path d="M178 -28C228 54 280 134 336 212C392 288 436 342 486 418" stroke="#E8A35C" stroke-width="18"/>
+    <path d="M182 -28C230 54 282 134 338 212C394 288 438 342 488 418" stroke="#F4C18B" stroke-width="8"/>
+
+    <path d="M-24 124C78 126 150 130 240 142C336 156 418 160 530 150C600 144 648 140 704 136" stroke="#D85A47" stroke-width="8"/>
+    <path d="M-26 128C76 130 148 134 238 146C334 160 416 164 528 154C598 148 646 144 702 140" stroke="#E57A68" stroke-width="3"/>
+
+    <path d="M-26 236C58 218 118 206 192 196C268 186 346 190 430 204C510 218 592 248 706 286" stroke="#C8CFDD" stroke-width="16"/>
+    <path d="M-24 238C60 220 120 208 194 198C270 188 348 192 432 206C512 220 594 250 708 288" stroke="#DCE2ED" stroke-width="8"/>
+
+    <path d="M44 320C114 270 180 226 252 186C312 152 382 126 484 104C568 86 620 82 694 80" stroke="#C9D2E0" stroke-width="12"/>
+    <path d="M46 322C116 272 182 228 254 188C314 154 384 128 486 106C570 88 622 84 696 82" stroke="#DFE5EF" stroke-width="6"/>
+
+    <path d="M506 390C470 338 440 292 420 256C404 228 394 196 390 148C388 108 390 68 400 -8" stroke="#D9DCE3" stroke-width="12"/>
+    <path d="M508 390C472 338 442 292 422 256C406 228 396 196 392 148C390 108 392 68 402 -8" stroke="#EEF2F7" stroke-width="6"/>
+  </g>
+
+  <g opacity="0.8" stroke="#BDC4D1" stroke-width="2" stroke-linecap="round">
+    <path d="M72 24L126 126"/>
+    <path d="M144 42L196 150"/>
+    <path d="M240 28L290 108"/>
+    <path d="M420 30L388 128"/>
+    <path d="M522 18L500 120"/>
+    <path d="M602 28L582 120"/>
+    <path d="M84 188L112 312"/>
+    <path d="M212 162L232 298"/>
+    <path d="M458 166L486 286"/>
+    <path d="M560 178L590 320"/>
+  </g>
+
+  <g fill="#5B6774" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" opacity="0.82">
+    <text x="46" y="88">Casa Kaiada</text>
+    <text x="246" y="172">Supermercado</text>
+    <text x="436" y="176">Colegio Antares</text>
+    <text x="534" y="236">Main</text>
+    <text x="394" y="236">Condominio</text>
+    <text x="118" y="262">Colegio Nossa</text>
+    <text x="538" y="104">R. Lauro Maia</text>
+  </g>
+
+  <g fill="#6D7682" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="600" opacity="0.78">
+    <text x="40" y="42">A70</text>
+    <text x="22" y="162">Pao de Acucar</text>
+    <text x="110" y="146">Lw Informatica</text>
+    <text x="276" y="318">Aguanambi</text>
+    <text x="476" y="292">Secretaria Social</text>
+    <text x="558" y="176" transform="rotate(90 558 176)">R. Carlos Vasconcelos</text>
+    <text x="448" y="116" transform="rotate(90 448 116)">R. Pinheiro Pessoa</text>
+    <text x="196" y="214">Rua Joao Lemos</text>
+    <text x="352" y="184" transform="rotate(90 352 184)">Rua Coronel Alves</text>
+    <text x="388" y="264">Home Friends of Jesus</text>
+  </g>
+
+  <g>
+    <path d="M422 140C422 124.536 434.536 112 450 112C465.464 112 478 124.536 478 140C478 159.775 450 180 450 180C450 180 422 159.775 422 140Z" fill="#E74C3C"/>
+    <circle cx="450" cy="140" r="9" fill="#F7C0B9"/>
+  </g>
+
+  <g fill="#43B4BA">
+    <circle cx="84" cy="264" r="9"/>
+    <circle cx="366" cy="206" r="9"/>
+    <circle cx="646" cy="302" r="9"/>
+  </g>
+  <g fill="white">
+    <circle cx="84" cy="264" r="3.2"/>
+    <circle cx="366" cy="206" r="3.2"/>
+    <circle cx="646" cy="302" r="3.2"/>
+  </g>
+</svg>

@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1095834856322",
+    "project_id": "aimbeat-visibloai",
+    "storage_bucket": "aimbeat-visibloai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1095834856322:android:5b5732d6321353a55dfd9b",
+        "android_client_info": {
+          "package_name": "com.example.visiblo_ai_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1095834856322-pgdacj1luu4sjf5t3nampu2vlgmmh7lf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.visiblo_ai_app",
+            "certificate_hash": "1b69f6e9e0f4a8b09118a8de4651b26edc9aa1d7"
+          }
+        },
+        {
+          "client_id": "1095834856322-ileb3qlbe6b3omb3cgqeim1so48i5k03.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwisURoqcelSi6FCd_SzZeYNR8U3NsSLg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1095834856322-ileb3qlbe6b3omb3cgqeim1so48i5k03.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

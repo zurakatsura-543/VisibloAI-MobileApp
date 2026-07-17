@@ -1,0 +1,49 @@
+abstract final class AppRoutes {
+  static const boot = '/';
+  static const welcome = '/welcome';
+  static const terms = '/terms';
+  static const privacyPolicy = '/privacy-policy';
+  static const login = '/login';
+  static const forgotPassword = '/forgot-password';
+  static const signUp = '/signup';
+  static const googleOAuth = '/google-oauth';
+  static const otpVerification = '/verify-otp';
+  static const onboardingSurvey = '/onboarding-survey';
+  static const googleConnect = '/google-connect';
+  static const locationSelection = '/location-selection';
+  static const businessProfile = '/business-profile';
+  static const businessLocation = '/business-location';
+  static const category = '/category';
+  static const customCategory = '/custom-category';
+  static const dashboard = '/dashboard';
+  static const gbpPosts = '/gbp-posts';
+  static const gbpOffers = '/gbp-offers';
+  static const gbpPhotos = '/gbp-photos';
+  static const gbpEvents = '/gbp-events';
+  static const leadsPipeline = '/leads-pipeline';
+  static const leadDetail = '/lead-detail';
+  static const gbpManager = '/gbp-manager';
+  static const websiteManager = '/website-manager';
+  static const audit = '/audit';
+  static const auditCategory = '/audit-category';
+  static const auditHours = '/audit-hours';
+  static const auditReviews = '/audit-reviews';
+  static const reports = '/reports';
+  static const alerts = '/alerts';
+  static const payment = '/payment';
+  static const account = '/account';
+  static const accountBusinessProfile = '/account/business-profile';
+  static const accountPackageBilling = '/account/package-billing';
+  static const accountGoogleBusinessProfile =
+      '/account/google-business-profile';
+  static const accountWorkspaceHealth = '/account/workspace-health';
+  static const accountWorkspaceHealthChecklist =
+      '/account/workspace-health-checklist';
+  static const clientReviews = '/client-reviews';
+  static const reviewPoster = '/review-poster';
+  static const keywordRanking = '/keyword-ranking';
+  static const seoCompetitors = '/seo/competitors';
+  static const seoHeatmap = '/seo/heatmap';
+  static const citations = '/citations';
+  static const support = '/support';
+}

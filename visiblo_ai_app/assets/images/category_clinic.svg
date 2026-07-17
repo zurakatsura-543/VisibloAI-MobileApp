@@ -1,0 +1,33 @@
+<svg width="160" height="200" viewBox="0 0 160 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="80" y1="0" x2="80" y2="200" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D8C9B8"/>
+      <stop offset="1" stop-color="#7E756C"/>
+    </linearGradient>
+    <linearGradient id="coat" x1="80" y1="108" x2="80" y2="200" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DCE4EA"/>
+    </linearGradient>
+  </defs>
+  <rect width="160" height="200" rx="18" fill="url(#bg)"/>
+  <rect x="0" y="0" width="160" height="200" rx="18" fill="black" fill-opacity="0.08"/>
+  <ellipse cx="80" cy="42" rx="44" ry="24" fill="#F4EADF" fill-opacity="0.38"/>
+  <ellipse cx="80" cy="200" rx="70" ry="28" fill="#3A3A3A" fill-opacity="0.15"/>
+  <path d="M47 198C50 165 61 135 80 135C99 135 110 165 113 198H47Z" fill="url(#coat)"/>
+  <path d="M68 140L80 153L92 140L101 198H59L68 140Z" fill="#F7FBFF"/>
+  <path d="M80 107C96.5685 107 110 93.5685 110 77C110 60.4315 96.5685 47 80 47C63.4315 47 50 60.4315 50 77C50 93.5685 63.4315 107 80 107Z" fill="#E6B692"/>
+  <path d="M57 73C57 57.536 67.52 45 80 45C92.48 45 103 57.536 103 73V79H57V73Z" fill="#302823"/>
+  <path d="M62 68C63.8 58.2 69.8 53 80 53C90.2 53 96.2 58.2 98 68C91.6 66.6 85.6 65.9 80 65.9C74.4 65.9 68.4 66.6 62 68Z" fill="#41342E"/>
+  <ellipse cx="68.5" cy="78" rx="2.5" ry="3.5" fill="#2A211F"/>
+  <ellipse cx="91.5" cy="78" rx="2.5" ry="3.5" fill="#2A211F"/>
+  <path d="M72 92C75 95 78 96.5 80 96.5C82 96.5 85 95 88 92" stroke="#B8745A" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M72 110C74 118 77 123 80 123C83 123 86 118 88 110" stroke="#D59E82" stroke-width="5" stroke-linecap="round"/>
+  <path d="M65 145L80 161L95 145" stroke="#D4DEE6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M58 144C61.5 150 68.5 154 80 154C91.5 154 98.5 150 102 144" stroke="#C4D1DB" stroke-width="3" stroke-linecap="round"/>
+  <path d="M55 196V174C55 168 59.5 162.5 65.5 161.5L70 161" stroke="#AAB7C4" stroke-width="3" stroke-linecap="round"/>
+  <path d="M105 196V174C105 168 100.5 162.5 94.5 161.5L90 161" stroke="#AAB7C4" stroke-width="3" stroke-linecap="round"/>
+  <path d="M93 161C93 167.5 87.2 173 80 173C72.8 173 67 167.5 67 161" stroke="#1C2430" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="68" cy="175" r="3" fill="#8BA2B8"/>
+  <path d="M68 178V185C68 190 72 194 77 194H86" stroke="#8BA2B8" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="89" cy="194" r="4" stroke="#8BA2B8" stroke-width="3"/>
+</svg>
