@@ -154,7 +154,7 @@ class AccountSettingsController extends GetxController {
   String get planStatusLabel {
     final status = _stringValue(remoteProfile.value?.subscription['status']);
     if (status.isEmpty) {
-      return 'trial not started';
+      return 'payment required';
     }
     return status.replaceAll('_', ' ').toLowerCase();
   }
@@ -178,6 +178,7 @@ class AccountSettingsController extends GetxController {
     final subscription = remoteProfile.value?.subscription ?? const {};
     final rawValue = _firstNonEmpty([
       _stringValue(subscription['expiresAt']),
+      _stringValue(subscription['introEndsAt']),
       _stringValue(subscription['trialEndsAt']),
     ]);
     if (rawValue.isEmpty) {
