@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../features/auth/controllers/product_mode_controller.dart';
 import '../features/onboarding/bindings/onboarding_binding.dart';
 import 'routes/app_pages.dart';
 import 'routes/app_routes.dart';
@@ -15,21 +16,27 @@ class VisibloAiApp extends StatelessWidget {
     return GetMaterialApp(
       title: 'VisibloAI',
       debugShowCheckedModeBanner: false,
-      initialRoute: AppRoutes.welcome,
+      initialRoute: AppRoutes.boot,
       initialBinding: OnboardingBinding(),
       getPages: AppPages.pages,
       theme: AppTheme.lightTheme,
+      routingCallback: (routing) {
+        final route = routing?.current;
+        if (route == null || route.isEmpty) {
+          return;
+        }
+        final productModeController = Get.isRegistered<ProductModeController>()
+            ? Get.find<ProductModeController>()
+            : Get.put(ProductModeController(), permanent: true);
+        productModeController.selectModeForRoute(route);
+      },
       builder: (context, child) {
-        final mediaQuery = MediaQuery.of(context);
         final fontFamily =
             Theme.of(context).textTheme.bodyMedium?.fontFamily ??
             AppTypography.fontFamily;
-        return MediaQuery(
-          data: mediaQuery.copyWith(textScaler: const TextScaler.linear(1.08)),
-          child: DefaultTextStyle.merge(
-            style: TextStyle(fontFamily: fontFamily),
-            child: child ?? const SizedBox.shrink(),
-          ),
+        return DefaultTextStyle.merge(
+          style: TextStyle(fontFamily: fontFamily),
+          child: child ?? const SizedBox.shrink(),
         );
       },
     );

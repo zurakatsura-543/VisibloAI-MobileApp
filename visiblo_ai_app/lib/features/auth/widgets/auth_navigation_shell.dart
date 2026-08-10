@@ -4,8 +4,22 @@ import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_typography.dart';
+import '../controllers/product_mode_controller.dart';
 
-enum AuthTab { home, audit, reports, payment, account }
+enum AuthTab {
+  home,
+  audit,
+  reports,
+  payment,
+  account,
+  socialDashboard,
+  socialAccounts,
+  socialCreate,
+  socialCalendar,
+  socialPosts,
+  socialAnalytics,
+  socialProfile,
+}
 
 class AuthNavigationShell extends StatelessWidget {
   const AuthNavigationShell({
@@ -94,39 +108,76 @@ class AuthBottomNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = [
-      (
-        tab: AuthTab.home,
-        label: 'Home',
-        icon: Icons.home_outlined,
-        iconWeight: 300.0,
-      ),
-      (
-        tab: AuthTab.audit,
-        label: 'Audit',
-        icon: Icons.insert_chart_outlined_rounded,
-        iconWeight: 400.0,
-      ),
-      (
-        tab: AuthTab.reports,
-        label: 'Reports',
-        icon: Icons.pie_chart_outline_rounded,
-        iconWeight: 300.0,
-      ),
-      (
-        tab: AuthTab.payment,
-        label: 'Payment',
-        icon: Icons.account_balance_wallet_outlined,
-        iconWeight: 300.0,
-      ),
-
-      (
-        tab: AuthTab.account,
-        label: 'Account',
-        icon: Icons.person_outline_rounded,
-        iconWeight: 300.0,
-      ),
-    ];
+    final productModeController = Get.isRegistered<ProductModeController>()
+        ? Get.find<ProductModeController>()
+        : Get.put(ProductModeController(), permanent: true);
+    final isSocialShell =
+        productModeController.isSocialMedia || currentTab._isSocialTab;
+    final items = isSocialShell
+        ? [
+            (
+              tab: AuthTab.socialDashboard,
+              label: 'Dashboard',
+              icon: Icons.dashboard_outlined,
+              iconWeight: 350.0,
+            ),
+            (
+              tab: AuthTab.socialAccounts,
+              label: 'Accounts',
+              icon: Icons.groups_outlined,
+              iconWeight: 350.0,
+            ),
+            (
+              tab: AuthTab.socialPosts,
+              label: 'Posts',
+              icon: Icons.task_alt_rounded,
+              iconWeight: 350.0,
+            ),
+            (
+              tab: AuthTab.socialCalendar,
+              label: 'Calendar',
+              icon: Icons.calendar_month_outlined,
+              iconWeight: 350.0,
+            ),
+            (
+              tab: AuthTab.socialAnalytics,
+              label: 'Analytics',
+              icon: Icons.bar_chart_rounded,
+              iconWeight: 350.0,
+            ),
+          ]
+        : [
+            (
+              tab: AuthTab.home,
+              label: 'Home',
+              icon: Icons.home_outlined,
+              iconWeight: 300.0,
+            ),
+            (
+              tab: AuthTab.audit,
+              label: 'Audit',
+              icon: Icons.insert_chart_outlined_rounded,
+              iconWeight: 400.0,
+            ),
+            (
+              tab: AuthTab.reports,
+              label: 'Reports',
+              icon: Icons.pie_chart_outline_rounded,
+              iconWeight: 300.0,
+            ),
+            (
+              tab: AuthTab.payment,
+              label: 'Payment',
+              icon: Icons.account_balance_wallet_outlined,
+              iconWeight: 300.0,
+            ),
+            (
+              tab: AuthTab.account,
+              label: 'Account',
+              icon: Icons.person_outline_rounded,
+              iconWeight: 300.0,
+            ),
+          ];
 
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
@@ -231,10 +282,36 @@ class _NavItem extends StatelessWidget {
       AuthTab.reports => AppRoutes.reports,
       AuthTab.payment => AppRoutes.payment,
       AuthTab.account => AppRoutes.account,
+      AuthTab.socialDashboard => AppRoutes.socialDashboard,
+      AuthTab.socialAccounts => AppRoutes.socialAccounts,
+      AuthTab.socialCreate => AppRoutes.socialCreate,
+      AuthTab.socialCalendar => AppRoutes.socialCalendar,
+      AuthTab.socialPosts => AppRoutes.socialPosts,
+      AuthTab.socialAnalytics => AppRoutes.socialAnalytics,
+      AuthTab.socialProfile => AppRoutes.socialProfile,
     };
+
+    final productModeController = Get.isRegistered<ProductModeController>()
+        ? Get.find<ProductModeController>()
+        : Get.put(ProductModeController(), permanent: true);
+    productModeController.selectMode(
+      tab._isSocialTab ? ProductMode.socialMedia : ProductMode.googleBusiness,
+    );
 
     if (Get.currentRoute != route) {
       Get.offNamed(route);
     }
+  }
+}
+
+extension on AuthTab {
+  bool get _isSocialTab {
+    return this == AuthTab.socialDashboard ||
+        this == AuthTab.socialAccounts ||
+        this == AuthTab.socialCreate ||
+        this == AuthTab.socialCalendar ||
+        this == AuthTab.socialPosts ||
+        this == AuthTab.socialAnalytics ||
+        this == AuthTab.socialProfile;
   }
 }

@@ -1,29 +1,39 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
+import '../../../app/routes/app_routes.dart';
 import '../../../app/services/local_auth_service.dart';
+import '../../onboarding/controllers/onboarding_controller.dart';
 import '../models/auth_me_response.dart';
 import '../models/payment_models.dart';
 import '../models/settings_models.dart';
 import '../models/subscription_payment_record.dart';
 import '../models/test_account.dart';
 import '../services/auth_api_service.dart';
+import '../../onboarding/models/google_business_location.dart';
 
 class PaymentController extends GetxController {
   PaymentController({
     AuthApiService? authApiService,
     LocalAuthService? localAuthService,
+    OnboardingController? onboardingController,
   }) : _authApiService = authApiService ?? Get.find<AuthApiService>(),
-       _localAuthService = localAuthService ?? Get.find<LocalAuthService>();
+       _localAuthService = localAuthService ?? Get.find<LocalAuthService>(),
+       _onboardingController =
+           onboardingController ?? Get.find<OnboardingController>();
 
   static const _gstRate = 0.18;
 
   final AuthApiService _authApiService;
   final LocalAuthService _localAuthService;
+  final OnboardingController _onboardingController;
 
   final isLoading = true.obs;
   final isRefreshing = false.obs;
@@ -42,6 +52,9 @@ class PaymentController extends GetxController {
   final checkoutContext = Rxn<BillingCheckoutContext>();
   final subscriptionStatus = Rxn<BillingSubscriptionStatus>();
   final billingUsage = Rxn<BillingUsageInfo>();
+  final remoteInvoices = <SubscriptionPaymentRecord>[].obs;
+  final downloadingInvoiceIds = <String>{}.obs;
+  final isDownloadingAllInvoices = false.obs;
 
   final couponCodeController = TextEditingController();
 
@@ -72,13 +85,18 @@ class PaymentController extends GetxController {
   }
 
   TestAccount? get currentUser => _localAuthService.currentUser.value;
+  GoogleBusinessLocation? get activatedGoogleLocation =>
+      _onboardingController.activatedGoogleLocation.value;
 
   List<BillingPlanDefinition> get plans {
-    final catalogs = checkoutContext.value?.plans ?? const <BillingPlanCatalog>[];
+    final catalogs =
+        checkoutContext.value?.plans ?? const <BillingPlanCatalog>[];
     if (catalogs.isEmpty) {
       return BillingPlanDefinition.plans;
     }
-    return catalogs.map(BillingPlanDefinition.fromCatalog).toList(growable: false);
+    return catalogs
+        .map(BillingPlanDefinition.fromCatalog)
+        .toList(growable: false);
   }
 
   BillingPlanDefinition get selectedPlan {
@@ -121,6 +139,59 @@ class PaymentController extends GetxController {
       'Your Business',
     ];
     return _firstNonEmpty(values);
+  }
+
+  String get selectedBusinessName {
+    final primaryBusiness = remoteProfile.value?.primaryBusiness;
+    final values = <String>[
+      activatedGoogleLocation?.title ?? '',
+      currentUser?.businessName ?? '',
+      checkoutContext.value?.business.name ?? '',
+      workspaceSettings.value?.business.name ?? '',
+      remoteProfile.value?.businessName ?? '',
+      primaryBusiness?['title']?.toString() ?? '',
+      primaryBusiness?['name']?.toString() ?? '',
+      'Selected business',
+    ];
+    return _firstNonEmpty(values);
+  }
+
+  String get selectedBusinessLocationLabel {
+    final values = <String>[
+      activatedGoogleLocation?.conciseAddress ?? '',
+      currentUser?.city ?? '',
+      currentUser?.country ?? '',
+    ].where((value) => value.trim().isNotEmpty).toList(growable: false);
+
+    if (values.isEmpty) {
+      return 'Business profile selected';
+    }
+
+    return values.join(', ');
+  }
+
+  String get selectedBusinessCategoryLabel {
+    return _firstNonEmpty(<String>[
+      activatedGoogleLocation?.primaryCategory ?? '',
+      currentUser?.categoryTitle ?? '',
+      currentUser?.industry ?? '',
+      'Business Profile',
+    ]);
+  }
+
+  String get selectedBusinessLogoUrl {
+    final primaryBusiness = remoteProfile.value?.primaryBusiness;
+    final photoPath = currentUser?.businessPhotoPath.trim() ?? '';
+    final photoPathIsUrl =
+        photoPath.isNotEmpty &&
+        (photoPath.startsWith('http://') || photoPath.startsWith('https://'));
+    return _firstNonEmpty(<String>[
+      activatedGoogleLocation?.logoUrl ?? '',
+      primaryBusiness?['logoUrl']?.toString() ?? '',
+      primaryBusiness?['photoUrl']?.toString() ?? '',
+      primaryBusiness?['imageUrl']?.toString() ?? '',
+      if (photoPathIsUrl) photoPath,
+    ]);
   }
 
   String get ownerName {
@@ -177,14 +248,28 @@ class PaymentController extends GetxController {
     if (inactiveStates.contains(billingUiState.state)) {
       return false;
     }
-    if (billingUiState.state.isNotEmpty) {
+    if (billingUiState.state == 'ACTIVE') {
       return true;
     }
     final status = subscriptionStatusRaw.toUpperCase();
-    return status == 'ACTIVE' ||
-        status == 'TRIAL_ACTIVE' ||
-        status == 'TRIALING' ||
-        remoteProfile.value?.subscriptionActive == true;
+    return status == 'ACTIVE' || remoteProfile.value?.hasPaidAccess == true;
+  }
+
+  bool get requiresFirstAccessPayment => !hasActiveSubscription;
+
+  bool get requiresIntroActivationPayment {
+    final checkout = checkoutContext.value;
+    if (hasActiveSubscription || checkout == null) {
+      return false;
+    }
+    return checkout.subscription == null &&
+        billingWarnings.any(
+          (warning) => warning.code == 'INTRO_PAYMENT_REQUIRED',
+        );
+  }
+
+  bool get requiresRenewalPayment {
+    return !hasActiveSubscription && !requiresIntroActivationPayment;
   }
 
   String get subscriptionStatusLabel {
@@ -231,6 +316,7 @@ class PaymentController extends GetxController {
       checkoutContext.value?.subscription?.expiresAt ?? '',
       subscriptionStatus.value?.subscription?.expiresAt ?? '',
       _stringValue(remoteProfile.value?.subscription['expiresAt']),
+      _stringValue(remoteProfile.value?.subscription['introEndsAt']),
       _stringValue(remoteProfile.value?.subscription['trialEndsAt']),
       currentUser?.subscriptionRenewalDateIso ?? '',
     ]);
@@ -273,6 +359,12 @@ class PaymentController extends GetxController {
   }
 
   List<SubscriptionPaymentRecord> get paymentHistory {
+    if (remoteInvoices.isNotEmpty) {
+      final sorted = List<SubscriptionPaymentRecord>.from(remoteInvoices)
+        ..sort((a, b) => b.paidOnIso.compareTo(a.paidOnIso));
+      return List<SubscriptionPaymentRecord>.unmodifiable(sorted);
+    }
+
     final localHistory = currentUser?.subscriptionPaymentHistory ?? const [];
     if (localHistory.isNotEmpty) {
       final sorted = List<SubscriptionPaymentRecord>.from(localHistory)
@@ -318,6 +410,11 @@ class PaymentController extends GetxController {
     }
     return 'visa';
   }
+
+  bool get hasDownloadableInvoices => paymentHistory.any(
+    (record) =>
+        record.canDownload && (record.invoiceId?.trim().isNotEmpty ?? false),
+  );
 
   int get estimatedSubtotalInr {
     return selectedPlan.subtotalFor(selectedBillingCycle.value);
@@ -442,6 +539,11 @@ class PaymentController extends GetxController {
         _settle(_authApiService.fetchBillingCheckoutContext()),
         _settle(_authApiService.fetchBillingSubscriptionStatus()),
         _settle(_authApiService.fetchBillingUsage()),
+        _settle(
+          _authApiService.fetchBillingInvoices(
+            businessId: checkoutContext.value?.business.id,
+          ),
+        ),
       ]);
 
       final profileResult = results[0] as _SettledResult<AuthMeResponse>;
@@ -452,6 +554,8 @@ class PaymentController extends GetxController {
       final subscriptionStatusResult =
           results[3] as _SettledResult<BillingSubscriptionStatus>;
       final usageResult = results[4] as _SettledResult<BillingUsageInfo>;
+      final invoicesResult =
+          results[5] as _SettledResult<List<SubscriptionPaymentRecord>>;
 
       final profile = profileResult.value;
       if (profile == null) {
@@ -462,13 +566,18 @@ class PaymentController extends GetxController {
       final checkout = checkoutContextResult.value;
       if (checkout == null) {
         throw checkoutContextResult.error ??
-            Exception('Unable to load your billing checkout details right now.');
+            Exception(
+              'Unable to load your billing checkout details right now.',
+            );
       }
 
       remoteProfile.value = profile;
       checkoutContext.value = checkout;
       subscriptionStatus.value = subscriptionStatusResult.value;
       billingUsage.value = usageResult.value;
+      remoteInvoices.assignAll(
+        invoicesResult.value ?? const <SubscriptionPaymentRecord>[],
+      );
       if (settingsResult.value != null) {
         workspaceSettings.value = settingsResult.value;
       }
@@ -520,6 +629,12 @@ class PaymentController extends GetxController {
         }
       }
 
+      if (requiresIntroActivationPayment) {
+        selectedPlanCode.value = 'SINGLE';
+        selectedBillingCycle.value = 'monthly';
+        selectedBillingMode.value = 'MANUAL';
+      }
+
       await _syncLocalUser(profile);
     } catch (error) {
       errorMessage.value = _humanizeError(
@@ -534,6 +649,104 @@ class PaymentController extends GetxController {
 
   Future<void> refreshData() async {
     await loadInitialData(manualRefresh: true, preserveInfoMessage: true);
+  }
+
+  bool isInvoiceDownloading(String? invoiceId) {
+    final id = invoiceId?.trim() ?? '';
+    return id.isNotEmpty && downloadingInvoiceIds.contains(id);
+  }
+
+  Future<void> downloadInvoice(SubscriptionPaymentRecord record) async {
+    final invoiceId = record.invoiceId?.trim() ?? '';
+    if (invoiceId.isEmpty || downloadingInvoiceIds.contains(invoiceId)) {
+      return;
+    }
+
+    downloadingInvoiceIds.add(invoiceId);
+    try {
+      final bytes = await _authApiService.downloadBillingInvoice(invoiceId);
+      if (bytes.isEmpty) {
+        throw Exception('The invoice file came back empty.');
+      }
+
+      final file = await _writeInvoiceFile(
+        bytes,
+        suggestedFileName: _invoiceFileName(record),
+      );
+
+      final openResult = await OpenFilex.open(
+        file.path,
+        type: 'application/pdf',
+      );
+
+      if (openResult.type != ResultType.done) {
+        infoMessage.value =
+            'Invoice saved to ${file.path}. No PDF app opened automatically.';
+      } else {
+        infoMessage.value = 'Invoice downloaded successfully.';
+      }
+    } catch (error) {
+      errorMessage.value = _humanizeError(
+        error,
+        fallback: 'Unable to download this invoice right now.',
+      );
+    } finally {
+      downloadingInvoiceIds.remove(invoiceId);
+    }
+  }
+
+  Future<void> downloadAllInvoices() async {
+    if (isDownloadingAllInvoices.value) {
+      return;
+    }
+
+    final downloadable = paymentHistory
+        .where(
+          (record) =>
+              record.canDownload &&
+              (record.invoiceId?.trim().isNotEmpty ?? false),
+        )
+        .toList(growable: false);
+    if (downloadable.isEmpty) {
+      infoMessage.value = 'No downloadable invoices are available yet.';
+      return;
+    }
+
+    isDownloadingAllInvoices.value = true;
+    try {
+      int savedCount = 0;
+      for (final record in downloadable) {
+        final invoiceId = record.invoiceId!.trim();
+        downloadingInvoiceIds.add(invoiceId);
+        try {
+          final bytes = await _authApiService.downloadBillingInvoice(invoiceId);
+          if (bytes.isEmpty) {
+            continue;
+          }
+          await _writeInvoiceFile(
+            bytes,
+            suggestedFileName: _invoiceFileName(record),
+          );
+          savedCount += 1;
+        } finally {
+          downloadingInvoiceIds.remove(invoiceId);
+        }
+      }
+
+      if (savedCount <= 0) {
+        throw Exception('No invoice files could be saved.');
+      }
+
+      infoMessage.value =
+          '$savedCount invoice${savedCount == 1 ? '' : 's'} saved on this device.';
+    } catch (error) {
+      errorMessage.value = _humanizeError(
+        error,
+        fallback: 'Unable to download invoice history right now.',
+      );
+    } finally {
+      isDownloadingAllInvoices.value = false;
+    }
   }
 
   void selectPlan(String planCode) {
@@ -944,7 +1157,8 @@ class PaymentController extends GetxController {
       await _recordSuccessfulLocalPayment(
         plan: plan,
         billingCycle: billingCycle,
-        amountPaise: order?.amount ?? selectedPlan.subtotalFor(billingCycle) * 100,
+        amountPaise:
+            order?.amount ?? selectedPlan.subtotalFor(billingCycle) * 100,
       );
       _clearCouponState(clearInput: true);
       infoMessage.value =
@@ -954,6 +1168,10 @@ class PaymentController extends GetxController {
         preserveInfoMessage: true,
         syncSelectionToActivePlan: true,
       );
+      if (hasActiveSubscription) {
+        Get.offAllNamed(AppRoutes.dashboard);
+        return;
+      }
       infoMessage.value = autopayCheckout != null
           ? 'AutoPay confirmed. ${plan.name} is now active.'
           : 'Payment confirmed. ${plan.name} is now active.';
@@ -1024,22 +1242,28 @@ class PaymentController extends GetxController {
     if (savedUser == null) {
       return;
     }
+    final selectedLocation = activatedGoogleLocation;
+    final hasExplicitSelectedBusiness =
+        selectedLocation != null && selectedLocation.title.trim().isNotEmpty;
 
     final remotePlanCode = _stringValue(
       checkoutContext.value?.subscription?.plan ??
           subscriptionStatus.value?.subscription?.plan ??
           profile.subscription['plan'],
     ).toUpperCase();
-    final remoteCycle = normalizeBillingCycle(_firstNonEmpty(<String>[
-      checkoutContext.value?.subscription?.billingCycle ?? '',
-      subscriptionStatus.value?.subscription?.billingCycle ?? '',
-      _stringValue(profile.subscription['billingCycle']),
-    ]));
+    final remoteCycle = normalizeBillingCycle(
+      _firstNonEmpty(<String>[
+        checkoutContext.value?.subscription?.billingCycle ?? '',
+        subscriptionStatus.value?.subscription?.billingCycle ?? '',
+        _stringValue(profile.subscription['billingCycle']),
+      ]),
+    );
     final renewalIso = _firstNonEmpty(<String>[
       subscriptionStatus.value?.autopay?.nextBillingAt ?? '',
       checkoutContext.value?.subscription?.expiresAt ?? '',
       subscriptionStatus.value?.subscription?.expiresAt ?? '',
       _stringValue(profile.subscription['expiresAt']),
+      _stringValue(profile.subscription['introEndsAt']),
       _stringValue(profile.subscription['trialEndsAt']),
       savedUser.subscriptionRenewalDateIso,
     ]);
@@ -1047,8 +1271,21 @@ class PaymentController extends GetxController {
     final updatedUser = savedUser.copyWith(
       email: _firstNonEmpty(<String>[profile.email, savedUser.email]),
       businessName: _firstNonEmpty(<String>[
+        if (hasExplicitSelectedBusiness) selectedLocation.title,
         profile.businessName,
         savedUser.businessName,
+      ]),
+      businessPhotoPath: _firstNonEmpty(<String>[
+        if (hasExplicitSelectedBusiness) selectedLocation.logoUrl,
+        savedUser.businessPhotoPath,
+      ]),
+      city: _firstNonEmpty(<String>[
+        if (hasExplicitSelectedBusiness) selectedLocation.conciseAddress,
+        savedUser.city,
+      ]),
+      categoryTitle: _firstNonEmpty(<String>[
+        if (hasExplicitSelectedBusiness) selectedLocation.primaryCategory,
+        savedUser.categoryTitle,
       ]),
       googleBusinessProfileConnected:
           profile.googleConnected || savedUser.googleBusinessProfileConnected,
@@ -1061,7 +1298,38 @@ class PaymentController extends GetxController {
       subscriptionRenewalDateIso: renewalIso,
     );
 
+    debugPrint(
+      'paymentSyncLocalUser: selectedLocation='
+      '${selectedLocation?.title ?? '-'} | '
+      'profile.businessId=${profile.businessId} | '
+      'profile.businessName=${profile.businessName} | '
+      'savedUser.businessName=${savedUser.businessName} | '
+      'final.businessName=${updatedUser.businessName}',
+    );
+
     await _localAuthService.updateCurrentUser(updatedUser);
+  }
+
+  Future<File> _writeInvoiceFile(
+    List<int> bytes, {
+    required String suggestedFileName,
+  }) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final invoicesDir = Directory('${directory.path}/invoices');
+    if (!await invoicesDir.exists()) {
+      await invoicesDir.create(recursive: true);
+    }
+    final file = File('${invoicesDir.path}/$suggestedFileName');
+    await file.writeAsBytes(bytes, flush: true);
+    return file;
+  }
+
+  String _invoiceFileName(SubscriptionPaymentRecord record) {
+    final rawBase = record.invoiceNumber?.trim().isNotEmpty == true
+        ? record.invoiceNumber!.trim()
+        : 'visiblo_invoice_${record.paidOnIso.hashCode.abs()}';
+    final safe = rawBase.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    return safe.toLowerCase().endsWith('.pdf') ? safe : '$safe.pdf';
   }
 
   void _clearCouponState({bool clearInput = false}) {
@@ -1235,7 +1503,6 @@ class PaymentController extends GetxController {
     }
     return int.tryParse(_stringValue(value)) ?? 0;
   }
-
 }
 
 class _SettledResult<T> {

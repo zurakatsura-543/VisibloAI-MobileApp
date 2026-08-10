@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
@@ -12,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/widgets/app_logo.dart';
+import '../controllers/product_mode_controller.dart';
 import '../../onboarding/controllers/onboarding_controller.dart';
 import '../models/report_models.dart';
 import '../models/test_account.dart';
@@ -19,17 +19,41 @@ import '../widgets/auth_layout.dart';
 import '../widgets/auth_navigation_shell.dart';
 import '../widgets/auth_sidebar.dart';
 import '../widgets/trend_chart.dart';
+import '../../social/controllers/social_accounts_controller.dart';
+import '../../social/controllers/social_analytics_controller.dart';
+import '../../social/controllers/social_creatives_controller.dart';
+import '../../social/controllers/social_posts_controller.dart';
+import '../../social/models/social_account.dart';
+import '../../social/models/social_engine_models.dart';
+
+const _socialPrimaryStart = Color(0xFF0A3F85);
+const _socialPrimaryEnd = Color(0xFF1565C0);
 
 class HomeOverviewView extends GetView<OnboardingController> {
-  const HomeOverviewView({super.key});
+  const HomeOverviewView({
+    super.key,
+    this.initialMode = ProductMode.googleBusiness,
+    this.shellTab = AuthTab.home,
+  });
+
+  final ProductMode initialMode;
+  final AuthTab shellTab;
 
   @override
   Widget build(BuildContext context) {
-    return const AuthNavigationShell(
-      currentTab: AuthTab.home,
+    final productModeController = Get.isRegistered<ProductModeController>()
+        ? Get.find<ProductModeController>()
+        : Get.put(ProductModeController(), permanent: true);
+    if (productModeController.mode != initialMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        productModeController.selectMode(initialMode);
+      });
+    }
+    return AuthNavigationShell(
+      currentTab: shellTab,
       backgroundColor: _OverviewPalette.canvas,
       floatingActionButton: _AddPostFab(),
-      child: _HomeOverviewContent(),
+      child: const _HomeOverviewContent(),
     );
   }
 }
@@ -48,9 +72,8 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
   final GlobalKey _aiGallerySectionKey = GlobalKey();
   int _healthAnimationCycle = 1;
   int _growthTrendAnimationCycle = 1;
-  bool _wasHealthVisible = false;
-  bool _wasGrowthTrendVisible = false;
-  ScrollDirection _lastScrollDirection = ScrollDirection.idle;
+  bool _hasAnimatedHealth = false;
+  bool _hasAnimatedGrowthTrend = false;
   bool _isSidebarOpen = false;
   bool _isAiGalleryDialogOpen = false;
   TrendWindow _trendWindow = TrendWindow.month;
@@ -62,6 +85,7 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       controller.fetchDashboardLiveStream();
       _fetchDashboardTrends();
+      _triggerSectionAnimationsIfNeeded();
     });
   }
 
@@ -137,60 +161,34 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
     if (notification.metrics.axis != Axis.vertical) {
       return false;
     }
-
-    final healthVisible = _isSectionVisible(_healthSectionKey);
-    final growthTrendVisible = _isSectionVisible(_growthTrendSectionKey);
-
-    if (notification is UserScrollNotification) {
-      if (notification.direction == ScrollDirection.idle) {
-        _lastScrollDirection = ScrollDirection.idle;
-        _wasHealthVisible = healthVisible;
-        _wasGrowthTrendVisible = growthTrendVisible;
-        return false;
-      }
-
-      final directionChanged = notification.direction != _lastScrollDirection;
-      final healthEnteredVisibleArea = healthVisible && !_wasHealthVisible;
-      final growthEnteredVisibleArea =
-          growthTrendVisible && !_wasGrowthTrendVisible;
-      if (healthVisible && (directionChanged || healthEnteredVisibleArea) ||
-          growthTrendVisible &&
-              (directionChanged || growthEnteredVisibleArea)) {
-        setState(() {
-          if (healthVisible && (directionChanged || healthEnteredVisibleArea)) {
-            _healthAnimationCycle++;
-          }
-          if (growthTrendVisible &&
-              (directionChanged || growthEnteredVisibleArea)) {
-            _growthTrendAnimationCycle++;
-          }
-        });
-      }
-      _lastScrollDirection = notification.direction;
-      _wasHealthVisible = healthVisible;
-      _wasGrowthTrendVisible = growthTrendVisible;
-      return false;
-    }
-
-    if (notification is ScrollUpdateNotification) {
-      final healthEnteredVisibleArea = healthVisible && !_wasHealthVisible;
-      final growthEnteredVisibleArea =
-          growthTrendVisible && !_wasGrowthTrendVisible;
-      if (healthEnteredVisibleArea || growthEnteredVisibleArea) {
-        setState(() {
-          if (healthEnteredVisibleArea) {
-            _healthAnimationCycle++;
-          }
-          if (growthEnteredVisibleArea) {
-            _growthTrendAnimationCycle++;
-          }
-        });
-      }
-      _wasHealthVisible = healthVisible;
-      _wasGrowthTrendVisible = growthTrendVisible;
-    }
-
+    _triggerSectionAnimationsIfNeeded();
     return false;
+  }
+
+  void _triggerSectionAnimationsIfNeeded() {
+    if (!mounted) {
+      return;
+    }
+
+    final shouldAnimateHealth =
+        !_hasAnimatedHealth && _isSectionVisible(_healthSectionKey);
+    final shouldAnimateGrowth =
+        !_hasAnimatedGrowthTrend && _isSectionVisible(_growthTrendSectionKey);
+
+    if (!shouldAnimateHealth && !shouldAnimateGrowth) {
+      return;
+    }
+
+    setState(() {
+      if (shouldAnimateHealth) {
+        _healthAnimationCycle++;
+        _hasAnimatedHealth = true;
+      }
+      if (shouldAnimateGrowth) {
+        _growthTrendAnimationCycle++;
+        _hasAnimatedGrowthTrend = true;
+      }
+    });
   }
 
   bool _isSectionVisible(GlobalKey sectionKey) {
@@ -221,6 +219,110 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
         barrierColor: const Color(0x800F2746),
         transitionDuration: const Duration(milliseconds: 260),
         pageBuilder: (dialogContext, animation, secondaryAnimation) {
+          final productMode = Get.find<ProductModeController>().mode;
+          if (productMode == ProductMode.socialMedia) {
+            final safeTop = MediaQuery.paddingOf(dialogContext).top;
+            final safeBottom = MediaQuery.paddingOf(dialogContext).bottom;
+            final screenWidth = MediaQuery.sizeOf(dialogContext).width;
+            final sidebarWidth = math
+                .min(screenWidth - 20, math.max(screenWidth * 0.58, 232.0))
+                .toDouble();
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.of(dialogContext).pop(),
+              child: Stack(
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {},
+                      child: TweenAnimationBuilder<Offset>(
+                        tween: Tween(
+                          begin: const Offset(-1.02, 0),
+                          end: Offset.zero,
+                        ),
+                        duration: const Duration(milliseconds: 260),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, offset, child) {
+                          return FractionalTranslation(
+                            translation: offset,
+                            child: child,
+                          );
+                        },
+                        child: SizedBox(
+                          width: sidebarWidth,
+                          height: double.infinity,
+                          child: SocialSidebarPanel(
+                            user: user,
+                            safeTopInset: safeTop,
+                            safeBottomInset: safeBottom,
+                            onDashboardTap: () {
+                              Navigator.of(dialogContext).pop();
+                              _navigateSidebar(
+                                AppRoutes.socialDashboard,
+                                replaceCurrent: true,
+                              );
+                            },
+                            onAccountsTap: () {
+                              Navigator.of(dialogContext).pop();
+                              _navigateSidebar(AppRoutes.socialAccounts);
+                            },
+                            onCreateTap: () {
+                              Navigator.of(dialogContext).pop();
+                              _navigateSidebar(AppRoutes.socialCreate);
+                            },
+                            onCreativesTap: () {
+                              Navigator.of(dialogContext).pop();
+                              _navigateSidebar(AppRoutes.socialCreatives);
+                            },
+                            onCalendarTap: () {
+                              Navigator.of(dialogContext).pop();
+                              _navigateSidebar(AppRoutes.socialCalendar);
+                            },
+                            onSchedulerTap: () {
+                              Navigator.of(dialogContext).pop();
+                              _navigateSidebar(AppRoutes.socialScheduler);
+                            },
+                            onPostsTap: () {
+                              Navigator.of(dialogContext).pop();
+                              _navigateSidebar(AppRoutes.socialPosts);
+                            },
+                            onAnalyticsTap: () {
+                              Navigator.of(dialogContext).pop();
+                              _navigateSidebar(AppRoutes.socialAnalytics);
+                            },
+                            onProfileTap: () {
+                              Navigator.of(dialogContext).pop();
+                              _navigateSidebar(AppRoutes.socialProfile);
+                            },
+                            onPaymentTap: () {
+                              Navigator.of(dialogContext).pop();
+                              _navigateSidebar(
+                                AppRoutes.payment,
+                                replaceCurrent: true,
+                              );
+                            },
+                            onSupportTap: () {
+                              Navigator.of(dialogContext).pop();
+                              _navigateSidebar(AppRoutes.support);
+                            },
+                            onCollapseTap: () =>
+                                Navigator.of(dialogContext).pop(),
+                            onLogoutTap: () {
+                              Navigator.of(dialogContext).pop();
+                              controller.logout();
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
           final currentRoute = Get.currentRoute;
           var isSeoToolsExpanded =
               currentRoute == AppRoutes.keywordRanking ||
@@ -435,6 +537,7 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
   Widget build(BuildContext context) {
     return Obx(() {
       final user = controller.currentUser.value;
+      final productMode = Get.find<ProductModeController>().mode;
       if (user == null) {
         return const Center(
           child: CircularProgressIndicator(color: AppColors.primary),
@@ -473,8 +576,8 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
           double totalStars = connectedProfile
               ? liveReviews.fold(0.0, (sum, r) => sum + r.starRating)
               : controller
-                  .businessReviewsFor(user)
-                  .fold(0.0, (sum, r) => sum + r.rating);
+                    .businessReviewsFor(user)
+                    .fold(0.0, (sum, r) => sum + r.rating);
           double avgRating = totalReviews > 0 ? totalStars / totalReviews : 0;
           int reviewScore = totalReviews > 0
               ? ((avgRating / 5) * 100).round()
@@ -502,76 +605,88 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
                   const SizedBox(height: 2),
                   _HomeOverviewHeader(onMenuTap: () => _openSidebar(user)),
                   SizedBox(height: topCardGap),
-                  _BusinessSummaryCard(
-                    user: user,
-                    reviewCountLabel: '$reviewCount',
-                    onBusinessPhotoTap: _scrollToAiGallery,
-                  ),
-                  const SizedBox(height: AuthViewSpacing.cardGap),
-                  _BusinessQuickActionsCard(user: user),
-                  SizedBox(height: topSectionGap),
-                  _HealthOverviewSection(
-                    key: _healthSectionKey,
-                    animationCycle: _healthAnimationCycle,
-                    seoScore: seoScore,
-                    gbpHealth: gbpHealth,
-                    citations: citations,
-                    listings: listings,
-                  ),
-                  SizedBox(height: 6),
-                  _OverviewMetricsSection(
-                    isCompact: isCompact,
-                    spacing: pairSpacing,
-                    reviewCount: reviewCount,
-                    insights: controller.liveInsights.value,
-                  ),
-                  const SizedBox(height: AuthViewSpacing.cardGap),
-                  _ActivityTrendsCard(
-                    key: _growthTrendSectionKey,
-                    animationCycle: _growthTrendAnimationCycle,
-                    insights: controller.liveInsights.value,
-                    trendWindow: _trendWindow,
-                    visualMode: _trendVisualMode,
-                    onWindowSelected: (window) {
-                      setState(() {
-                        _trendWindow = window;
-                      });
-                      _fetchDashboardTrends();
-                    },
-                    onVisualModeChanged: (mode) {
-                      setState(() {
-                        _trendVisualMode = mode;
-                        _growthTrendAnimationCycle++;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: AuthViewSpacing.cardGap),
-                  _SectionHeader(
-                    title: 'AI Recommendations',
-                    actionLabel: 'View all',
-                    onActionTap: _openAiGalleryDialog,
-                  ),
-                  const SizedBox(height: AuthViewSpacing.cardGap),
-                  _AiRecommendationsScroller(
-                    gallerySectionKey: _aiGallerySectionKey,
-                    user: user,
-                    onOpenGalleryTap: _openAiGalleryDialog,
-                  ),
-                  const SizedBox(height: AuthViewSpacing.cardGap),
-                  const _SectionHeader(title: 'Pending Actions'),
-                  const SizedBox(height: AuthViewSpacing.cardGap),
-                  _PendingActionsCard(
-                    pendingReviewCount: pendingReviewCount,
-                    onPhotoTap: _openAiGalleryDialog,
-                  ),
-                  const SizedBox(height: AuthViewSpacing.cardGap),
-                  const _SectionHeader(
-                    title: 'May 2025 Growth Summary',
-                    actionLabel: 'View Report',
-                    actionColor: AppColors.primary,
-                  ),
-                  const SizedBox(height: AuthViewSpacing.cardGap),
-                  const _GrowthSummaryCard(),
+                  if (productMode == ProductMode.googleBusiness) ...[
+                    _BusinessSummaryCard(
+                      user: user,
+                      reviewCountLabel: '$reviewCount',
+                      onBusinessPhotoTap: _scrollToAiGallery,
+                    ),
+                    const SizedBox(height: AuthViewSpacing.cardGap),
+                    _BusinessQuickActionsCard(user: user),
+                    SizedBox(height: topSectionGap),
+                    _HealthOverviewSection(
+                      key: _healthSectionKey,
+                      animationCycle: _healthAnimationCycle,
+                      seoScore: seoScore,
+                      gbpHealth: gbpHealth,
+                      citations: citations,
+                      listings: listings,
+                    ),
+                    SizedBox(height: 6),
+                    _OverviewMetricsSection(
+                      isCompact: isCompact,
+                      spacing: pairSpacing,
+                      reviewCount: reviewCount,
+                      insights: controller.liveInsights.value,
+                    ),
+                    const SizedBox(height: AuthViewSpacing.cardGap),
+                    _ActivityTrendsCard(
+                      key: _growthTrendSectionKey,
+                      animationCycle: _growthTrendAnimationCycle,
+                      insights: controller.liveInsights.value,
+                      trendWindow: _trendWindow,
+                      visualMode: _trendVisualMode,
+                      onWindowSelected: (window) {
+                        setState(() {
+                          _trendWindow = window;
+                        });
+                        _fetchDashboardTrends();
+                      },
+                      onVisualModeChanged: (mode) {
+                        setState(() {
+                          _trendVisualMode = mode;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: AuthViewSpacing.cardGap),
+                    _SectionHeader(
+                      title: 'AI Recommendations',
+                      actionLabel: 'View all',
+                      onActionTap: _openAiGalleryDialog,
+                    ),
+                    const SizedBox(height: AuthViewSpacing.cardGap),
+                    _AiRecommendationsScroller(
+                      gallerySectionKey: _aiGallerySectionKey,
+                      user: user,
+                      onOpenGalleryTap: _openAiGalleryDialog,
+                    ),
+                    const SizedBox(height: AuthViewSpacing.cardGap),
+                    const _SectionHeader(title: 'Pending Actions'),
+                    const SizedBox(height: AuthViewSpacing.cardGap),
+                    _PendingActionsCard(
+                      pendingReviewCount: pendingReviewCount,
+                      onPhotoTap: _openAiGalleryDialog,
+                    ),
+                    const SizedBox(height: AuthViewSpacing.cardGap),
+                    const _SectionHeader(
+                      title: 'May 2025 Growth Summary',
+                      actionLabel: 'View Report',
+                      actionColor: AppColors.primary,
+                    ),
+                    const SizedBox(height: AuthViewSpacing.cardGap),
+                    const _GrowthSummaryCard(),
+                  ] else ...[
+                    _SocialHomeOverview(
+                      user: user,
+                      onCreateTap: () => Get.snackbar(
+                        'Social Create',
+                        'Create flow comes in the next step.',
+                        snackPosition: SnackPosition.BOTTOM,
+                        backgroundColor: Colors.white,
+                        colorText: AppColors.brandBlue,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -589,7 +704,41 @@ class _HomeOverviewHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _GoogleBusinessHeroCard(onMenuTap: onMenuTap);
+    final productModeController = Get.find<ProductModeController>();
+
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SidebarMenuTriggerButton(onTap: onMenuTap, isEmbedded: true),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Obx(
+                () => _ProductModeSwitcher(
+                  selectedMode: productModeController.mode,
+                  onModeSelected: (mode) {
+                    productModeController.selectMode(mode);
+                    final targetRoute = mode == ProductMode.googleBusiness
+                        ? AppRoutes.dashboard
+                        : AppRoutes.socialDashboard;
+                    if (Get.currentRoute != targetRoute) {
+                      Get.offNamed(targetRoute);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Obx(
+          () => productModeController.isGoogleBusiness
+              ? const _GoogleBusinessHeroCard()
+              : const _SocialMediaTopBannerCard(),
+        ),
+      ],
+    );
   }
 }
 
@@ -598,12 +747,19 @@ class _AddPostFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final productModeController = Get.isRegistered<ProductModeController>()
+        ? Get.find<ProductModeController>()
+        : Get.put(ProductModeController(), permanent: true);
     return Padding(
       padding: const EdgeInsets.only(right: 4, bottom: 8),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => Get.toNamed(AppRoutes.gbpPosts),
+          onTap: () => Get.toNamed(
+            productModeController.isSocialMedia
+                ? AppRoutes.socialCreate
+                : AppRoutes.gbpPosts,
+          ),
           borderRadius: BorderRadius.circular(999),
           child: Ink(
             width: 64,
@@ -633,20 +789,17 @@ class _AddPostFab extends StatelessWidget {
 }
 
 class _GoogleBusinessHeroCard extends StatelessWidget {
-  const _GoogleBusinessHeroCard({required this.onMenuTap});
-
-  final VoidCallback onMenuTap;
+  const _GoogleBusinessHeroCard();
 
   @override
   Widget build(BuildContext context) {
-    final isTightWidth = MediaQuery.sizeOf(context).width < 390;
-
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(isTightWidth ? 8 : 10, 12, 12, 12),
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(_homeCardRadius(28)),
+        border: Border.all(color: const Color(0xFFD5E2F2)),
         boxShadow: const [
           BoxShadow(
             color: Color(0x120F2746),
@@ -655,21 +808,2174 @@ class _GoogleBusinessHeroCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: const Padding(
+        padding: EdgeInsets.symmetric(vertical: 2),
+        child: _GoogleBusinessLogo(
+          alignLeft: true,
+          showTagline: true,
+          useBrandBadgeColors: true,
+        ),
+      ),
+    );
+  }
+}
+
+class _SocialMediaTopBannerCard extends StatelessWidget {
+  const _SocialMediaTopBannerCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 390;
+    final socialLabelSize = isCompact ? 13.8 : 14.4;
+    final headlineSize = isCompact ? 12.4 : 15.2;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 2, 14, 3),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(_homeCardRadius(28)),
+        border: Border.all(color: const Color(0xFFD5E2F2)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F2746),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: AspectRatio(
+          aspectRatio: 3.95,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              isCompact ? 8 : 14,
+              isCompact ? 4 : 6,
+              isCompact ? 8 : 18,
+              isCompact ? 4 : 6,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  flex: 9,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 1),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 2),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Text(
+                            'Social media',
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: socialLabelSize,
+                              height: 1.0,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Image.asset(
+                                'assets/images/facebook.png',
+                                width: isCompact ? 26 : 30,
+                                height: isCompact ? 26 : 30,
+                                fit: BoxFit.contain,
+                              ),
+                              SizedBox(width: isCompact ? 5 : 6),
+                              Image.asset(
+                                'assets/images/instagram.png',
+                                width: isCompact ? 26 : 30,
+                                height: isCompact ? 26 : 30,
+                                fit: BoxFit.contain,
+                              ),
+                              SizedBox(width: isCompact ? 5 : 6),
+                              Image.asset(
+                                'assets/images/link.png',
+                                width: isCompact ? 26 : 30,
+                                height: isCompact ? 26 : 30,
+                                fit: BoxFit.contain,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(width: isCompact ? 12 : 18),
+                Expanded(
+                  flex: 11,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8, right: 0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AppLogo(iconSize: isCompact ? 32 : 42),
+                          SizedBox(height: isCompact ? 4 : 10),
+                          Text(
+                            'AI-powered content for\nyour social platforms',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: AppColors.brandBlue,
+                              fontSize: headlineSize,
+                              height: 1.0,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.08,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SocialHomeOverview extends StatefulWidget {
+  const _SocialHomeOverview({required this.user, required this.onCreateTap});
+
+  final TestAccount user;
+  final VoidCallback onCreateTap;
+
+  @override
+  State<_SocialHomeOverview> createState() => _SocialHomeOverviewState();
+}
+
+class _SocialHomeOverviewState extends State<_SocialHomeOverview> {
+  late final SocialAccountsController _accountsController =
+      Get.isRegistered<SocialAccountsController>()
+      ? Get.find<SocialAccountsController>()
+      : Get.put(SocialAccountsController());
+  late final SocialPostsController _postsController =
+      Get.isRegistered<SocialPostsController>()
+      ? Get.find<SocialPostsController>()
+      : Get.put(SocialPostsController());
+  late final SocialAnalyticsController _analyticsController =
+      Get.isRegistered<SocialAnalyticsController>()
+      ? Get.find<SocialAnalyticsController>()
+      : Get.put(SocialAnalyticsController());
+  late final SocialCreativesController _creativesController =
+      Get.isRegistered<SocialCreativesController>()
+      ? Get.find<SocialCreativesController>()
+      : Get.put(SocialCreativesController());
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadDashboard());
+  }
+
+  void _loadDashboard() {
+    _accountsController.loadAccounts();
+    _postsController.loadPosts();
+    _analyticsController.loadIfBusinessOrRangeChanged('Last 28 days');
+    _creativesController.loadIfBusinessChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(
+      () => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SidebarMenuTriggerButton(onTap: onMenuTap, isEmbedded: true),
-          SizedBox(width: isTightWidth ? 8 : 10),
-          const Expanded(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 2),
-              child: _GoogleBusinessLogo(
-                alignLeft: true,
-                showTagline: true,
-                useBrandBadgeColors: true,
+          _SocialStatsGrid(
+            accountsController: _accountsController,
+            postsController: _postsController,
+            analyticsController: _analyticsController,
+          ),
+          const SizedBox(height: AuthViewSpacing.cardGap),
+          _SocialConnectedPlatformsCard(
+            accounts: _accountsController.accounts.toList(growable: false),
+            isLoading: _accountsController.isLoading.value,
+          ),
+          const SizedBox(height: AuthViewSpacing.cardGap),
+          _SocialUpcomingPostsCard(
+            posts: _postsController.posts.toList(growable: false),
+          ),
+          const SizedBox(height: AuthViewSpacing.cardGap),
+          _SocialRecentPostsCard(
+            posts: _postsController.posts.toList(growable: false),
+            isLoading: _postsController.isLoading.value,
+          ),
+          const SizedBox(height: AuthViewSpacing.cardGap),
+          _SocialPhotoGalleryCard(
+            creatives: _creativesController.creatives.toList(growable: false),
+            isLoading: _creativesController.isLoading.value,
+          ),
+          const SizedBox(height: AuthViewSpacing.cardGap),
+          const _SocialQuickActionsCard(),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialStatsGrid extends StatelessWidget {
+  const _SocialStatsGrid({
+    required this.accountsController,
+    required this.postsController,
+    required this.analyticsController,
+  });
+
+  final SocialAccountsController accountsController;
+  final SocialPostsController postsController;
+  final SocialAnalyticsController analyticsController;
+
+  @override
+  Widget build(BuildContext context) {
+    final posts = postsController.posts;
+    final summary = analyticsController.dashboard.value?.summary ?? const {};
+    final scheduledCount = posts.where(_isScheduledSocialPost).length;
+    final publishedCount = posts.where(_isPublishedSocialPost).length;
+    final engagementRate = _readSocialDouble(
+      summary['engagementRate'] ?? summary['engagement_rate'],
+    );
+    final cards = [
+      (
+        title: 'Scheduled Posts',
+        value: '$scheduledCount',
+        delta: scheduledCount > 0 ? 'Live' : '0%',
+        footer: 'from scheduled queue',
+        growthUp: true,
+        icon: Icons.calendar_month_rounded,
+        tint: const Color(0xFFEEF0FF),
+        iconColor: const Color(0xFF5A52FF),
+      ),
+      (
+        title: 'Published Media',
+        value: '$publishedCount',
+        delta: publishedCount > 0 ? 'Live' : '0%',
+        footer: 'from backend posts',
+        growthUp: true,
+        icon: Icons.bar_chart_rounded,
+        tint: const Color(0xFFEEF5FF),
+        iconColor: const Color(0xFF3E7BFA),
+      ),
+      (
+        title: 'Connected Accounts',
+        value: '${accountsController.connectedCount}',
+        delta: accountsController.healthyCount > 0 ? 'Active' : '0%',
+        footer:
+            '${accountsController.healthyCount}/${accountsController.connectedCount} Active',
+        growthUp: true,
+        icon: Icons.groups_rounded,
+        tint: const Color(0xFFEAFBF7),
+        iconColor: const Color(0xFF1DAE8A),
+      ),
+      (
+        title: 'Engagement Rate',
+        value: '${engagementRate.toStringAsFixed(2)}%',
+        delta: '0.0%',
+        footer: 'Last 28 days',
+        growthUp: true,
+        icon: Icons.show_chart_rounded,
+        tint: const Color(0xFFF5EEFF),
+        iconColor: const Color(0xFF8A58FF),
+      ),
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: cards.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+        childAspectRatio: 1.42,
+      ),
+      itemBuilder: (context, index) {
+        final card = cards[index];
+        return Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE8EEF5)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0C0F2746),
+                blurRadius: 10,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D63C8),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(height: 7),
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: card.tint,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(card.icon, color: card.iconColor, size: 18),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      card.title,
+                      maxLines: 2,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: const Color(0xFF111827),
+                        fontSize: 12.4,
+                        height: 1.1,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    card.value,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF111827),
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.35,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 1),
+                    child: Icon(
+                      card.growthUp
+                          ? Icons.arrow_upward_rounded
+                          : Icons.arrow_downward_rounded,
+                      size: 12,
+                      color: card.growthUp
+                          ? const Color(0xFF16A34A)
+                          : const Color(0xFFEF4444),
+                    ),
+                  ),
+                  const SizedBox(width: 1),
+                  Text(
+                    card.delta,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: card.growthUp
+                          ? const Color(0xFF16A34A)
+                          : const Color(0xFFEF4444),
+                      fontSize: 11.2,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 1),
+              Text(
+                card.footer,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: AppColors.brandBlue.withValues(alpha: 0.58),
+                  fontSize: 10.1,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SocialConnectedPlatformsCard extends StatelessWidget {
+  const _SocialConnectedPlatformsCard({
+    required this.accounts,
+    required this.isLoading,
+  });
+
+  final List<SocialAccount> accounts;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = accounts.take(3).toList(growable: false);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE8EEF5)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F2746),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Connected Platforms',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF111827),
+                    fontSize: 14.8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => Get.offNamed(AppRoutes.socialAccounts),
+                child: const Text(
+                  'View All',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF315EF6),
+                    fontSize: 12.2,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (isLoading && items.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 18),
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                ),
+              ),
+            )
+          else if (items.isEmpty)
+            _SocialEmptyState(
+              icon: Icons.add_link_rounded,
+              title: 'No social accounts connected yet.',
+              actionLabel: 'Connect Accounts',
+              onTap: () => Get.offNamed(AppRoutes.socialAccounts),
+            )
+          else
+            Row(
+              children: items
+                  .map(
+                    (account) => Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          right: account == items.last ? 0 : 8,
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(0xFFE6EDF5),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  _SocialHomeLogo(
+                                    asset: _socialPlatformLogoPath(
+                                      account.platform,
+                                    ),
+                                    size: 32,
+                                  ),
+                                  const Spacer(),
+                                  Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: BoxDecoration(
+                                      color: account.isActive
+                                          ? const Color(0xFF22C55E)
+                                          : const Color(0xFFF59E0B),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                _socialPlatformTitle(account.platform),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: Color(0xFF111827),
+                                  fontSize: 13.1,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.12,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                account.isActive ? 'Connected' : 'Needs sync',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: account.isActive
+                                      ? const Color(0xFF22C55E)
+                                      : const Color(0xFFF59E0B),
+                                  fontSize: 12.2,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: -0.08,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _socialRelativeTime(
+                                  account.updatedAt ?? account.createdAt,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: AppColors.brandBlue.withValues(
+                                    alpha: 0.58,
+                                  ),
+                                  fontSize: 11.2,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: -0.08,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialUpcomingPostsCard extends StatelessWidget {
+  const _SocialUpcomingPostsCard({required this.posts});
+
+  final List<SocialPostInfo> posts;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final upcoming = posts
+        .where((post) => _isScheduledSocialPost(post) && post.scheduledAt != null)
+        .where((post) => !post.scheduledAt!.isBefore(_startOfDay(today)))
+        .toList()
+      ..sort((a, b) => a.scheduledAt!.compareTo(b.scheduledAt!));
+    final days = List.generate(7, (index) {
+      final day = today.add(Duration(days: index));
+      final postOnDay = _firstSocialPostOnDay(upcoming, day);
+      return (
+        _shortWeekday(day),
+        '${day.day}',
+        index == 0 || postOnDay != null,
+        postOnDay == null
+            ? const Color(0xFFCBD5E1)
+            : _socialPlatformColor(_firstSocialPlatform(postOnDay)),
+      );
+    });
+    final nextPost = upcoming.isNotEmpty ? upcoming.first : null;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE8EEF5)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F2746),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Upcoming Posts',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF111827),
+                    fontSize: 14.8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => Get.offNamed(AppRoutes.socialCalendar),
+                child: const Text(
+                  'View Calendar',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: _socialPrimaryStart,
+                    fontSize: 12.2,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE6EDF5)),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: days
+                      .map(
+                        (day) => Expanded(
+                          child: Container(
+                            margin: EdgeInsets.only(
+                              right: day == days.last ? 0 : 4,
+                            ),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: day.$3 ? 5 : 0,
+                              vertical: day.$3 ? 6 : 0,
+                            ),
+                            decoration: day.$3
+                                ? BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: const Color(0xFFDCE6F4),
+                                    ),
+                                  )
+                                : null,
+                            child: Column(
+                              children: [
+                                Text(
+                                  day.$1,
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: AppColors.brandBlue.withValues(
+                                      alpha: 0.66,
+                                    ),
+                                    fontSize: 10.2,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  day.$2,
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF111827),
+                                    fontSize: 12.8,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: -0.1,
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                Container(
+                                  width: 5,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    color: day.$4,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+                const SizedBox(height: 12),
+                if (nextPost == null)
+                  _SocialEmptyState(
+                    icon: Icons.event_busy_rounded,
+                    title: 'No upcoming scheduled posts.',
+                    actionLabel: 'Create Post',
+                    onTap: () => Get.offNamed(AppRoutes.socialCreate),
+                  )
+                else
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE6EDF5)),
+                    ),
+                    child: Row(
+                      children: [
+                        _SocialPostThumb(post: nextPost, size: 48),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _socialPostTitle(nextPost),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: Color(0xFF111827),
+                                  fontSize: 12.8,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: -0.1,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 8,
+                                runSpacing: 4,
+                                children: [
+                                  Text(
+                                    _socialTimeLabel(nextPost.scheduledAt),
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: AppColors.brandBlue.withValues(
+                                        alpha: 0.7,
+                                      ),
+                                      fontSize: 11.4,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    '• ${_socialPlatformTitle(_firstSocialPlatform(nextPost))}',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: AppColors.brandBlue.withValues(
+                                        alpha: 0.7,
+                                      ),
+                                      fontSize: 11.4,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFFF3D9),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: const Text(
+                                      'Scheduled',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        color: Color(0xFFDB8A00),
+                                        fontSize: 10.6,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: -0.08,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: Color(0xFF64748B),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialQuickActionsCard extends StatelessWidget {
+  const _SocialQuickActionsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      ('Create Post', 'AI Assistant', Icons.edit_note_rounded),
+      ('Connect Account', 'Add Platform', Icons.add_link_rounded),
+      ('Open Scheduler', 'Plan Content', Icons.calendar_today_rounded),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE8EEF5)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F2746),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'AI Quick Actions',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              color: Color(0xFF111827),
+              fontSize: 14.8,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.2,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: items
+                .map(
+                  (item) => Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        right: item == items.last ? 0 : 8,
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(10, 12, 10, 11),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9FBFE),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFE6EDF5)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              item.$3,
+                              color: const Color(0xFF246BFD),
+                              size: 22,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              item.$1,
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF111827),
+                                fontSize: 12.0,
+                                height: 1.15,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.1,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              item.$2,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: AppColors.brandBlue.withValues(
+                                  alpha: 0.58,
+                                ),
+                                fontSize: 10.8,
+                                height: 1.15,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: -0.08,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialRecentPostsCard extends StatefulWidget {
+  const _SocialRecentPostsCard({
+    required this.posts,
+    required this.isLoading,
+  });
+
+  final List<SocialPostInfo> posts;
+  final bool isLoading;
+
+  @override
+  State<_SocialRecentPostsCard> createState() => _SocialRecentPostsCardState();
+}
+
+class _SocialRecentPostsCardState extends State<_SocialRecentPostsCard> {
+  String _selectedFilter = 'All Posts';
+
+  @override
+  Widget build(BuildContext context) {
+    final filters = [
+      ('All Posts', Icons.layers_rounded),
+      ('Facebook', null),
+      ('Instagram', null),
+      ('LinkedIn', null),
+    ];
+
+    final visiblePosts = _selectedFilter == 'All Posts'
+        ? widget.posts.take(4).toList(growable: false)
+        : widget.posts
+              .where(
+                (post) =>
+                    _socialPlatformTitle(_firstSocialPlatform(post)) ==
+                    _selectedFilter,
+              )
+              .take(4)
+              .toList(growable: false);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE8EEF5)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F2746),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Recent Posts',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF111827),
+                    fontSize: 14.8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => Get.offNamed(AppRoutes.socialPosts),
+                child: const Text(
+                  'View All',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF315EF6),
+                    fontSize: 12.2,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: filters.map((filter) {
+                final selected = _selectedFilter == filter.$1;
+                return Padding(
+                  padding: EdgeInsets.only(
+                    right: filter == filters.last ? 0 : 8,
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => setState(() => _selectedFilter = filter.$1),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Ink(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: selected ? 14 : 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: selected
+                              ? const LinearGradient(
+                                  colors: [
+                                    Color(0xFF0A3F85),
+                                    Color(0xFF2ACFC7),
+                                  ],
+                                )
+                              : null,
+                          color: selected ? null : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: selected
+                                ? Colors.transparent
+                                : const Color(0xFFDDE7F2),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (filter.$2 != null) ...[
+                              Icon(filter.$2, size: 16, color: Colors.white),
+                              const SizedBox(width: 8),
+                            ] else if (filter.$1 == 'Facebook') ...[
+                              Image.asset(
+                                'assets/images/facebook.png',
+                                width: 18,
+                                height: 18,
+                                fit: BoxFit.contain,
+                              ),
+                              const SizedBox(width: 8),
+                            ] else if (filter.$1 == 'Instagram') ...[
+                              Image.asset(
+                                'assets/images/instagram.png',
+                                width: 18,
+                                height: 18,
+                                fit: BoxFit.contain,
+                              ),
+                              const SizedBox(width: 8),
+                            ] else ...[
+                              Image.asset(
+                                'assets/images/link.png',
+                                width: 18,
+                                height: 18,
+                                fit: BoxFit.contain,
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                            Text(
+                              filter.$1,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: selected
+                                    ? Colors.white
+                                    : const Color(0xFF111827),
+                                fontSize: 12.4,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (widget.isLoading && visiblePosts.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 18),
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                ),
+              ),
+            )
+          else if (visiblePosts.isEmpty)
+            _SocialEmptyState(
+              icon: Icons.article_outlined,
+              title: 'No posts found for this filter.',
+              actionLabel: 'Create Post',
+              onTap: () => Get.offNamed(AppRoutes.socialCreate),
+            )
+          else
+            ...visiblePosts.map(
+              (post) {
+                final statusStyle = _socialStatusStyle(post);
+                final platform = _firstSocialPlatform(post);
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: post == visiblePosts.last ? 0 : 12,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE6EDF5)),
+                    ),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _SocialPostThumb(post: post, width: 88),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    _SocialHomeLogo(
+                                      asset: _socialPlatformLogoPath(platform),
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _socialPostTitle(post),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontFamily: 'Inter',
+                                          color: Color(0xFF111827),
+                                          fontSize: 13.0,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: -0.1,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: statusStyle.$2,
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        statusStyle.$1,
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          color: statusStyle.$3,
+                                          fontSize: 11.4,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  post.content,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: AppColors.brandBlue.withValues(
+                                      alpha: 0.86,
+                                    ),
+                                    fontSize: 12.0,
+                                    height: 1.3,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _socialPostDateLabel(post),
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: AppColors.brandBlue.withValues(
+                                      alpha: 0.68,
+                                    ),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          const SizedBox(height: 14),
+          Center(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => Get.offNamed(AppRoutes.socialAnalytics),
+                borderRadius: BorderRadius.circular(999),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.bar_chart_rounded,
+                        size: 18,
+                        color: Color(0xFF315EF6),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'See Insights Overview',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: const Color(0xFF315EF6),
+                          fontSize: 14.0,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SocialPhotoGalleryCard extends StatefulWidget {
+  const _SocialPhotoGalleryCard({
+    required this.creatives,
+    required this.isLoading,
+  });
+
+  final List<SocialCreative> creatives;
+  final bool isLoading;
+
+  @override
+  State<_SocialPhotoGalleryCard> createState() =>
+      _SocialPhotoGalleryCardState();
+}
+
+class _SocialPhotoGalleryCardState extends State<_SocialPhotoGalleryCard> {
+  String _selectedFilter = 'All';
+
+  @override
+  Widget build(BuildContext context) {
+    final filters = ['All', 'Creatives', 'Images'];
+    final visibleItems = _selectedFilter == 'All'
+        ? widget.creatives.take(4).toList(growable: false)
+        : widget.creatives
+              .where((item) {
+                final source = item.imageSource.toLowerCase();
+                return _selectedFilter == 'Images'
+                    ? source.contains('stock')
+                    : !source.contains('stock');
+              })
+              .take(4)
+              .toList(growable: false);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE8EEF5)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F2746),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Photo Gallery',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF111827),
+                    fontSize: 14.8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => Get.offNamed(AppRoutes.socialCreatives),
+                child: const Text(
+                  'View All',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF315EF6),
+                    fontSize: 12.2,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: filters.map((filter) {
+              final selected = _selectedFilter == filter;
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: filter == filters.last ? 0 : 8,
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => setState(() => _selectedFilter = filter),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Ink(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          gradient: selected
+                              ? const LinearGradient(
+                                  colors: [
+                                    Color(0xFF0A3F85),
+                                    Color(0xFF2ACFC7),
+                                  ],
+                                )
+                              : null,
+                          color: selected ? null : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: selected
+                                ? Colors.transparent
+                                : const Color(0xFFDDE7F2),
+                          ),
+                        ),
+                        child: Text(
+                          filter,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: selected
+                                ? Colors.white
+                                : const Color(0xFF111827),
+                            fontSize: 12.6,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+          if (widget.isLoading && visibleItems.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 18),
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                ),
+              ),
+            )
+          else if (visibleItems.isEmpty)
+            _SocialEmptyState(
+              icon: Icons.photo_library_outlined,
+              title: 'No creatives found yet.',
+              actionLabel: 'Open Creatives',
+              onTap: () => Get.offNamed(AppRoutes.socialCreatives),
+            )
+          else
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: visibleItems.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 0.86,
+              ),
+              itemBuilder: (context, index) {
+                final item = visibleItems[index];
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFE6EDF5)),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: _SocialNetworkImage(
+                                url: item.imageUrl,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              top: 12,
+                              right: 12,
+                              child: Icon(
+                                Icons.auto_awesome_rounded,
+                                color: Colors.white.withValues(alpha: 0.95),
+                                size: 22,
+                                shadows: const [
+                                  Shadow(
+                                    color: Color(0x330F2746),
+                                    blurRadius: 10,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _socialCreativeTitle(item),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: Color(0xFF111827),
+                                  fontSize: 12.8,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: -0.1,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              item.imageSource.toLowerCase().contains('stock')
+                                  ? 'Stock'
+                                  : 'Saved',
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF16A34A),
+                                fontSize: 12.4,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.08,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.bookmark_border_rounded,
+                              size: 18,
+                              color: Color(0xFF16A34A),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          const SizedBox(height: 14),
+          GestureDetector(
+            onTap: () => Get.offNamed(AppRoutes.socialCreatives),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFDDE7F2)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.photo_library_outlined,
+                    size: 20,
+                    color: Color(0xFF315EF6),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Open Creative Library',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF315EF6),
+                      fontSize: 14.0,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: Color(0xFF315EF6),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialEmptyState extends StatelessWidget {
+  const _SocialEmptyState({
+    required this.icon,
+    required this.title,
+    required this.actionLabel,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String actionLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE6EDF5)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: const Color(0xFF315EF6), size: 24),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              color: AppColors.brandBlue.withValues(alpha: 0.78),
+              fontSize: 12.4,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [_socialPrimaryStart, _socialPrimaryEnd],
+                  ),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              child: Text(
+                actionLabel,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: Colors.white,
+                  fontSize: 12.0,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialHomeLogo extends StatelessWidget {
+  const _SocialHomeLogo({required this.asset, required this.size});
+
+  final String asset;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(size / 4)),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(asset, fit: BoxFit.cover),
+    );
+  }
+}
+
+class _SocialPostThumb extends StatelessWidget {
+  const _SocialPostThumb({required this.post, this.size, this.width});
+
+  final SocialPostInfo post;
+  final double? size;
+  final double? width;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = _resolveSocialPostImageUrl(post);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: width ?? size,
+        height: size,
+        child: imageUrl.isEmpty
+            ? _SocialTextPostThumb(post: post)
+            : _SocialNetworkImage(url: imageUrl, fit: BoxFit.cover),
+      ),
+    );
+  }
+}
+
+class _SocialTextPostThumb extends StatelessWidget {
+  const _SocialTextPostThumb({required this.post});
+
+  final SocialPostInfo post;
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = _socialTextPreview(post.content);
+    final accent = _socialPlatformColor(_firstSocialPlatform(post));
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF8FBFF), Color(0xFFF1F6FD)],
+        ),
+        border: Border.all(color: const Color(0xFFDCE7F3)),
+      ),
+      padding: const EdgeInsets.fromLTRB(9, 9, 9, 9),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Icon(
+                  Icons.subject_rounded,
+                  size: 14,
+                  color: accent,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0xFFE3EAF3)),
+                ),
+                child: const Text(
+                  'Text',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF5F6F89),
+                    fontSize: 9.8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.05,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Expanded(
+            child: Text(
+              preview,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF21314F),
+                fontSize: 10.8,
+                height: 1.28,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.08,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: List.generate(
+              3,
+              (index) => Expanded(
+                child: Container(
+                  height: 3,
+                  margin: EdgeInsets.only(right: index == 2 ? 0 : 4),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: index == 0 ? 0.3 : 0.14),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialNetworkImage extends StatelessWidget {
+  const _SocialNetworkImage({required this.url, this.fit = BoxFit.cover});
+
+  final String url;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) {
+    if (url.trim().isEmpty) {
+      return const ColoredBox(
+        color: Color(0xFFF1F5F9),
+        child: Center(
+          child: Icon(Icons.image_outlined, color: Color(0xFF94A3B8)),
+        ),
+      );
+    }
+    return Image.network(
+      url,
+      fit: fit,
+      errorBuilder: (_, _, _) => const ColoredBox(
+        color: Color(0xFFF1F5F9),
+        child: Center(
+          child: Icon(Icons.broken_image_outlined, color: Color(0xFF94A3B8)),
+        ),
+      ),
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return const ColoredBox(
+          color: Color(0xFFF8FAFC),
+          child: Center(
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+bool _isPublishedSocialPost(SocialPostInfo post) {
+  final status = post.status.toLowerCase();
+  return status.contains('published') || post.publishedAt != null;
+}
+
+bool _isScheduledSocialPost(SocialPostInfo post) {
+  final status = post.status.toLowerCase();
+  return status.contains('scheduled') && !_isPublishedSocialPost(post);
+}
+
+DateTime _startOfDay(DateTime value) {
+  return DateTime(value.year, value.month, value.day);
+}
+
+bool _sameSocialDay(DateTime? first, DateTime second) {
+  if (first == null) return false;
+  return first.year == second.year &&
+      first.month == second.month &&
+      first.day == second.day;
+}
+
+SocialPostInfo? _firstSocialPostOnDay(
+  List<SocialPostInfo> posts,
+  DateTime day,
+) {
+  for (final post in posts) {
+    if (_sameSocialDay(post.scheduledAt, day)) return post;
+  }
+  return null;
+}
+
+String _firstSocialPlatform(SocialPostInfo post) {
+  return post.platforms.isEmpty ? 'FACEBOOK' : post.platforms.first;
+}
+
+String _socialPlatformLogoPath(String platform) {
+  final normalized = platform.trim().toUpperCase();
+  if (normalized.contains('INSTAGRAM')) return 'assets/images/instagram.png';
+  if (normalized.contains('LINKEDIN')) return 'assets/images/link.png';
+  return 'assets/images/facebook.png';
+}
+
+String _socialPlatformTitle(String platform) {
+  final normalized = platform.trim().toUpperCase();
+  if (normalized.contains('INSTAGRAM')) return 'Instagram';
+  if (normalized.contains('LINKEDIN')) return 'LinkedIn';
+  if (normalized.contains('FACEBOOK')) return 'Facebook';
+  return platform.trim().isEmpty ? 'Social' : platform.trim();
+}
+
+Color _socialPlatformColor(String platform) {
+  final normalized = platform.trim().toUpperCase();
+  if (normalized.contains('INSTAGRAM')) return const Color(0xFFE1306C);
+  if (normalized.contains('LINKEDIN')) return const Color(0xFF0A66C2);
+  return const Color(0xFF1877F2);
+}
+
+(String, Color, Color) _socialStatusStyle(SocialPostInfo post) {
+  final status = post.status.toLowerCase();
+  if (status.contains('failed')) {
+    return ('Failed', const Color(0xFFFFE8E8), const Color(0xFFEF4444));
+  }
+  if (_isScheduledSocialPost(post)) {
+    return ('Scheduled', const Color(0xFFFFF3D9), const Color(0xFFDB8A00));
+  }
+  if (_isPublishedSocialPost(post)) {
+    return ('Published', const Color(0xFFE8FAEE), const Color(0xFF22A95A));
+  }
+  return ('Draft', const Color(0xFFF1F5F9), const Color(0xFF64748B));
+}
+
+String _socialPostTitle(SocialPostInfo post) {
+  final normalized = post.content.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (normalized.isEmpty) return 'Untitled social post';
+  return normalized.length <= 42 ? normalized : '${normalized.substring(0, 42)}...';
+}
+
+String _socialPostDateLabel(SocialPostInfo post) {
+  final value = post.publishedAt ?? post.scheduledAt ?? post.createdAt;
+  if (value == null) return 'Date unavailable';
+  return _socialDateTimeLabel(value);
+}
+
+String _socialDateTimeLabel(DateTime value) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
+  final minute = value.minute.toString().padLeft(2, '0');
+  final suffix = value.hour >= 12 ? 'PM' : 'AM';
+  return '${months[value.month - 1]} ${value.day}, ${value.year} at $hour:$minute $suffix';
+}
+
+String _socialTimeLabel(DateTime? value) {
+  if (value == null) return 'Time unavailable';
+  final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
+  final minute = value.minute.toString().padLeft(2, '0');
+  final suffix = value.hour >= 12 ? 'PM' : 'AM';
+  return '$hour:$minute $suffix';
+}
+
+String _shortWeekday(DateTime value) {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return days[value.weekday - 1];
+}
+
+String _socialRelativeTime(DateTime? value) {
+  if (value == null) return 'Sync time unavailable';
+  final diff = DateTime.now().difference(value);
+  if (diff.inMinutes < 1) return 'Synced just now';
+  if (diff.inHours < 1) return 'Synced ${diff.inMinutes}m ago';
+  if (diff.inDays < 1) return 'Synced ${diff.inHours}h ago';
+  return 'Synced ${diff.inDays}d ago';
+}
+
+String _socialCreativeTitle(SocialCreative creative) {
+  final prompt = creative.promptUsed?.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (prompt != null && prompt.isNotEmpty) {
+    return prompt.length <= 28 ? prompt : '${prompt.substring(0, 28)}...';
+  }
+  final type = creative.creativeType.replaceAll('_', ' ').trim();
+  if (type.isEmpty) return 'Creative';
+  return type
+      .split(' ')
+      .where((part) => part.isNotEmpty)
+      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
+}
+
+String _socialTextPreview(String content) {
+  final normalized = content.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (normalized.isEmpty) {
+    return 'Text-only social update';
+  }
+  return normalized.length <= 70
+      ? normalized
+      : '${normalized.substring(0, 70)}...';
+}
+
+String _resolveSocialPostImageUrl(SocialPostInfo post) {
+  if (post.mediaUrls.isNotEmpty && post.mediaUrls.first.trim().isNotEmpty) {
+    return post.mediaUrls.first.trim();
+  }
+
+  final raw = post.raw;
+  final directCandidates = [
+    raw['imageUrl'],
+    raw['image_url'],
+    raw['thumbnailUrl'],
+    raw['thumbnail_url'],
+    raw['mediaUrl'],
+    raw['media_url'],
+    raw['coverUrl'],
+    raw['cover_url'],
+    raw['image'],
+  ];
+  for (final candidate in directCandidates) {
+    final value = candidate?.toString().trim() ?? '';
+    if (value.isNotEmpty) {
+      return value;
+    }
+  }
+
+  for (final key in const ['media', 'images', 'attachments']) {
+    final value = raw[key];
+    if (value is List) {
+      for (final item in value) {
+        if (item is String && item.trim().isNotEmpty) {
+          return item.trim();
+        }
+        if (item is Map) {
+          final map = Map<String, dynamic>.from(item);
+          for (final nestedKey in const [
+            'url',
+            'imageUrl',
+            'image_url',
+            'thumbnailUrl',
+            'thumbnail_url',
+            'mediaUrl',
+            'media_url',
+          ]) {
+            final nestedValue = map[nestedKey]?.toString().trim() ?? '';
+            if (nestedValue.isNotEmpty) {
+              return nestedValue;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  final content = raw['content'];
+  if (content is Map) {
+    final contentMap = Map<String, dynamic>.from(content);
+    for (final key in const [
+      'imageUrl',
+      'image_url',
+      'thumbnailUrl',
+      'thumbnail_url',
+      'mediaUrl',
+      'media_url',
+      'url',
+      'image',
+    ]) {
+      final value = contentMap[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+  }
+
+  return '';
+}
+
+double _readSocialDouble(dynamic value) {
+  if (value is num) return value.toDouble();
+  final text = value?.toString().replaceAll('%', '').trim() ?? '';
+  return double.tryParse(text) ?? 0;
+}
+
+class _ProductModeSwitcher extends StatelessWidget {
+  const _ProductModeSwitcher({
+    required this.selectedMode,
+    required this.onModeSelected,
+  });
+
+  final ProductMode selectedMode;
+  final ValueChanged<ProductMode> onModeSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final isGoogleSelected = selectedMode == ProductMode.googleBusiness;
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FAFD),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFDDE7F2)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ProductModeChip(
+              label: 'Google Business',
+              selected: isGoogleSelected,
+              onTap: () => onModeSelected(ProductMode.googleBusiness),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _ProductModeChip(
+              label: 'Social Media',
+              selected: !isGoogleSelected,
+              onTap: () => onModeSelected(ProductMode.socialMedia),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductModeChip extends StatelessWidget {
+  const _ProductModeChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            gradient: selected
+                ? const LinearGradient(
+                    colors: [Color(0xFF0A3F85), Color(0xFF1565C0)],
+                  )
+                : null,
+            color: selected ? null : Colors.transparent,
+            boxShadow: selected
+                ? const [
+                    BoxShadow(
+                      color: Color(0x2239B4BD),
+                      blurRadius: 14,
+                      offset: Offset(0, 6),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected
+                        ? Colors.white
+                        : AppColors.brandBlue.withValues(alpha: 0.92),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -689,17 +2995,19 @@ class _GoogleBusinessLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCompactHero = MediaQuery.sizeOf(context).width < 390;
-    final googleFontSize = isCompactHero ? 24.0 : 31.0;
-    final googleSubLabelSize = isCompactHero ? 11.8 : 15.5;
-    final storeBadgeSize = isCompactHero ? 42.0 : 52.0;
-    final brandMarkSize = isCompactHero ? 31.0 : 37.0;
-    final taglineFontSize = isCompactHero ? 14.0 : 18.0;
+    final googleFontSize = isCompactHero ? 22.0 : 29.0;
+    final googleSubLabelSize = isCompactHero ? 12.6 : 15.8;
+    final storeBadgeSize = isCompactHero ? 42.0 : 50.0;
+    final brandMarkSize = isCompactHero ? 33.0 : 39.0;
+    final taglineFontSize = isCompactHero ? 15.0 : 19.0;
     const taglineText = 'AI-powered visibility\nfor your GBP';
 
     final logoRow = Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
+        _GoogleStoreBadge(size: storeBadgeSize),
+        const SizedBox(width: 8),
         Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -741,7 +3049,7 @@ class _GoogleBusinessLogo extends StatelessWidget {
             ),
             const SizedBox(height: 1),
             Padding(
-              padding: const EdgeInsets.only(left: 6),
+              padding: const EdgeInsets.only(left: 2),
               child: Text(
                 'My Business',
                 style: TextStyle(
@@ -756,8 +3064,6 @@ class _GoogleBusinessLogo extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(width: 6),
-        _GoogleStoreBadge(size: storeBadgeSize),
       ],
     );
 
@@ -791,8 +3097,11 @@ class _GoogleBusinessLogo extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         logoRow,
-        SizedBox(width: isCompactHero ? 14 : 18),
-        visibloColumn,
+        SizedBox(width: isCompactHero ? 30 : 40),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, right: 8),
+          child: visibloColumn,
+        ),
       ],
     );
 
@@ -1266,9 +3575,22 @@ class _BusinessPhotoTile extends StatelessWidget {
 
     final controller = Get.find<OnboardingController>();
     final livePhotos = controller.liveGbpMedia;
-    final String? liveImageUrl = livePhotos.isNotEmpty
-        ? livePhotos.first.googleUrl
-        : null;
+    final photoCandidates = livePhotos
+        .where((media) => media.mediaFormat.trim().toUpperCase() == 'PHOTO')
+        .toList(growable: false);
+    final preferredPhoto = photoCandidates.firstWhereOrNull((media) {
+      final category = media.category.trim().toUpperCase();
+      return category.contains('PROFILE') || category.contains('LOGO');
+    });
+    final resolvedPhoto =
+        preferredPhoto ??
+        (photoCandidates.isNotEmpty ? photoCandidates.first : null);
+    final String? liveImageUrl =
+        resolvedPhoto?.googleUrl.trim().isNotEmpty == true
+        ? resolvedPhoto!.googleUrl
+        : (resolvedPhoto?.thumbnailUrl.trim().isNotEmpty == true
+              ? resolvedPhoto!.thumbnailUrl
+              : null);
 
     return Material(
       color: Colors.transparent,
@@ -2147,77 +4469,148 @@ class _ActivityTrendsCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: _sectionCardDecoration(26),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFFFFF), Color(0xFFF4F8FF)],
+        ),
+        border: Border.all(color: const Color(0xFFDCE7F6)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F2746),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Activity Trends',
-                      style: const TextStyle(
-                        fontSize: 17,
-                        color: AppColors.text,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      trendConfig.subtitle,
-                      style: const TextStyle(
-                        fontSize: 12.8,
-                        color: Color(0xFF7E8798),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              InkWell(
-                onTap: () => _pickTrendWindow(context),
-                borderRadius: BorderRadius.circular(999),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
-                  ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7FAFF),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFFE1EAF7)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(999),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFE9F2FF), Color(0xFFD7E7FF)],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.insights_rounded,
+                    size: 21,
+                    color: AppColors.brandBlue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        trendConfig.buttonLabel,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.brandBlue,
-                          fontWeight: FontWeight.w700,
+                      const Text(
+                        'Activity Trends',
+                        style: TextStyle(
+                          fontSize: 17.2,
+                          color: AppColors.text,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 16,
-                        color: AppColors.brandBlue,
+                      const SizedBox(height: 2),
+                      Text(
+                        trendConfig.subtitle,
+                        style: const TextStyle(
+                          fontSize: 12.7,
+                          height: 1.3,
+                          color: Color(0xFF667085),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 10),
+                InkWell(
+                  onTap: () => _pickTrendWindow(context),
+                  borderRadius: BorderRadius.circular(999),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 13,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: const Color(0xFFD7E3F3)),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x0A0F2746),
+                          blurRadius: 8,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          trendConfig.buttonLabel,
+                          style: const TextStyle(
+                            fontSize: 12.2,
+                            color: AppColors.brandBlue,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 16,
+                          color: AppColors.brandBlue,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          AnimatedTrendChart(
-            config: trendConfig,
-            cycle: animationCycle,
-            visualMode: visualMode,
-            onVisualModeChanged: onVisualModeChanged,
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFFE3EBF7)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0C0F2746),
+                  blurRadius: 10,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: AnimatedTrendChart(
+                config: trendConfig,
+                cycle: animationCycle,
+                visualMode: visualMode,
+                onVisualModeChanged: onVisualModeChanged,
+              ),
+            ),
           ),
         ],
       ),
@@ -4201,6 +6594,10 @@ File? _safeLocalImageFile(String path) {
 }
 
 String _clientCategory(TestAccount user) {
+  final liveLoc = Get.find<OnboardingController>().liveGbpLocation.value;
+  if (liveLoc != null && liveLoc.primaryCategory.trim().isNotEmpty) {
+    return liveLoc.primaryCategory.trim();
+  }
   if (user.categoryTitle.trim().isNotEmpty) {
     return user.categoryTitle.trim();
   }
@@ -4244,6 +6641,20 @@ String _clientAddress(TestAccount user) {
 }
 
 String _clientLocationSummary(TestAccount user) {
+  final liveLoc = Get.find<OnboardingController>().liveGbpLocation.value;
+  if (liveLoc != null && liveLoc.formattedAddress.trim().isNotEmpty) {
+    final addressParts = liveLoc.formattedAddress
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (addressParts.length >= 2) {
+      return '${addressParts[addressParts.length - 2]}, ${addressParts.last}';
+    }
+    if (addressParts.isNotEmpty) {
+      return addressParts.last;
+    }
+  }
   final city = user.city.trim();
   return switch (city.toLowerCase()) {
     'mumbai' => 'Mumbai, Maharashtra',
@@ -4326,5 +6737,5 @@ String _clientMapQuery(TestAccount user) {
 }
 
 abstract final class _OverviewPalette {
-  static const canvas = Color(0xFFF5F8FE);
+  static const canvas = Colors.white;
 }

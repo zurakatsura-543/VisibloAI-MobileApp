@@ -56,6 +56,7 @@ class OnboardingController extends GetxController {
   final fullNameController = TextEditingController();
   final signUpEmailController = TextEditingController();
   final signUpPasswordController = TextEditingController();
+  final signUpConfirmPasswordController = TextEditingController();
   final signUpPhoneController = TextEditingController();
   final otpCodeController = TextEditingController();
   final resetPasswordController = TextEditingController();
@@ -66,6 +67,8 @@ class OnboardingController extends GetxController {
 
   final obscureLoginPassword = true.obs;
   final obscureSignUpPassword = true.obs;
+  final obscureSignUpConfirmPassword = true.obs;
+  final rememberMe = true.obs;
   final isLoginLoading = false.obs;
   final isSignUpLoading = false.obs;
   final isOtpLoading = false.obs;
@@ -90,8 +93,12 @@ class OnboardingController extends GetxController {
   final selectedSurveySeoExperience = RxnString();
   final selectedSurveyOrgSize = RxnString();
   final selectedSurveyHeardFrom = RxnString();
+  final selectedSignUpPhoneCountryIso = 'IN'.obs;
+  final selectedSignUpPhoneCountryName = 'India'.obs;
+  final selectedSignUpPhoneDialCode = '+91'.obs;
   final availableGoogleLocations = <GoogleBusinessLocation>[].obs;
   final selectedGoogleLocationId = ''.obs;
+  final activatedGoogleLocation = Rxn<GoogleBusinessLocation>();
   final locationQuota = Rxn<Map<String, dynamic>>();
   final selectedIndustry = RxnString();
   final selectedCategoryIndex = (-1).obs;
@@ -109,6 +116,7 @@ class OnboardingController extends GetxController {
   final isLoadingReports = false.obs;
   final liveAudit = Rxn<AuditResult>();
   final isLoadingAudit = false.obs;
+  int _dashboardFetchToken = 0;
 
   Future<void> fetchReportsData(DateTimeRange range) async {
     final user = currentUser.value;
@@ -251,6 +259,7 @@ class OnboardingController extends GetxController {
     }
 
     final businessId = user.backendBusinessId;
+    final fetchToken = ++_dashboardFetchToken;
 
     // Fetch a fresh /auth/me to get locationId + gmbLocationId.
     String dbLocationId = '';
@@ -278,9 +287,19 @@ class OnboardingController extends GetxController {
     await Future.wait([
       // 1. NAP / location info
       _authApiService
-          .fetchGbpLocation(businessId)
+          .fetchGbpLocation(
+            businessId,
+            expectedGmbLocationId: gmbLocationId,
+            expectedBackendLocationId: dbLocationId,
+          )
           .then((loc) {
-            if (loc != null) liveGbpLocation.value = loc;
+            if (loc != null &&
+                _isCurrentDashboardFetch(
+                  expectedBusinessId: businessId,
+                  fetchToken: fetchToken,
+                )) {
+              liveGbpLocation.value = loc;
+            }
           })
           .catchError((e) {
             debugPrint('fetchDashboardLiveStream: location error: $e');
@@ -364,7 +383,12 @@ class OnboardingController extends GetxController {
               debugPrint(
                 'merged: ${aiPosts.length} ai + ${gbpOnlyPosts.length} gbp-only. Total visible: ${unifiedList.length}',
               );
-              liveGbpPosts.value = unifiedList;
+              if (_isCurrentDashboardFetch(
+                expectedBusinessId: businessId,
+                fetchToken: fetchToken,
+              )) {
+                liveGbpPosts.value = unifiedList;
+              }
             })
             .catchError((e) {
               debugPrint('fetchDashboardLiveStream: posts error: $e');
@@ -380,7 +404,12 @@ class OnboardingController extends GetxController {
               debugPrint(
                 'fetchDashboardLiveStream: ${media.length} media items',
               );
-              liveGbpMedia.value = media;
+              if (_isCurrentDashboardFetch(
+                expectedBusinessId: businessId,
+                fetchToken: fetchToken,
+              )) {
+                liveGbpMedia.value = media;
+              }
             })
             .catchError((e) {
               debugPrint('fetchDashboardLiveStream: media error: $e');
@@ -394,7 +423,12 @@ class OnboardingController extends GetxController {
             .fetchLiveReviews(dbLocationId)
             .then((reviews) {
               debugPrint('fetchDashboardLiveStream: ${reviews.length} reviews');
-              liveGbpReviews.value = reviews;
+              if (_isCurrentDashboardFetch(
+                expectedBusinessId: businessId,
+                fetchToken: fetchToken,
+              )) {
+                liveGbpReviews.value = reviews;
+              }
             })
             .catchError((e) {
               debugPrint('fetchDashboardLiveStream: reviews error: $e');
@@ -414,12 +448,17 @@ class OnboardingController extends GetxController {
 
   Future<void> fetchAuditData(String businessId, String gmbLocationId) async {
     isLoadingAudit.value = true;
+    final fetchToken = _dashboardFetchToken;
     try {
       final audit = await _authApiService.fetchAuditResult(
         gmbLocationId,
         businessId,
       );
-      if (audit != null) {
+      if (audit != null &&
+          _isCurrentDashboardFetch(
+            expectedBusinessId: businessId,
+            fetchToken: fetchToken,
+          )) {
         liveAudit.value = audit;
         debugPrint('fetchAuditData: Fetched audit score ${audit.overallScore}');
       }
@@ -444,6 +483,39 @@ class OnboardingController extends GetxController {
 
   void toggleSignUpPassword() {
     obscureSignUpPassword.value = !obscureSignUpPassword.value;
+  }
+
+  void toggleSignUpConfirmPassword() {
+    obscureSignUpConfirmPassword.value = !obscureSignUpConfirmPassword.value;
+  }
+
+  void toggleRememberMe() {
+    rememberMe.value = !rememberMe.value;
+  }
+
+  void updateSignUpPhoneCountry({
+    required String isoCode,
+    required String name,
+    required String dialCode,
+  }) {
+    selectedSignUpPhoneCountryIso.value = isoCode;
+    selectedSignUpPhoneCountryName.value = name;
+    selectedSignUpPhoneDialCode.value = dialCode;
+  }
+
+  String normalizedSignUpPhone() {
+    final raw = signUpPhoneController.text.trim();
+    if (raw.isEmpty) {
+      return '';
+    }
+
+    var digits = raw.replaceAll(RegExp(r'\D'), '');
+    while (digits.length > 1 && digits.startsWith('0')) {
+      digits = digits.substring(1);
+    }
+
+    final dialDigits = selectedSignUpPhoneDialCode.value.replaceAll('+', '');
+    return '+$dialDigits$digits';
   }
 
   void goToLogin() => Get.toNamed(AppRoutes.login);
@@ -532,7 +604,7 @@ class OnboardingController extends GetxController {
         email: normalizedEmail,
         fallbackFullName: fullNameController.text.trim(),
       );
-      _navigateToSessionRoute(remoteProfile);
+      await _navigateToSessionRoute(remoteProfile);
     } catch (error, stackTrace) {
       debugPrint('Google sign-in error: $error');
       debugPrintStack(
@@ -576,7 +648,7 @@ class OnboardingController extends GetxController {
         email: normalizedEmail,
         fallbackFullName: fullNameController.text.trim(),
       );
-      _navigateToSessionRoute(remoteProfile);
+      await _navigateToSessionRoute(remoteProfile);
     } catch (error) {
       Get.snackbar(
         'Login failed',
@@ -637,7 +709,7 @@ class OnboardingController extends GetxController {
         email: signUpEmailController.text,
         password: signUpPasswordController.text,
         name: fullNameController.text,
-        phone: signUpPhoneController.text,
+        phone: normalizedSignUpPhone(),
       );
     } catch (error) {
       Get.snackbar(
@@ -717,7 +789,7 @@ class OnboardingController extends GetxController {
         email: signUpEmailController.text,
         password: signUpPasswordController.text,
         name: fullNameController.text,
-        phone: signUpPhoneController.text,
+        phone: normalizedSignUpPhone(),
       );
     } catch (error) {
       Get.snackbar(
@@ -756,7 +828,7 @@ class OnboardingController extends GetxController {
       }
 
       await _syncCurrentUserFromRemoteProfile(remoteProfile);
-      _navigateToSessionRoute(remoteProfile);
+      await _navigateToSessionRoute(remoteProfile);
     } catch (error) {
       await _resetToPublicEntry();
       if (showFailureSnack) {
@@ -786,6 +858,16 @@ class OnboardingController extends GetxController {
       return 'Please confirm your password';
     }
     if (value != resetPasswordController.text) {
+      return 'Passwords do not match';
+    }
+    return null;
+  }
+
+  String? validateSignUpConfirmPassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please confirm your password';
+    }
+    if (value != signUpPasswordController.text) {
       return 'Passwords do not match';
     }
     return null;
@@ -836,7 +918,7 @@ class OnboardingController extends GetxController {
         fallbackTimeZone: selectedTimeZone.value ?? '',
       );
       otpCodeController.clear();
-      _navigateToSessionRoute(remoteProfile);
+      await _navigateToSessionRoute(remoteProfile);
     } catch (error) {
       Get.snackbar(
         'Verification failed',
@@ -946,10 +1028,7 @@ class OnboardingController extends GetxController {
     isResendOtpLoading.value = true;
 
     try {
-      await _authApiService.resendOtp(
-        email: email,
-        type: 'PASSWORD_RESET',
-      );
+      await _authApiService.resendOtp(email: email, type: 'PASSWORD_RESET');
       Get.snackbar(
         'OTP sent',
         'A fresh password reset code has been sent to $email.',
@@ -969,7 +1048,7 @@ class OnboardingController extends GetxController {
   String labelForSurveyRole(String value) {
     switch (value) {
       case 'seo':
-        return 'SEO specialist';
+        return 'Growth / SEO manager';
       case 'marketing':
         return 'Marketing team';
       case 'ceo':
@@ -977,7 +1056,7 @@ class OnboardingController extends GetxController {
       case 'business_owner':
         return 'Business owner';
       case 'agency':
-        return 'Agency';
+        return 'Agency / Consultant';
       case 'other':
         return 'Other';
       default:
@@ -1022,7 +1101,7 @@ class OnboardingController extends GetxController {
       case 'referral':
         return 'Referral';
       case 'blog':
-        return 'Blog or content';
+        return 'YouTube / content';
       case 'other':
         return 'Other';
       default:
@@ -1054,7 +1133,7 @@ class OnboardingController extends GetxController {
       );
       final remoteProfile = await _authApiService.fetchMyData();
       await _syncCurrentUserFromRemoteProfile(remoteProfile);
-      _navigateToSessionRoute(remoteProfile);
+      await _navigateToSessionRoute(remoteProfile);
     } catch (error) {
       Get.snackbar(
         'Survey failed',
@@ -1076,51 +1155,82 @@ class OnboardingController extends GetxController {
   }
 
   Future<void> continueAfterGoogleConnection() async {
-    isGoogleConnectRefreshing.value = true;
-
-    try {
-      final remoteProfile = await _waitForGoogleConnectionProfile();
-      await _syncCurrentUserFromRemoteProfile(remoteProfile);
-      if (!remoteProfile.googleConnected) {
-        Get.snackbar(
-          'Connection still syncing',
-          'Google returned to the app, but the Business Profile connection has not been confirmed yet. Please try again in a moment.',
-          snackPosition: SnackPosition.BOTTOM,
-        );
-        return;
-      }
-      _navigateToSessionRoute(remoteProfile);
-    } catch (error) {
+    final connected = await refreshGoogleConnectionStatus();
+    if (!connected) {
       Get.snackbar(
-        'Refresh failed',
-        _humanizeError(error),
+        'Connection still syncing',
+        'Google returned to the app, but the Business Profile connection has not been confirmed yet. Please try again in a moment.',
         snackPosition: SnackPosition.BOTTOM,
       );
-    } finally {
-      isGoogleConnectRefreshing.value = false;
     }
   }
 
   Future<void> finalizeGoogleConnectionCallback(String callbackUrl) async {
     await _authApiService.completeGoogleOAuthCallback(callbackUrl);
 
-    final remoteProfile = await _waitForGoogleConnectionProfile();
-    await _syncCurrentUserFromRemoteProfile(remoteProfile);
+    final connected = await refreshGoogleConnectionStatus(
+      showErrorSnack: false,
+      attempts: 12,
+      delay: const Duration(seconds: 2),
+    );
 
-    if (!remoteProfile.googleConnected) {
-      Get.offAllNamed(AppRoutes.googleConnect);
-      Get.snackbar(
-        'Connection still syncing',
-        'Google authorization finished, but the Business Profile connection has not been confirmed yet. Tap continue again in a moment.',
-        snackPosition: SnackPosition.BOTTOM,
+    if (!connected) {
+      Get.offAllNamed(
+        AppRoutes.googleConnect,
+        arguments: {'awaitingSync': true},
       );
-      return;
+    }
+  }
+
+  Future<bool> refreshGoogleConnectionStatus({
+    bool showErrorSnack = true,
+    int attempts = 8,
+    Duration delay = const Duration(seconds: 2),
+  }) async {
+    if (isGoogleConnectRefreshing.value) {
+      return false;
     }
 
-    _navigateToSessionRoute(remoteProfile);
+    isGoogleConnectRefreshing.value = true;
+
+    try {
+      final remoteProfile = await _waitForGoogleConnectionProfile(
+        attempts: attempts,
+        delay: delay,
+      );
+      await _syncCurrentUserFromRemoteProfile(remoteProfile);
+      if (!remoteProfile.googleConnected) {
+        return false;
+      }
+      await _navigateToSessionRoute(remoteProfile);
+      return true;
+    } catch (error) {
+      if (showErrorSnack) {
+        Get.snackbar(
+          'Refresh failed',
+          _humanizeError(error),
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+      return false;
+    } finally {
+      isGoogleConnectRefreshing.value = false;
+    }
   }
 
   Future<void> loadAvailableGoogleLocations() async {
+    final remoteProfile = await _authApiService.fetchMyData();
+    await _syncCurrentUserFromRemoteProfile(remoteProfile);
+
+    if (!remoteProfile.googleConnected) {
+      availableGoogleLocations.clear();
+      selectedGoogleLocationId.value = '';
+      locationQuota.value = remoteProfile.locationQuota.isEmpty
+          ? null
+          : remoteProfile.locationQuota;
+      return;
+    }
+
     isLocationsLoading.value = true;
 
     try {
@@ -1201,10 +1311,31 @@ class OnboardingController extends GetxController {
     isLocationActivationLoading.value = true;
 
     try {
+      activatedGoogleLocation.value = selectedLocation;
+      debugPrint(
+        'activateSelectedGoogleLocation: selected=${selectedLocation.title} '
+        '| gmbLocationId=${selectedLocation.gmbLocationId} '
+        '| address=${selectedLocation.conciseAddress} '
+        '| logo=${selectedLocation.logoUrl}',
+      );
       final remoteProfile = await _authApiService.activateLocation(
         selectedLocation,
       );
-      await _syncCurrentUserFromRemoteProfile(remoteProfile);
+      debugPrint(
+        'activateSelectedGoogleLocation: backend response '
+        'businessId=${remoteProfile.businessId}, '
+        'locationId=${remoteProfile.locationId}, '
+        'gmbLocationId=${remoteProfile.gmbLocationId}, '
+        'businessName=${remoteProfile.businessName}, '
+        'primaryBusiness=${remoteProfile.primaryBusiness}',
+      );
+      await _syncCurrentUserFromRemoteProfile(
+        remoteProfile,
+        fallbackBusinessName: selectedLocation.title,
+        fallbackBusinessPhotoPath: selectedLocation.logoUrl,
+        fallbackCategoryTitle: selectedLocation.primaryCategory,
+        fallbackCity: selectedLocation.conciseAddress,
+      );
       _clearLiveWorkspaceData();
       final shouldStartBusinessOnboarding = isAddAnotherProfileMode.value;
       isAddAnotherProfileMode.value = false;
@@ -1212,10 +1343,10 @@ class OnboardingController extends GetxController {
         Get.offAllNamed(AppRoutes.businessProfile);
         return;
       }
-      if (_routeForSession(remoteProfile) == AppRoutes.dashboard) {
+      if (_routeForSession(remoteProfile) == AppRoutes.unifiedDashboard) {
         await fetchDashboardLiveStream();
       }
-      _navigateToSessionRoute(remoteProfile);
+      await _navigateToSessionRoute(remoteProfile, allowAutoSwitch: false);
     } catch (error) {
       Get.snackbar(
         'Activation failed',
@@ -1270,10 +1401,10 @@ class OnboardingController extends GetxController {
       );
       await _syncCurrentUserFromRemoteProfile(remoteProfile);
       _clearLiveWorkspaceData();
-      if (_routeForSession(remoteProfile) == AppRoutes.dashboard) {
+      if (_routeForSession(remoteProfile) == AppRoutes.unifiedDashboard) {
         await fetchDashboardLiveStream();
       }
-      _navigateToSessionRoute(remoteProfile);
+      await _navigateToSessionRoute(remoteProfile, allowAutoSwitch: false);
       Get.snackbar(
         'Workspace switched',
         'You are now managing $businessName.',
@@ -1418,7 +1549,7 @@ class OnboardingController extends GetxController {
     await _authApiService.logoutBackend();
     await _authService.logout();
     _resetAccountDrafts();
-    Get.offAllNamed(AppRoutes.welcome);
+    Get.offAllNamed(AppRoutes.signUp);
   }
 
   Future<void> deleteCurrentAccount() async {
@@ -1434,7 +1565,7 @@ class OnboardingController extends GetxController {
     await _authService.deleteCurrentAccount();
     _resetAccountDrafts();
 
-    Get.offAllNamed(AppRoutes.welcome);
+    Get.offAllNamed(AppRoutes.signUp);
     Get.snackbar(
       'Account deleted',
       'Your saved test account was removed from this device.',
@@ -2470,6 +2601,7 @@ class OnboardingController extends GetxController {
     fullNameController.text = savedUser.fullName;
     signUpEmailController.text = savedUser.email;
     signUpPasswordController.text = '';
+    signUpConfirmPasswordController.text = '';
     businessNameController.text = savedUser.businessName;
     selectedIndustry.value = savedUser.industry;
     selectedCity.value = savedUser.city.isEmpty ? null : savedUser.city;
@@ -2513,6 +2645,7 @@ class OnboardingController extends GetxController {
     required String password,
     String fallbackFullName = '',
     String fallbackBusinessName = '',
+    String fallbackBusinessPhotoPath = '',
     String fallbackIndustry = '',
     String fallbackCategoryTitle = '',
     String fallbackCategorySubtitle = '',
@@ -2526,9 +2659,23 @@ class OnboardingController extends GetxController {
       remoteProfile.email,
       email,
     ]).trim().toLowerCase();
+    final hasExplicitBusinessFallback = fallbackBusinessName.trim().isNotEmpty;
+    final hasExplicitPhotoFallback = fallbackBusinessPhotoPath
+        .trim()
+        .isNotEmpty;
+    final hasExplicitIndustryFallback = fallbackIndustry.trim().isNotEmpty;
+    final hasExplicitCategoryTitleFallback = fallbackCategoryTitle
+        .trim()
+        .isNotEmpty;
+    final hasExplicitCategorySubtitleFallback = fallbackCategorySubtitle
+        .trim()
+        .isNotEmpty;
+    final hasExplicitCityFallback = fallbackCity.trim().isNotEmpty;
+    final hasExplicitCountryFallback = fallbackCountry.trim().isNotEmpty;
+    final hasExplicitTimeZoneFallback = fallbackTimeZone.trim().isNotEmpty;
 
     final businessName = _firstNonEmpty([
-      remoteProfile.businessName,
+      if (hasExplicitBusinessFallback) fallbackBusinessName,
       _readBusinessString(primaryBusiness, const [
         'businessName',
         'name',
@@ -2536,8 +2683,9 @@ class OnboardingController extends GetxController {
         'displayName',
         'gbpName',
       ]),
-      _readRawString(remoteProfile.rawData, const ['businessName', 'name']),
       fallbackBusinessName,
+      remoteProfile.businessName,
+      _readRawString(remoteProfile.rawData, const ['businessName', 'name']),
       normalizedEmail.split('@').first,
     ]);
 
@@ -2559,38 +2707,38 @@ class OnboardingController extends GetxController {
       password: password,
       businessName: businessName,
       industry: _firstNonEmpty([
+        if (hasExplicitIndustryFallback) fallbackIndustry,
         _readBusinessString(primaryBusiness, const ['industry', 'vertical']),
-        fallbackIndustry,
       ]),
       categoryTitle: _firstNonEmpty([
+        if (hasExplicitCategoryTitleFallback) fallbackCategoryTitle,
         _readBusinessString(primaryBusiness, const [
           'primaryCategory',
           'categoryTitle',
           'category',
         ]),
-        fallbackCategoryTitle,
         'Business Category',
       ]),
       categorySubtitle: _firstNonEmpty([
+        if (hasExplicitCategorySubtitleFallback) fallbackCategorySubtitle,
         _readBusinessString(primaryBusiness, const [
           'secondaryCategory',
           'categorySubtitle',
           'subcategory',
         ]),
-        fallbackCategorySubtitle,
         'Connected from backend',
       ]),
       city: _firstNonEmpty([
+        if (hasExplicitCityFallback) fallbackCity,
         _readBusinessString(primaryBusiness, const ['city', 'locality']),
-        fallbackCity,
       ]),
       country: _firstNonEmpty([
+        if (hasExplicitCountryFallback) fallbackCountry,
         _readBusinessString(primaryBusiness, const ['country', 'countryName']),
-        fallbackCountry,
       ]),
       timeZone: _firstNonEmpty([
+        if (hasExplicitTimeZoneFallback) fallbackTimeZone,
         _readBusinessString(primaryBusiness, const ['timeZone', 'timezone']),
-        fallbackTimeZone,
       ]),
       streetAddress: _firstNonEmpty([
         _readBusinessString(primaryBusiness, const [
@@ -2638,7 +2786,10 @@ class OnboardingController extends GetxController {
       backendAuthenticated: remoteProfile.authenticated,
       backendAvailableBusinesses: remoteProfile.availableBusinesses,
       draftPhotoGalleryPaths: savedUser?.draftPhotoGalleryPaths ?? const [],
-      businessPhotoPath: savedUser?.businessPhotoPath ?? '',
+      businessPhotoPath: _firstNonEmpty([
+        if (hasExplicitPhotoFallback) fallbackBusinessPhotoPath,
+        savedUser?.businessPhotoPath ?? '',
+      ]),
       businessPhotoGalleryPaths:
           savedUser?.businessPhotoGalleryPaths ?? const [],
       businessReviews: savedUser?.businessReviews ?? const [],
@@ -2808,11 +2959,14 @@ class OnboardingController extends GetxController {
     return null;
   }
 
-  Future<AuthMeResponse> _waitForGoogleConnectionProfile() async {
+  Future<AuthMeResponse> _waitForGoogleConnectionProfile({
+    int attempts = 8,
+    Duration delay = const Duration(seconds: 2),
+  }) async {
     AuthMeResponse? lastProfile;
     Object? lastError;
 
-    for (var attempt = 0; attempt < 5; attempt++) {
+    for (var attempt = 0; attempt < attempts; attempt++) {
       try {
         final profile = await _authApiService.fetchMyData();
         lastProfile = profile;
@@ -2823,8 +2977,8 @@ class OnboardingController extends GetxController {
         lastError = error;
       }
 
-      if (attempt < 4) {
-        await Future<void>.delayed(const Duration(milliseconds: 900));
+      if (attempt < attempts - 1) {
+        await Future<void>.delayed(delay);
       }
     }
 
@@ -2866,6 +3020,7 @@ class OnboardingController extends GetxController {
     String password = '',
     String fallbackFullName = '',
     String fallbackBusinessName = '',
+    String fallbackBusinessPhotoPath = '',
     String fallbackIndustry = '',
     String fallbackCategoryTitle = '',
     String fallbackCategorySubtitle = '',
@@ -2891,6 +3046,7 @@ class OnboardingController extends GetxController {
           : isBusinessSwitch
           ? ''
           : savedUser?.businessName ?? businessNameController.text.trim(),
+      fallbackBusinessPhotoPath: fallbackBusinessPhotoPath,
       fallbackIndustry: fallbackIndustry.isNotEmpty
           ? fallbackIndustry
           : isBusinessSwitch
@@ -2908,7 +3064,9 @@ class OnboardingController extends GetxController {
           : savedUser?.categorySubtitle ?? '',
       fallbackCity: fallbackCity.isNotEmpty
           ? fallbackCity
-          : isBusinessSwitch ? '' : savedUser?.city ?? selectedCity.value ?? '',
+          : isBusinessSwitch
+          ? ''
+          : savedUser?.city ?? selectedCity.value ?? '',
       fallbackCountry: fallbackCountry.isNotEmpty
           ? fallbackCountry
           : isBusinessSwitch
@@ -2944,21 +3102,55 @@ class OnboardingController extends GetxController {
     if (!remoteProfile.googleConnected) {
       return AppRoutes.googleConnect;
     }
-    if (!remoteProfile.hasBusiness) {
+    if (!remoteProfile.hasActiveBusinessSelection) {
       return AppRoutes.locationSelection;
     }
-    // Temporarily bypass payment screen for testing
-    // if (!remoteProfile.subscriptionActive) {
-    //   return AppRoutes.payment;
-    // }
-    return AppRoutes.dashboard;
+    if (!remoteProfile.hasPaidAccess) {
+      return AppRoutes.payment;
+    }
+    return AppRoutes.unifiedDashboard;
   }
 
-  void _navigateToSessionRoute(AuthMeResponse remoteProfile) {
-    final route = _routeForSession(remoteProfile);
+  Future<AuthMeResponse> _profileForSessionRoute(
+    AuthMeResponse remoteProfile, {
+    required bool allowAutoSwitch,
+  }) async {
+    if (!allowAutoSwitch ||
+        remoteProfile.hasPaidAccess ||
+        !remoteProfile.hasAnyBusinessPaidAccess) {
+      return remoteProfile;
+    }
+
+    final fallbackBusiness = remoteProfile.firstAccessibleBusiness;
+    final businessId = fallbackBusiness?['id']?.toString().trim() ?? '';
+    final locationId = fallbackBusiness?['locationId']?.toString().trim() ?? '';
+    if (businessId.isEmpty ||
+        locationId.isEmpty ||
+        businessId == remoteProfile.businessId) {
+      return remoteProfile;
+    }
+
+    final switchedProfile = await _authApiService.setActiveLocation(
+      businessId: businessId,
+      locationId: locationId,
+    );
+    await _syncCurrentUserFromRemoteProfile(switchedProfile);
+    _clearLiveWorkspaceData();
+    return switchedProfile;
+  }
+
+  Future<void> _navigateToSessionRoute(
+    AuthMeResponse remoteProfile, {
+    bool allowAutoSwitch = true,
+  }) async {
+    final routeProfile = await _profileForSessionRoute(
+      remoteProfile,
+      allowAutoSwitch: allowAutoSwitch,
+    );
+    final route = _routeForSession(routeProfile);
     if (route == AppRoutes.otpVerification) {
       pendingOtpEmail.value = _firstNonEmpty([
-        remoteProfile.email,
+        routeProfile.email,
         pendingOtpEmail.value,
         loginEmailController.text,
         signUpEmailController.text,
@@ -2969,6 +3161,7 @@ class OnboardingController extends GetxController {
   }
 
   void _clearLiveWorkspaceData() {
+    _dashboardFetchToken++;
     liveGbpLocation.value = null;
     liveGbpPosts.clear();
     liveGbpMedia.clear();
@@ -2976,6 +3169,16 @@ class OnboardingController extends GetxController {
     liveInsights.value = null;
     liveKeywords.clear();
     liveAudit.value = null;
+  }
+
+  bool _isCurrentDashboardFetch({
+    required String expectedBusinessId,
+    required int fetchToken,
+  }) {
+    final activeBusinessId = currentUser.value?.backendBusinessId.trim() ?? '';
+    return fetchToken == _dashboardFetchToken &&
+        activeBusinessId.isNotEmpty &&
+        activeBusinessId == expectedBusinessId;
   }
 
   Future<void> _resetToPublicEntry() async {
@@ -2992,7 +3195,11 @@ class OnboardingController extends GetxController {
     fullNameController.clear();
     signUpEmailController.clear();
     signUpPasswordController.clear();
+    signUpConfirmPasswordController.clear();
     signUpPhoneController.clear();
+    selectedSignUpPhoneCountryIso.value = 'IN';
+    selectedSignUpPhoneCountryName.value = 'India';
+    selectedSignUpPhoneDialCode.value = '+91';
     otpCodeController.clear();
     resetPasswordController.clear();
     confirmResetPasswordController.clear();
@@ -3008,6 +3215,7 @@ class OnboardingController extends GetxController {
     selectedSurveyHeardFrom.value = null;
     availableGoogleLocations.clear();
     selectedGoogleLocationId.value = '';
+    activatedGoogleLocation.value = null;
     locationQuota.value = null;
     selectedIndustry.value = null;
     selectedCategoryIndex.value = -1;
@@ -3024,6 +3232,7 @@ class OnboardingController extends GetxController {
     fullNameController.dispose();
     signUpEmailController.dispose();
     signUpPasswordController.dispose();
+    signUpConfirmPasswordController.dispose();
     signUpPhoneController.dispose();
     otpCodeController.dispose();
     resetPasswordController.dispose();

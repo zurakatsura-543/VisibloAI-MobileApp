@@ -22,14 +22,18 @@ import '../../features/auth/views/leads_pipeline_view.dart';
 import '../../features/auth/views/home_overview_view.dart';
 import '../../features/auth/views/keyword_ranking_view.dart';
 import '../../features/auth/controllers/seo_tools_controller.dart';
+import '../../features/auth/controllers/product_mode_controller.dart';
 import '../../features/auth/views/account_detail_views.dart';
 import '../../features/auth/bindings/website_manager_binding.dart';
 import '../../features/auth/views/payment_view.dart';
 import '../../features/auth/views/profile_view.dart';
 import '../../features/auth/views/review_poster_view.dart';
 import '../../features/auth/views/reports_view.dart';
+import '../../features/auth/views/social_workspace_views.dart';
 import '../../features/auth/views/support_view.dart';
+import '../../features/auth/views/unified_dashboard_view.dart';
 import '../../features/auth/views/website_manager_view.dart';
+import '../../features/auth/widgets/auth_navigation_shell.dart';
 import '../../features/onboarding/bindings/onboarding_binding.dart';
 import '../../features/onboarding/views/business_location_view.dart';
 import '../../features/onboarding/views/business_profile_view.dart';
@@ -126,8 +130,69 @@ abstract final class AppPages {
       binding: OnboardingBinding(),
     ),
     GetPage(
+      name: AppRoutes.unifiedDashboard,
+      page: () => const UnifiedDashboardView(),
+      binding: OnboardingBinding(),
+    ),
+    GetPage(
       name: AppRoutes.dashboard,
-      page: () => const HomeOverviewView(),
+      page: () => const HomeOverviewView(
+        initialMode: ProductMode.googleBusiness,
+        shellTab: AuthTab.home,
+      ),
+      binding: OnboardingBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.socialDashboard,
+      page: () => const HomeOverviewView(
+        initialMode: ProductMode.socialMedia,
+        shellTab: AuthTab.socialDashboard,
+      ),
+      binding: OnboardingBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.socialAccounts,
+      page: () => const SocialAccountsView(),
+      binding: OnboardingBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.socialCreate,
+      page: () => const SocialCreateView(),
+      binding: OnboardingBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.socialCreatives,
+      page: () => const SocialCreativesView(),
+      binding: OnboardingBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.socialCalendar,
+      page: () => const SocialCalendarView(),
+      binding: OnboardingBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.socialScheduler,
+      page: () => const SocialSchedulerView(),
+      binding: OnboardingBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.socialPosts,
+      page: () => const SocialPostsView(),
+      binding: OnboardingBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.socialAnalytics,
+      page: () => const SocialAnalyticsView(),
+      binding: OnboardingBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.socialReports,
+      page: () => const SocialReportsView(),
+      binding: OnboardingBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.socialProfile,
+      page: () => const SocialProfileView(),
       binding: OnboardingBinding(),
     ),
     GetPage(
@@ -247,23 +312,18 @@ abstract final class AppPages {
     ),
     GetPage(
       name: AppRoutes.keywordRanking,
-      page: () => const KeywordRankingView(
-        initialTab: SeoMobileTab.keywords,
-      ),
+      page: () => const KeywordRankingView(initialTab: SeoMobileTab.keywords),
       binding: OnboardingBinding(),
     ),
     GetPage(
       name: AppRoutes.seoCompetitors,
-      page: () => const KeywordRankingView(
-        initialTab: SeoMobileTab.competitors,
-      ),
+      page: () =>
+          const KeywordRankingView(initialTab: SeoMobileTab.competitors),
       binding: OnboardingBinding(),
     ),
     GetPage(
       name: AppRoutes.seoHeatmap,
-      page: () => const KeywordRankingView(
-        initialTab: SeoMobileTab.heatmap,
-      ),
+      page: () => const KeywordRankingView(initialTab: SeoMobileTab.heatmap),
       binding: OnboardingBinding(),
     ),
     GetPage(

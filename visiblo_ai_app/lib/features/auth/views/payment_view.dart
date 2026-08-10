@@ -1,9 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_typography.dart';
+import '../../../app/widgets/app_logo.dart';
+import '../../../app/widgets/app_primary_button.dart';
+import '../../onboarding/controllers/onboarding_controller.dart';
+import '../../onboarding/models/google_business_location.dart';
 import '../controllers/payment_controller.dart';
 import '../models/payment_models.dart';
 import '../models/subscription_payment_record.dart';
@@ -14,10 +21,763 @@ class PaymentView extends GetView<PaymentController> {
 
   @override
   Widget build(BuildContext context) {
-    return AuthNavigationShell(
-      currentTab: AuthTab.payment,
-      backgroundColor: const Color(0xFFF5F7FB),
-      child: _PaymentContent(controller: controller),
+    return Obx(() {
+      final liveProfile = controller.remoteProfile.value;
+      if (liveProfile != null && controller.requiresIntroActivationPayment) {
+        return _TrialUnlockView(controller: controller);
+      }
+
+      return AuthNavigationShell(
+        currentTab: AuthTab.payment,
+        backgroundColor: const Color(0xFFF5F7FB),
+        child: _PaymentContent(controller: controller),
+      );
+    });
+  }
+}
+
+class _TrialUnlockView extends StatelessWidget {
+  const _TrialUnlockView({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAFCFF),
+      body: SafeArea(
+        child: Obx(() {
+          final isLoading =
+              controller.isLoading.value &&
+              controller.remoteProfile.value == null;
+          if (isLoading) {
+            return const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            );
+          }
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: () {
+                        if (Get.previousRoute.isNotEmpty) {
+                          Get.back();
+                          return;
+                        }
+                        Get.offAllNamed(AppRoutes.locationSelection);
+                      },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 40,
+                        height: 40,
+                      ),
+                      icon: const Icon(
+                        Icons.arrow_back_rounded,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    const Spacer(),
+                    const AppLogo(iconSize: 42, centered: true),
+                    const Spacer(),
+                    const SizedBox(width: 40),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Unlock Your 7-Day Trial',
+                  style: GoogleFonts.manrope(
+                    fontSize: 29,
+                    height: 1.08,
+                    color: AppColors.brandBlue,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Pay a one-time fee of Rs 99 to access VisibloAI and start your 7-day trial.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.manrope(
+                    fontSize: 16,
+                    height: 1.45,
+                    color: AppColors.mutedText,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: const Color(0xFF93C9FF)),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x11003F70),
+                        blurRadius: 26,
+                        offset: Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        flex: 11,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '₹99',
+                              style: GoogleFonts.manrope(
+                                fontSize: 42,
+                                height: 0.95,
+                                color: AppColors.brandBlue,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '7-Day Trial Access',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              softWrap: false,
+                              style: GoogleFonts.manrope(
+                                fontSize: 15.8,
+                                color: AppColors.primaryDark,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEAF9FB),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.sell_outlined,
+                                    size: 14,
+                                    color: AppColors.primary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      'One-time payment',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      softWrap: false,
+                                      style: GoogleFonts.manrope(
+                                        fontSize: 11.8,
+                                        color: AppColors.primaryDark,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        width: 1,
+                        height: 98,
+                        margin: const EdgeInsets.symmetric(horizontal: 12),
+                        color: const Color(0xFFE1E8F2),
+                      ),
+                      Expanded(
+                        flex: 13,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Image.asset(
+                            'assets/images/app-banner7.png',
+                            height: 152,
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _SelectedBusinessCard(controller: controller),
+                const SizedBox(height: 18),
+                _TrialBenefitsCard(controller: controller),
+                const SizedBox(height: 18),
+                _SecureCheckoutNote(),
+                const SizedBox(height: 18),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.brandBlue,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x24359FC4),
+                        blurRadius: 20,
+                        offset: Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: AppPrimaryButton(
+                    label: 'Pay Rs 99 & Start Trial',
+                    icon: Icons.arrow_forward_rounded,
+                    isLoading: controller.isSelectedPlanBusy,
+                    backgroundColor: Colors.transparent,
+                    disabledBackgroundColor: Colors.transparent,
+                    onPressed: controller.checkoutSelectedPlan,
+                    labelStyle: GoogleFonts.manrope(
+                      fontSize: 18.5,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Get.bottomSheet<void>(
+                        _TrialPlanDetailsSheet(controller: controller),
+                        isScrollControlled: true,
+                        backgroundColor: Colors.white,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(28),
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.brandBlue,
+                    ),
+                    label: Text(
+                      'View plan details',
+                      style: GoogleFonts.manrope(
+                        fontSize: 14.5,
+                        color: AppColors.brandBlue,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Center(
+                  child: Text(
+                    'You can cancel anytime. No hidden charges.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.manrope(
+                      fontSize: 12.8,
+                      color: AppColors.mutedText,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (controller.errorMessage.value != null) ...[
+                  const SizedBox(height: 14),
+                  _FeedbackBanner(
+                    message: controller.errorMessage.value!,
+                    isError: true,
+                    onDismiss: controller.clearError,
+                  ),
+                ],
+                if (controller.infoMessage.value != null) ...[
+                  const SizedBox(height: 14),
+                  _FeedbackBanner(
+                    message: controller.infoMessage.value!,
+                    onDismiss: controller.clearInfo,
+                  ),
+                ],
+              ],
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _SelectedBusinessCard extends StatelessWidget {
+  const _SelectedBusinessCard({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final onboardingController = Get.find<OnboardingController>();
+
+    return Obx(() {
+      final GoogleBusinessLocation? selectedLocation =
+          onboardingController.activatedGoogleLocation.value;
+      final selectedName = (selectedLocation?.title.trim().isNotEmpty ?? false)
+          ? selectedLocation!.title.trim()
+          : controller.selectedBusinessName;
+      final selectedAddress =
+          (selectedLocation?.conciseAddress.trim().isNotEmpty ?? false)
+          ? selectedLocation!.conciseAddress.trim()
+          : controller.selectedBusinessLocationLabel;
+      final logoUrl = (selectedLocation?.logoUrl.trim().isNotEmpty ?? false)
+          ? selectedLocation!.logoUrl.trim()
+          : controller.selectedBusinessLogoUrl.trim();
+      final initials = selectedName.isNotEmpty
+          ? selectedName.characters.first.toUpperCase()
+          : 'B';
+
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: _cardDecoration(
+          border: Border.all(color: const Color(0xFFE1E9F2)),
+        ),
+        child: Row(
+          children: [
+            _SelectedBusinessLogo(
+              logoUrl: logoUrl,
+              localPath: controller.currentUser?.businessPhotoPath.trim() ?? '',
+              initials: initials,
+              businessName: selectedName,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Selected Business',
+                    style: GoogleFonts.manrope(
+                      fontSize: 12,
+                      color: const Color(0xFF7C889C),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    selectedName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.manrope(
+                      fontSize: 17.8,
+                      color: AppColors.brandBlue,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 16,
+                        color: Color(0xFF98A3B5),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          selectedAddress,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.manrope(
+                            fontSize: 13.2,
+                            color: AppColors.mutedText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.check_circle_rounded,
+              color: AppColors.primary,
+              size: 28,
+            ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _BusinessLogoFallback extends StatelessWidget {
+  const _BusinessLogoFallback({required this.initials});
+
+  final String initials;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF245BEB), Color(0xFF39B4BD)],
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: GoogleFonts.manrope(
+          fontSize: 28,
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectedBusinessLogo extends StatelessWidget {
+  const _SelectedBusinessLogo({
+    required this.logoUrl,
+    required this.localPath,
+    required this.initials,
+    required this.businessName,
+  });
+
+  final String logoUrl;
+  final String localPath;
+  final String initials;
+  final String businessName;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLocalFile =
+        localPath.isNotEmpty && !(Uri.tryParse(localPath)?.hasScheme ?? false);
+    final hasRemoteUrl = logoUrl.isNotEmpty;
+    final localIsRemote =
+        localPath.isNotEmpty &&
+        (localPath.startsWith('http://') || localPath.startsWith('https://'));
+    final isAimbeat = businessName.toLowerCase().contains('aimbeat');
+
+    Widget fallback() => _BusinessLogoFallback(initials: initials);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: 64,
+        height: 64,
+        color: Colors.transparent,
+        alignment: Alignment.center,
+        child: hasRemoteUrl
+            ? Padding(
+                padding: EdgeInsets.all(isAimbeat ? 8 : 0),
+                child: Image.network(
+                  logoUrl,
+                  width: 64,
+                  height: 64,
+                  fit: isAimbeat ? BoxFit.contain : BoxFit.cover,
+                  errorBuilder: (_, _, _) => fallback(),
+                ),
+              )
+            : localIsRemote
+            ? Padding(
+                padding: EdgeInsets.all(isAimbeat ? 8 : 0),
+                child: Image.network(
+                  localPath,
+                  width: 64,
+                  height: 64,
+                  fit: isAimbeat ? BoxFit.contain : BoxFit.cover,
+                  errorBuilder: (_, _, _) => fallback(),
+                ),
+              )
+            : hasLocalFile
+            ? Padding(
+                padding: EdgeInsets.all(isAimbeat ? 8 : 0),
+                child: Image.file(
+                  File(localPath),
+                  width: 64,
+                  height: 64,
+                  fit: isAimbeat ? BoxFit.contain : BoxFit.cover,
+                  errorBuilder: (_, _, _) => fallback(),
+                ),
+              )
+            : fallback(),
+      ),
+    );
+  }
+}
+
+class _TrialBenefitsCard extends StatelessWidget {
+  const _TrialBenefitsCard({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final features = controller.selectedPlan.features
+        .take(4)
+        .toList(growable: false);
+    final labels = <String>[
+      'Access full\napp features',
+      'Generate AI\nsocial posts',
+      'Multi-platform\npublishing',
+      'Manage your\nbusiness profile',
+    ];
+    final icons = <IconData>[
+      Icons.dashboard_customize_outlined,
+      Icons.auto_awesome_outlined,
+      Icons.send_outlined,
+      Icons.person_outline_rounded,
+    ];
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      decoration: _cardDecoration(
+        border: Border.all(color: const Color(0xFFE1E9F2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'What you\'ll get with your trial',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.manrope(
+              fontSize: 18.5,
+              color: AppColors.brandBlue,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: List.generate(4, (index) {
+              final label = index < labels.length
+                  ? labels[index]
+                  : (index < features.length ? features[index] : '');
+              return Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      right: index == 3
+                          ? BorderSide.none
+                          : const BorderSide(color: Color(0xFFE7EDF5)),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: index.isEven
+                                ? const [Color(0xFFF1F7FF), Color(0xFFE8FBFF)]
+                                : const [Color(0xFFEFFFF7), Color(0xFFF4FDFF)],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          icons[index],
+                          color: index == 1 || index == 3
+                              ? AppColors.primary
+                              : AppColors.brandBlue,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 34,
+                        child: Text(
+                          label,
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.manrope(
+                            fontSize: 11,
+                            height: 1.14,
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SecureCheckoutNote extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5FDFF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFAEE5EC)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF9FB),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.lock_outline_rounded,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Safe & Secure Checkout',
+                  style: GoogleFonts.manrope(
+                    fontSize: 15,
+                    color: AppColors.brandBlue,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Secure payment • Start instantly',
+                  style: GoogleFonts.manrope(
+                    fontSize: 12,
+                    color: AppColors.mutedText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.lock_outline_rounded,
+                size: 14,
+                color: Color(0xFF66768F),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'SSL Encrypted',
+                textAlign: TextAlign.right,
+                style: GoogleFonts.manrope(
+                  fontSize: 10.8,
+                  color: const Color(0xFF66768F),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrialPlanDetailsSheet extends StatelessWidget {
+  const _TrialPlanDetailsSheet({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final plan = controller.selectedPlan;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 54,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD9E4EE),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              plan.name,
+              style: GoogleFonts.manrope(
+                fontSize: 22,
+                color: AppColors.brandBlue,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              plan.description,
+              style: GoogleFonts.manrope(
+                fontSize: 14.5,
+                color: AppColors.mutedText,
+                height: 1.45,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 16),
+            for (final feature in plan.features.take(6)) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.check_circle_rounded,
+                      size: 18,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      feature,
+                      style: GoogleFonts.manrope(
+                        fontSize: 14,
+                        color: AppColors.text,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -100,6 +860,8 @@ class _PaymentContentState extends State<_PaymentContent> {
                       _BillingWarningsCard(controller: widget.controller),
                       const SizedBox(height: 12),
                     ],
+                    _IntroAccessBanner(controller: widget.controller),
+                    const SizedBox(height: 12),
                     _ActiveSubscriptionCard(controller: widget.controller),
                     const SizedBox(height: 12),
                     _UpgradePlansCard(controller: widget.controller),
@@ -347,7 +1109,7 @@ class _SubscriptionTopBar extends StatelessWidget {
                     backButton,
                     Expanded(
                       child: Text(
-                        'Subscription',
+                        'Activation & Billing',
                         textAlign: TextAlign.center,
                         style: AppTypography.button(
                           fontSize: 20,
@@ -370,7 +1132,7 @@ class _SubscriptionTopBar extends StatelessWidget {
               backButton,
               Expanded(
                 child: Text(
-                  'Subscription',
+                  'Activation & Billing',
                   textAlign: TextAlign.center,
                   style: AppTypography.button(
                     fontSize: 20,
@@ -439,6 +1201,87 @@ class _FeedbackBanner extends StatelessWidget {
             splashRadius: 18,
             icon: const Icon(Icons.close_rounded, size: 18),
             color: AppColors.mutedText,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IntroAccessBanner extends StatelessWidget {
+  const _IntroAccessBanner({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    if (controller.hasActiveSubscription) {
+      return const SizedBox.shrink();
+    }
+
+    final isRenewal = controller.requiresRenewalPayment;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0F2B5B), Color(0xFF42C7D5)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x16003F70),
+            blurRadius: 20,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.workspace_premium_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isRenewal
+                      ? 'Continue your visibility engine'
+                      : 'Activate your first 7 days for Rs 99',
+                  style: AppTypography.card(
+                    fontSize: 18,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  isRenewal
+                      ? 'This business is locked until billing is restored. Pick a monthly or yearly plan to continue where you left off.'
+                      : 'Every business must complete payment before dashboard access. After 7 days, choose a plan to continue.',
+                  style: AppTypography.body(
+                    fontSize: 13.2,
+                    color: Colors.white.withValues(alpha: 0.92),
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -710,7 +1553,9 @@ class _UpgradePlansCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Upgrade Your Plan',
+            controller.hasActiveSubscription
+                ? 'Change Your Plan'
+                : 'Activate Your Plan',
             style: AppTypography.card(
               fontSize: 18,
               color: AppColors.text,
@@ -1140,9 +1985,8 @@ class _SecurePaymentCard extends StatelessWidget {
                       _PaymentMethodChip(
                         label: method.label,
                         selected: selectedMethod == method.id,
-                        onTap: () => controller.updatePreferredPaymentMethod(
-                          method.id,
-                        ),
+                        onTap: () =>
+                            controller.updatePreferredPaymentMethod(method.id),
                       ),
                   ],
                 ),
@@ -1367,49 +2211,47 @@ class _PaymentHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final records = controller.paymentHistory;
+    return Obx(() {
+      final records = controller.paymentHistory;
+      final canDownloadAll = controller.hasDownloadableInvoices;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      decoration: _cardDecoration(),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 360;
+      return Container(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+        decoration: _cardDecoration(),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 360;
+            final downloadAllLabel = controller.isDownloadingAllInvoices.value
+                ? 'Saving...'
+                : 'Download all';
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (compact)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Payment History',
-                      style: AppTypography.card(
-                        fontSize: 17,
-                        color: AppColors.text,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        'Download all',
-                        style: AppTypography.label(
-                          fontSize: 12,
-                          color: AppColors.brandBlue,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              else
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
+            Widget headerAction() {
+              if (!canDownloadAll) {
+                return const SizedBox.shrink();
+              }
+              return GestureDetector(
+                onTap: controller.isDownloadingAllInvoices.value
+                    ? null
+                    : controller.downloadAllInvoices,
+                child: Text(
+                  downloadAllLabel,
+                  style: AppTypography.label(
+                    fontSize: 12,
+                    color: AppColors.brandBlue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (compact)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
                         'Payment History',
                         style: AppTypography.card(
                           fontSize: 17,
@@ -1417,52 +2259,75 @@ class _PaymentHistoryCard extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ),
-                    Text(
-                      'Download all',
-                      style: AppTypography.label(
-                        fontSize: 12,
-                        color: AppColors.brandBlue,
-                        fontWeight: FontWeight.w700,
+                      if (canDownloadAll) ...[
+                        const SizedBox(height: 4),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: headerAction(),
+                        ),
+                      ],
+                    ],
+                  )
+                else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Payment History',
+                          style: AppTypography.card(
+                            fontSize: 17,
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      headerAction(),
+                    ],
+                  ),
+                const SizedBox(height: 10),
+                if (records.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    child: Text(
+                      'No billing records yet. Your successful Razorpay payments and invoices will appear here.',
+                      style: AppTypography.body(
+                        fontSize: 13.2,
+                        color: AppColors.mutedText,
                       ),
                     ),
-                  ],
-                ),
-              const SizedBox(height: 10),
-              if (records.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  child: Text(
-                    'No billing records yet. Your successful Razorpay payments will appear here.',
-                    style: AppTypography.body(
-                      fontSize: 13.2,
-                      color: AppColors.mutedText,
+                  )
+                else
+                  for (int index = 0; index < records.length; index++) ...[
+                    _PaymentHistoryRow(
+                      controller: controller,
+                      record: records[index],
                     ),
-                  ),
-                )
-              else
-                for (int index = 0; index < records.length; index++) ...[
-                  _PaymentHistoryRow(record: records[index]),
-                  if (index != records.length - 1)
-                    const Divider(height: 20, color: Color(0xFFE8EEF4)),
-                ],
-            ],
-          );
-        },
-      ),
-    );
+                    if (index != records.length - 1)
+                      const Divider(height: 20, color: Color(0xFFE8EEF4)),
+                  ],
+              ],
+            );
+          },
+        ),
+      );
+    });
   }
 }
 
 class _PaymentHistoryRow extends StatelessWidget {
-  const _PaymentHistoryRow({required this.record});
+  const _PaymentHistoryRow({required this.controller, required this.record});
 
+  final PaymentController controller;
   final SubscriptionPaymentRecord record;
 
   @override
   Widget build(BuildContext context) {
     final paidDate = DateTime.tryParse(record.paidOnIso);
     final dateLabel = paidDate == null ? 'Unknown date' : _formatDate(paidDate);
+    final invoiceLabel = record.invoiceNumber?.trim() ?? '';
+    final businessLabel = record.businessName?.trim() ?? '';
+    final locationLabel = record.businessLocation?.trim() ?? '';
+    final isDownloading = controller.isInvoiceDownloading(record.invoiceId);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1480,6 +2345,17 @@ class _PaymentHistoryRow extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              if (businessLabel.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(
+                  businessLabel,
+                  style: AppTypography.body(
+                    fontSize: 12.4,
+                    color: AppColors.brandBlue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
               const SizedBox(height: 4),
               Text(
                 dateLabel,
@@ -1488,6 +2364,26 @@ class _PaymentHistoryRow extends StatelessWidget {
                   color: AppColors.mutedText,
                 ),
               ),
+              if (invoiceLabel.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  invoiceLabel,
+                  style: AppTypography.body(
+                    fontSize: 11.6,
+                    color: AppColors.mutedText,
+                  ),
+                ),
+              ],
+              if (locationLabel.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  locationLabel,
+                  style: AppTypography.body(
+                    fontSize: 11.6,
+                    color: AppColors.mutedText,
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -1518,6 +2414,23 @@ class _PaymentHistoryRow extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (record.canDownload &&
+                      (record.invoiceId?.trim().isNotEmpty ?? false)) ...[
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: isDownloading
+                          ? null
+                          : () => controller.downloadInvoice(record),
+                      child: Text(
+                        isDownloading ? 'Saving...' : 'Invoice',
+                        style: AppTypography.label(
+                          fontSize: 11.5,
+                          color: AppColors.brandBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -1546,6 +2459,37 @@ class _PaymentHistoryRow extends StatelessWidget {
                       color: AppColors.mutedText,
                     ),
                   ),
+                  if (invoiceLabel.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      invoiceLabel,
+                      style: AppTypography.body(
+                        fontSize: 11.6,
+                        color: AppColors.mutedText,
+                      ),
+                    ),
+                  ],
+                  if (businessLabel.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      businessLabel,
+                      style: AppTypography.body(
+                        fontSize: 11.8,
+                        color: AppColors.brandBlue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                  if (locationLabel.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      locationLabel,
+                      style: AppTypography.body(
+                        fontSize: 11.6,
+                        color: AppColors.mutedText,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1580,6 +2524,23 @@ class _PaymentHistoryRow extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (record.canDownload &&
+                    (record.invoiceId?.trim().isNotEmpty ?? false)) ...[
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: isDownloading
+                        ? null
+                        : () => controller.downloadInvoice(record),
+                    child: Text(
+                      isDownloading ? 'Saving...' : 'Download invoice',
+                      style: AppTypography.label(
+                        fontSize: 11.4,
+                        color: AppColors.brandBlue,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ],
@@ -1665,7 +2626,10 @@ class _AutoRenewCard extends StatelessWidget {
                       if (controller.canCancelAutopay)
                         TextButton.icon(
                           onPressed: controller.cancelAutopay,
-                          icon: const Icon(Icons.pause_circle_outline, size: 16),
+                          icon: const Icon(
+                            Icons.pause_circle_outline,
+                            size: 16,
+                          ),
                           label: const Text('Stop at period end'),
                         ),
                     ],

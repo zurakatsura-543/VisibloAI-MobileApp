@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:get/get.dart';
 
+import '../../onboarding/controllers/onboarding_controller.dart';
+import '../models/auth_me_response.dart';
 import '../models/gbp_manager_models.dart';
 import '../services/auth_api_service.dart';
 
@@ -19,6 +21,7 @@ class GbpManagerController extends GetxController {
   final deletingLocationId = RxnString();
   final errorMessage = RxnString();
   final infoMessage = RxnString();
+  final locationQuota = Rxn<Map<String, dynamic>>();
 
   final locations = <GbpManagerLocation>[].obs;
 
@@ -37,6 +40,26 @@ class GbpManagerController extends GetxController {
       locations.fold<int>(0, (sum, location) => sum + location.reviews);
 
   int get pendingLocations => totalLocations - verifiedLocations;
+
+  int get quotaUsed => _quotaInt('used');
+
+  int get quotaMax => _quotaInt('max');
+
+  int get quotaRemaining => _quotaInt('remaining');
+
+  bool get hasQuotaData => locationQuota.value != null;
+
+  bool get isLocationQuotaUnlimited => quotaMax >= 999 || quotaRemaining >= 999;
+
+  bool get canAddLocation =>
+      !hasQuotaData || isLocationQuotaUnlimited || quotaRemaining > 0;
+
+  String get quotaUsedLabel => '$quotaUsed';
+
+  String get quotaMaxLabel => isLocationQuotaUnlimited ? '∞' : '$quotaMax';
+
+  String get quotaRemainingLabel =>
+      isLocationQuotaUnlimited ? '∞' : '$quotaRemaining';
 
   String get averageRatingLabel {
     if (locations.isEmpty) {
@@ -67,6 +90,7 @@ class GbpManagerController extends GetxController {
     try {
       final loadedLocations = await _authApiService.fetchGbpManagerLocations();
       locations.assignAll(_sortedLocations(loadedLocations));
+      await _refreshLocationQuota();
     } catch (error) {
       errorMessage.value = _humanizeError(
         error,
@@ -138,6 +162,11 @@ class GbpManagerController extends GetxController {
     final trimmedPhone = phone.trim();
     if (trimmedName.isEmpty || trimmedAddress.isEmpty) {
       errorMessage.value = 'Business name and address are required.';
+      return;
+    }
+    if (!canAddLocation) {
+      errorMessage.value =
+          'Your location quota is fully used. Upgrade or free a slot before adding another location.';
       return;
     }
 
@@ -236,5 +265,39 @@ class GbpManagerController extends GetxController {
       return message.replaceFirst('Exception: ', '');
     }
     return message;
+  }
+
+  Future<void> _refreshLocationQuota() async {
+    try {
+      final remoteProfile = await _authApiService.fetchMyData();
+      _applyLocationQuota(remoteProfile);
+    } catch (_) {
+      if (Get.isRegistered<OnboardingController>()) {
+        final existingQuota = Get.find<OnboardingController>().locationQuota.value;
+        if (existingQuota != null && existingQuota.isNotEmpty) {
+          locationQuota.value = Map<String, dynamic>.from(existingQuota);
+        }
+      }
+    }
+  }
+
+  void _applyLocationQuota(AuthMeResponse remoteProfile) {
+    locationQuota.value = remoteProfile.locationQuota.isEmpty
+        ? null
+        : Map<String, dynamic>.from(remoteProfile.locationQuota);
+    if (Get.isRegistered<OnboardingController>()) {
+      Get.find<OnboardingController>().locationQuota.value = locationQuota.value;
+    }
+  }
+
+  int _quotaInt(String key) {
+    final value = locationQuota.value?[key];
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.round();
+    }
+    return int.tryParse(value?.toString().trim() ?? '') ?? 0;
   }
 }

@@ -14,6 +14,14 @@ import '../widgets/auth_navigation_shell.dart';
 
 enum _ClientReviewFilter { all, needsReply, positive, negative }
 
+const String _reviewFontFamily = 'Inter';
+const Color _reviewInk = Color(0xFF102641);
+const Color _reviewBlue = Color(0xFF11418C);
+const Color _reviewTeal = Color(0xFF18C2D0);
+const Color _reviewMuted = Color(0xFF61738C);
+const Color _reviewBorder = Color(0xFFDCE6F1);
+const Color _reviewPurple = Color(0xFF6D45F4);
+
 class ClientReviewsView extends StatefulWidget {
   const ClientReviewsView({super.key});
 
@@ -80,42 +88,128 @@ class _ClientReviewsViewState extends State<ClientReviewsView> {
             _ReviewsTopBar(onCreatePost: () => Get.toNamed(AppRoutes.gbpPosts)),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Client Reviews',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF1F3556),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    RichText(
-                      text: TextSpan(
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: 14,
-                          color: const Color(0xFF5B6780),
-                          height: 1.45,
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white,
+                            Color(0xFFF7FAFF),
+                            Color(0xFFEEF8FF),
+                          ],
                         ),
-                        children: const [
-                          TextSpan(
-                            text:
-                                'Manage and respond to Google Business Profile reviews powered by ',
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: const Color(0xFFE2EAF4)),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x100F2746),
+                            blurRadius: 28,
+                            offset: Offset(0, 14),
                           ),
-                          TextSpan(
-                            text: 'VisibloAI',
-                            style: TextStyle(
-                              color: Color(0xFF4B79D8),
-                              fontWeight: FontWeight.w600,
+                        ],
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Client Reviews',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleLarge?.copyWith(
+                                    fontFamily: _reviewFontFamily,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w800,
+                                    color: _reviewInk,
+                                    height: 1.05,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                RichText(
+                                  text: TextSpan(
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          fontFamily: _reviewFontFamily,
+                                          fontSize: 14,
+                                          color: _reviewMuted,
+                                          height: 1.5,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                    children: const [
+                                      TextSpan(
+                                        text:
+                                            'Manage and respond to Google Business Profile reviews powered by ',
+                                      ),
+                                      TextSpan(
+                                        text: 'VisibloAI',
+                                        style: TextStyle(
+                                          fontFamily: _reviewFontFamily,
+                                          color: _reviewBlue,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Container(
+                            width: 58,
+                            height: 58,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(0xFFEFF5FF),
+                                  Color(0xFFE7FCFF),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x142696D1),
+                                  blurRadius: 18,
+                                  offset: Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: const [
+                                Icon(
+                                  Icons.auto_awesome_rounded,
+                                  size: 24,
+                                  color: _reviewBlue,
+                                ),
+                                Positioned(
+                                  right: 12,
+                                  top: 12,
+                                  child: Icon(
+                                    Icons.star_rounded,
+                                    size: 10,
+                                    color: _reviewTeal,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     _SyncReviewsButton(
                       onTap: () async {
                         await _controller.syncBusinessReviewsFromGoogle();
@@ -130,22 +224,23 @@ class _ClientReviewsViewState extends State<ClientReviewsView> {
                         );
                       },
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     _LocationSummaryCard(
                       user: user,
                       averageRating: averageRating,
                       reviewCount: reviews.length,
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 18),
                     Text(
                       'Reviews',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF3F3F46),
+                        fontFamily: _reviewFontFamily,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: _reviewInk,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
@@ -369,10 +464,10 @@ class _ReviewsTopBar extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFD8DFEA))),
+        border: Border(bottom: BorderSide(color: Color(0xFFE5EDF6))),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Row(
           children: [
             const AuthShellBackButton(),
@@ -384,20 +479,29 @@ class _ReviewsTopBar extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
               child: Ink(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 7,
+                  horizontal: 14,
+                  vertical: 9,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEAF4FF),
+                  color: const Color(0xFFF8FBFF),
+                  border: Border.all(color: const Color(0xFFD9E6F6)),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Text(
-                  'Create Post',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF275AAE),
-                    fontWeight: FontWeight.w700,
-                  ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.edit_outlined, size: 15, color: _reviewBlue),
+                    SizedBox(width: 7),
+                    Text(
+                      'Create Post',
+                      style: TextStyle(
+                        fontFamily: _reviewFontFamily,
+                        fontSize: 13,
+                        color: _reviewBlue,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -419,13 +523,24 @@ class _SyncReviewsButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(18),
         child: Ink(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 15),
+          padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: const Color(0xFF44BBC5),
-            borderRadius: BorderRadius.circular(10),
+            gradient: const LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [_reviewBlue, _reviewTeal],
+            ),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x2418B6CA),
+                blurRadius: 24,
+                offset: Offset(0, 14),
+              ),
+            ],
           ),
           child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -435,11 +550,14 @@ class _SyncReviewsButton extends StatelessWidget {
               Text(
                 'Sync from Google',
                 style: TextStyle(
+                  fontFamily: _reviewFontFamily,
                   fontSize: 14,
                   color: Colors.white,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
+              SizedBox(width: 10),
+              Icon(Icons.auto_awesome_rounded, size: 15, color: Colors.white),
             ],
           ),
         ),
@@ -464,7 +582,7 @@ class _LocationSummaryCard extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isTight = constraints.maxWidth < 360;
-        final cardHeight = isTight ? 136.0 : 130.0;
+        final cardHeight = isTight ? 142.0 : 136.0;
 
         return SizedBox(
           height: cardHeight,
@@ -503,15 +621,22 @@ class _LocationMapPreview extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: () => _openBusinessMap(user),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(22),
         child: Ink(
           decoration: BoxDecoration(
             color: AppColors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: _reviewBorder),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x100F2746),
+                blurRadius: 20,
+                offset: Offset(0, 12),
+              ),
+            ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(22),
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -550,9 +675,10 @@ class _LocationMapPreview extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
+                            fontFamily: _reviewFontFamily,
                             fontSize: 12.8,
-                            color: Color(0xFF24466F),
-                            fontWeight: FontWeight.w700,
+                            color: _reviewInk,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -574,9 +700,10 @@ class _LocationMapPreview extends StatelessWidget {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
+                                  fontFamily: _reviewFontFamily,
                                   fontSize: 10.8,
                                   height: 1.25,
-                                  color: Color(0xFF6F7B8C),
+                                  color: _reviewMuted,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -620,8 +747,9 @@ class _LocationMapPreview extends StatelessWidget {
                         Text(
                           'Open map',
                           style: TextStyle(
+                            fontFamily: _reviewFontFamily,
                             fontSize: 10.6,
-                            color: Color(0xFF29538A),
+                            color: _reviewBlue,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -665,8 +793,9 @@ class _ReviewScoreCard extends StatelessWidget {
                 'GOOGLE REVIEW',
                 maxLines: 1,
                 style: TextStyle(
+                  fontFamily: _reviewFontFamily,
                   fontSize: isNarrow ? 9.8 : 10.2,
-                  color: const Color(0xFF7A8798).withValues(alpha: 0.9),
+                  color: _reviewMuted,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.35,
                 ),
@@ -676,9 +805,10 @@ class _ReviewScoreCard extends StatelessWidget {
             Text(
               averageRating.toStringAsFixed(1),
               style: TextStyle(
+                fontFamily: _reviewFontFamily,
                 fontSize: isNarrow ? 26 : 28,
                 height: 1,
-                color: const Color(0xFF214B7B),
+                color: _reviewInk,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -694,8 +824,9 @@ class _ReviewScoreCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
+                fontFamily: _reviewFontFamily,
                 fontSize: isNarrow ? 10.2 : 11,
-                color: const Color(0xFF7C8798),
+                color: _reviewMuted,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -713,9 +844,20 @@ class _ReviewScoreCard extends StatelessWidget {
         compact ? 9 : 12,
       ),
       decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white, Color(0xFFF8FBFF)],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _reviewBorder),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x100F2746),
+            blurRadius: 20,
+            offset: Offset(0, 12),
+          ),
+        ],
       ),
       child: compact
           ? compactContent
@@ -773,20 +915,22 @@ class _ReviewFilterChip extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
           decoration: BoxDecoration(
-            color: selected ? const Color(0xFF46BBC4) : AppColors.white,
+            gradient: selected
+                ? const LinearGradient(colors: [_reviewBlue, _reviewTeal])
+                : null,
+            color: selected ? null : AppColors.white,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: selected
-                  ? const Color(0xFF46BBC4)
-                  : const Color(0xFFE2E8F0),
+              color: selected ? Colors.transparent : _reviewBorder,
             ),
           ),
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 11.8,
-              color: selected ? Colors.white : const Color(0xFF546274),
-              fontWeight: FontWeight.w600,
+              fontFamily: _reviewFontFamily,
+              fontSize: 12.2,
+              color: selected ? Colors.white : _reviewMuted,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -820,14 +964,25 @@ class _ReviewCard extends StatelessWidget {
 
     return InkWell(
       onTap: review.hasOwnerReply ? onEditReply : onCustomizeSuggestion,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(24),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE3E8F1)),
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.white, Color(0xFFF9FBFE)],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: _reviewBorder),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x100F2746),
+              blurRadius: 22,
+              offset: Offset(0, 12),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -847,16 +1002,18 @@ class _ReviewCard extends StatelessWidget {
                       Text(
                         review.reviewerName,
                         style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF214B7B),
-                          fontWeight: FontWeight.w700,
+                          fontFamily: _reviewFontFamily,
+                          fontSize: 15.6,
+                          color: _reviewInk,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                       Text(
                         review.reviewDateLabel,
                         style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF94A0B1),
+                          fontFamily: _reviewFontFamily,
+                          fontSize: 11.5,
+                          color: _reviewMuted,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -867,17 +1024,27 @@ class _ReviewCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Text(
-              review.comment,
-              maxLines: isExpanded || !needsExpand ? null : 3,
-              overflow: isExpanded || !needsExpand
-                  ? null
-                  : TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 14,
-                height: 1.5,
-                color: Color(0xFF343F52),
-                fontWeight: FontWeight.w500,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF6F9FD),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE7EEF7)),
+              ),
+              child: Text(
+                review.comment,
+                maxLines: isExpanded || !needsExpand ? null : 4,
+                overflow: isExpanded || !needsExpand
+                    ? null
+                    : TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: _reviewFontFamily,
+                  fontSize: 14.2,
+                  height: 1.6,
+                  color: Color(0xFF304156),
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
             if (needsExpand) ...[
@@ -887,17 +1054,18 @@ class _ReviewCard extends StatelessWidget {
                 child: Text(
                   isExpanded ? 'Show less' : 'View full review...',
                   style: const TextStyle(
-                    fontSize: 12.5,
-                    color: Color(0xFF1DB3C0),
+                    fontFamily: _reviewFontFamily,
+                    fontSize: 12.6,
+                    color: _reviewBlue,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
             ],
-            const SizedBox(height: 10),
+            const SizedBox(height: 14),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 10,
+              runSpacing: 10,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 _ReviewStatusChip(review: review),
@@ -965,9 +1133,10 @@ class _ReviewerAvatar extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
+          fontFamily: _reviewFontFamily,
           fontSize: 14,
-          color: Color(0xFF6C4CE6),
-          fontWeight: FontWeight.w700,
+          color: _reviewBlue,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -1027,6 +1196,7 @@ class _ReviewStatusChip extends StatelessWidget {
           Text(
             hasReply ? 'REPLIED' : 'NEEDS REPLY',
             style: TextStyle(
+              fontFamily: _reviewFontFamily,
               fontSize: 11,
               color: hasReply
                   ? const Color(0xFF49A15E)
@@ -1053,17 +1223,26 @@ class _ReviewTextAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: color,
-            fontWeight: FontWeight.w600,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: color.withValues(alpha: 0.18)),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontFamily: _reviewFontFamily,
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),
@@ -1088,9 +1267,13 @@ class _SuggestedReplyCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F0FF),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE3D7FF)),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFFBF9FF), Color(0xFFF5F0FF)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE7DDFF)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1102,10 +1285,11 @@ class _SuggestedReplyCard extends StatelessWidget {
               Text(
                 'VISIBLOAI SUGGESTED\nREPLY',
                 style: TextStyle(
+                  fontFamily: _reviewFontFamily,
                   fontSize: 11,
                   height: 1.15,
-                  color: Color(0xFF6B38E0),
-                  fontWeight: FontWeight.w700,
+                  color: _reviewPurple,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
@@ -1114,7 +1298,8 @@ class _SuggestedReplyCard extends StatelessWidget {
           Text(
             replyText,
             style: const TextStyle(
-              fontSize: 12.6,
+              fontFamily: _reviewFontFamily,
+              fontSize: 13.1,
               height: 1.45,
               color: Color(0xFF4D5566),
               fontWeight: FontWeight.w500,
@@ -1130,13 +1315,17 @@ class _SuggestedReplyCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 11),
                     side: const BorderSide(color: Color(0xFFCCBEFF)),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                    foregroundColor: const Color(0xFF6B38E0),
+                    foregroundColor: _reviewPurple,
                   ),
                   child: const Text(
                     'Edit Reply',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      fontFamily: _reviewFontFamily,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -1146,18 +1335,21 @@ class _SuggestedReplyCard extends StatelessWidget {
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: onApply,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(999),
                     child: Ink(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 11),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4A20C9),
-                        borderRadius: BorderRadius.circular(6),
+                        gradient: const LinearGradient(
+                          colors: [_reviewBlue, _reviewPurple],
+                        ),
+                        borderRadius: BorderRadius.circular(999),
                       ),
                       child: const Center(
                         child: Text(
                           'Apply Suggestion',
                           style: TextStyle(
+                            fontFamily: _reviewFontFamily,
                             fontSize: 12,
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
@@ -1232,9 +1424,9 @@ class _OwnerReplyCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF2FBFF),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFBDEBF2)),
+        color: const Color(0xFFF4FBFF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD4EEF5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1242,6 +1434,7 @@ class _OwnerReplyCard extends StatelessWidget {
           Text(
             '# Owner Reply',
             style: TextStyle(
+              fontFamily: _reviewFontFamily,
               fontSize: 11.5,
               color: const Color(0xFF1C7E90).withValues(alpha: 0.9),
               fontWeight: FontWeight.w700,
@@ -1252,7 +1445,8 @@ class _OwnerReplyCard extends StatelessWidget {
           Text(
             review.ownerReply,
             style: const TextStyle(
-              fontSize: 13.2,
+              fontFamily: _reviewFontFamily,
+              fontSize: 13.4,
               height: 1.45,
               color: Color(0xFF4D5566),
               fontWeight: FontWeight.w500,
@@ -1263,8 +1457,9 @@ class _OwnerReplyCard extends StatelessWidget {
             Text(
               review.ownerReplyUpdatedLabel,
               style: const TextStyle(
+                fontFamily: _reviewFontFamily,
                 fontSize: 11,
-                color: Color(0xFF6C7A8D),
+                color: _reviewMuted,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1347,9 +1542,13 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE6EDF5)),
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.white, Color(0xFFF7FBFF)],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: _reviewBorder),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1375,7 +1574,7 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
                     'AI Sentiment Analysis',
                     style: AppTypography.button(
                       fontSize: 14.2,
-                      color: const Color(0xFF1F3556),
+                      color: _reviewInk,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -1387,7 +1586,7 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
               'Generate an analysis to classify the review, estimate confidence, and draft a safer reply.',
               style: AppTypography.body(
                 fontSize: 12.4,
-                color: const Color(0xFF68788E),
+                color: _reviewMuted,
                 fontWeight: FontWeight.w500,
                 height: 1.42,
               ),
@@ -1398,11 +1597,11 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
               child: FilledButton.icon(
                 onPressed: _isGenerating ? null : _generateAiReply,
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF44BBC5),
+                  backgroundColor: _reviewBlue,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                 ),
                 icon: _isGenerating
@@ -1467,9 +1666,13 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE6EDF5)),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white, Color(0xFFF8FBFF)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _reviewBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1495,7 +1698,7 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
                   'AI Sentiment Analysis',
                   style: AppTypography.button(
                     fontSize: 14.2,
-                    color: const Color(0xFF1F3556),
+                    color: _reviewInk,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1694,8 +1897,12 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
           maxHeight: MediaQuery.sizeOf(context).height * 0.9,
         ),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFFCFEFF), Colors.white],
+          ),
+          borderRadius: BorderRadius.circular(30),
           boxShadow: const [
             BoxShadow(
               color: Color(0x330F2746),
@@ -1704,11 +1911,22 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
             ),
           ],
         ),
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: Container(
+                  width: 56,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCE5F1),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
               Row(
                 children: [
                   Expanded(
@@ -1716,8 +1934,8 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
                       'Client Reviews',
                       style: AppTypography.card(
                         fontSize: 18,
-                        color: const Color(0xFF1F3556),
-                        fontWeight: FontWeight.w700,
+                        color: _reviewInk,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
@@ -1735,40 +1953,65 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
                 'Manage and respond to Google Business Profile reviews powered by VisibloAI',
                 style: AppTypography.body(
                   fontSize: 12.6,
-                  color: const Color(0xFF66778C),
+                  color: _reviewMuted,
                   fontWeight: FontWeight.w500,
                   height: 1.42,
                 ),
               ),
               const SizedBox(height: 12),
-              _buildSentimentAnalysis(),
-              const SizedBox(height: 10),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFDFEFF),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE6EDF5)),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: _reviewBorder),
                 ),
-                child: Text(
-                  '"$quotedReview"',
-                  style: AppTypography.body(
-                    fontSize: 14,
-                    color: const Color(0xFF5A6E87),
-                    fontWeight: FontWeight.w500,
-                    height: 1.45,
-                  ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFE9F9FF),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.format_quote_rounded,
+                        color: _reviewBlue,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '"$quotedReview"',
+                        style: AppTypography.body(
+                          fontSize: 15,
+                          color: _reviewInk,
+                          fontWeight: FontWeight.w600,
+                          height: 1.55,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
+              _buildSentimentAnalysis(),
+              const SizedBox(height: 12),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F0FF),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2D7FF)),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFFCFAFF), Color(0xFFF6F1FF)],
+                  ),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: const Color(0xFFE8DEFF)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1794,9 +2037,28 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
                             'VISIBLOAI SUGGESTED REPLY',
                             style: AppTypography.label(
                               fontSize: 10.5,
-                              color: const Color(0xFF6B38E0),
+                              color: _reviewPurple,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.45,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.88),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Text(
+                            'AI Draft',
+                            style: TextStyle(
+                              fontFamily: _reviewFontFamily,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: _reviewPurple,
                             ),
                           ),
                         ),
@@ -1815,10 +2077,10 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
                             ? 'Generate a reply or type your own response below.'
                             : suggestedReply,
                         style: AppTypography.body(
-                          fontSize: 12.6,
-                          color: const Color(0xFF4D5566),
+                          fontSize: 13.4,
+                          color: _reviewInk,
                           fontWeight: FontWeight.w500,
-                          height: 1.45,
+                          height: 1.5,
                         ),
                       ),
                     ),
@@ -1830,20 +2092,21 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
                         _ReplyActionChip(
                           label: 'Use this reply',
                           icon: Icons.send_outlined,
-                          foreground: const Color(0xFF6B38E0),
+                          foreground: _reviewBlue,
+                          filled: true,
                           onTap: () =>
                               widget.onSave(_replyController.text.trim()),
                         ),
                         _ReplyActionChip(
                           label: 'Edit reply',
                           icon: Icons.edit_outlined,
-                          foreground: const Color(0xFF6B38E0),
+                          foreground: _reviewPurple,
                           onTap: () => _replyFocusNode.requestFocus(),
                         ),
                         _ReplyActionChip(
                           label: _isGenerating ? 'Generating...' : 'Regenerate',
                           icon: Icons.refresh_rounded,
-                          foreground: const Color(0xFF6B38E0),
+                          foreground: _reviewPurple,
                           onTap: _isGenerating ? null : _generateAiReply,
                         ),
                       ],
@@ -1856,8 +2119,8 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
                 'Write your reply',
                 style: AppTypography.button(
                   fontSize: 18,
-                  color: AppColors.brandBlue,
-                  fontWeight: FontWeight.w700,
+                  color: _reviewInk,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 4),
@@ -1865,15 +2128,16 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
                 'Write a professional and helpful response.',
                 style: AppTypography.body(
                   fontSize: 12.4,
-                  color: const Color(0xFF68788E),
+                  color: _reviewMuted,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 10),
               Container(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF44BBC5)),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFCBE3F4)),
+                  color: const Color(0xFFFCFEFF),
                 ),
                 child: TextField(
                   controller: _replyController,
@@ -1887,40 +2151,37 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
                       fontWeight: FontWeight.w500,
                     ),
                     filled: true,
-                    fillColor: const Color(0xFFFBFDFE),
+                    fillColor: const Color(0xFFFCFEFF),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.all(14),
                   ),
                   style: AppTypography.body(
-                    fontSize: 13,
+                    fontSize: 13.4,
                     color: const Color(0xFF44556A),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
               const SizedBox(height: 12),
-              Center(
-                child: SizedBox(
-                  width: 158,
-                  child: FilledButton.icon(
-                    onPressed: () =>
-                        widget.onSave(_replyController.text.trim()),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF44BBC5),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => widget.onSave(_replyController.text.trim()),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _reviewBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
                     ),
-                    icon: const Icon(Icons.send_outlined, size: 15),
-                    label: Text(
-                      'Reply to review',
-                      style: AppTypography.button(
-                        fontSize: 12.4,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  ),
+                  icon: const Icon(Icons.send_outlined, size: 17),
+                  label: Text(
+                    'Reply to review',
+                    style: AppTypography.button(
+                      fontSize: 13.2,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -1939,22 +2200,26 @@ class _ReplyActionChip extends StatelessWidget {
     required this.icon,
     required this.foreground,
     required this.onTap,
+    this.filled = false,
   });
 
   final String label;
   final IconData icon;
   final Color foreground;
   final VoidCallback? onTap;
+  final bool filled;
 
   @override
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        foregroundColor: foreground,
-        side: BorderSide(color: foreground.withValues(alpha: 0.35)),
-        backgroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        foregroundColor: filled ? Colors.white : foreground,
+        side: BorderSide(
+          color: filled ? Colors.transparent : foreground.withValues(alpha: 0.35),
+        ),
+        backgroundColor: filled ? foreground : Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
       icon: Icon(icon, size: 15),
@@ -1962,7 +2227,7 @@ class _ReplyActionChip extends StatelessWidget {
         label,
         style: AppTypography.label(
           fontSize: 10.8,
-          color: foreground,
+          color: filled ? Colors.white : foreground,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -1980,8 +2245,8 @@ class _EmptyReviewState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _reviewBorder),
       ),
       child: const Column(
         children: [
@@ -1990,8 +2255,9 @@ class _EmptyReviewState extends StatelessWidget {
           Text(
             'No reviews match this filter.',
             style: TextStyle(
+              fontFamily: _reviewFontFamily,
               fontSize: 14,
-              color: Color(0xFF4C5A6D),
+              color: _reviewMuted,
               fontWeight: FontWeight.w600,
             ),
           ),

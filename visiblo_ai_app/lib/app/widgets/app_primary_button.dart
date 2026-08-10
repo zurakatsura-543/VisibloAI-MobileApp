@@ -9,17 +9,23 @@ class AppPrimaryButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.icon,
+    this.iconSize = 18,
     this.isLoading = false,
     this.labelStyle,
     this.height = 56,
+    this.backgroundColor,
+    this.disabledBackgroundColor,
   });
 
   final String label;
   final VoidCallback onPressed;
   final IconData? icon;
+  final double iconSize;
   final bool isLoading;
   final TextStyle? labelStyle;
   final double height;
+  final Color? backgroundColor;
+  final Color? disabledBackgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -37,9 +43,10 @@ class AppPrimaryButton extends StatelessWidget {
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           elevation: 0,
-          backgroundColor: AppColors.primary,
+          backgroundColor: backgroundColor ?? AppColors.primary,
           foregroundColor: AppColors.white,
-          disabledBackgroundColor: AppColors.primaryDark,
+          disabledBackgroundColor:
+              disabledBackgroundColor ?? AppColors.primaryDark,
           disabledForegroundColor: AppColors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
@@ -61,7 +68,7 @@ class AppPrimaryButton extends StatelessWidget {
                   Text(label, style: resolvedLabelStyle),
                   if (icon != null) ...[
                     const SizedBox(width: 8),
-                    Icon(icon, size: 18),
+                    Icon(icon, size: iconSize),
                   ],
                 ],
               ),

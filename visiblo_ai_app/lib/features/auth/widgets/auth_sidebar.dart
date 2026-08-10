@@ -19,6 +19,25 @@ class SidebarMenuTriggerButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isEmbedded) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: const SizedBox(
+            width: 30,
+            height: 34,
+            child: Icon(
+              Icons.menu_rounded,
+              size: 24,
+              color: AppColors.brandBlue,
+            ),
+          ),
+        ),
+      );
+    }
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -28,18 +47,16 @@ class SidebarMenuTriggerButton extends StatelessWidget {
           width: 54,
           height: 54,
           decoration: BoxDecoration(
-            color: isEmbedded ? const Color(0xFFF3F7FD) : AppColors.white,
+            color: AppColors.white,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: const Color(0xFFE2E9F2)),
-            boxShadow: isEmbedded
-                ? null
-                : const [
-                    BoxShadow(
-                      color: Color(0x140F2746),
-                      blurRadius: 18,
-                      offset: Offset(0, 8),
-                    ),
-                  ],
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x140F2746),
+                blurRadius: 18,
+                offset: Offset(0, 8),
+              ),
+            ],
           ),
           child: const Icon(
             Icons.menu_rounded,
@@ -537,6 +554,248 @@ class AuthSidebarPanel extends StatelessWidget {
                   onLogoutTap: onLogoutTap,
                 ),
                 SizedBox(height: safeBottomInset),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class SocialSidebarPanel extends StatelessWidget {
+  const SocialSidebarPanel({
+    super.key,
+    required this.user,
+    required this.safeTopInset,
+    required this.safeBottomInset,
+    required this.onDashboardTap,
+    required this.onAccountsTap,
+    required this.onCreateTap,
+    required this.onCreativesTap,
+    required this.onCalendarTap,
+    required this.onSchedulerTap,
+    this.onPostsTap,
+    this.onAnalyticsTap,
+    this.onReportsTap,
+    required this.onProfileTap,
+    required this.onPaymentTap,
+    required this.onSupportTap,
+    required this.onCollapseTap,
+    required this.onLogoutTap,
+  });
+
+  final TestAccount user;
+  final double safeTopInset;
+  final double safeBottomInset;
+  final VoidCallback onDashboardTap;
+  final VoidCallback onAccountsTap;
+  final VoidCallback onCreateTap;
+  final VoidCallback onCreativesTap;
+  final VoidCallback onCalendarTap;
+  final VoidCallback onSchedulerTap;
+  final VoidCallback? onPostsTap;
+  final VoidCallback? onAnalyticsTap;
+  final VoidCallback? onReportsTap;
+  final VoidCallback onProfileTap;
+  final VoidCallback onPaymentTap;
+  final VoidCallback onSupportTap;
+  final VoidCallback onCollapseTap;
+  final VoidCallback onLogoutTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentRoute = Get.currentRoute;
+    final isDashboardSelected = currentRoute == AppRoutes.socialDashboard;
+    final isAccountsSelected = currentRoute == AppRoutes.socialAccounts;
+    final isCreateSelected = currentRoute == AppRoutes.socialCreate;
+    final isCreativesSelected = currentRoute == AppRoutes.socialCreatives;
+    final isCalendarSelected = currentRoute == AppRoutes.socialCalendar;
+    final isSchedulerSelected = currentRoute == AppRoutes.socialScheduler;
+    final isPostsSelected = currentRoute == AppRoutes.socialPosts;
+    final isAnalyticsSelected = currentRoute == AppRoutes.socialAnalytics;
+    final isReportsSelected = currentRoute == AppRoutes.socialReports;
+    final isProfileSelected = currentRoute == AppRoutes.socialProfile;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 240;
+
+        return Material(
+          color: AppColors.white,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x260F2746),
+                  blurRadius: 28,
+                  offset: Offset(0, 14),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? 12 : 16,
+                      18 + safeTopInset,
+                      compact ? 12 : 16,
+                      16,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            AppLogo(iconSize: compact ? 40 : 44),
+                            const Spacer(),
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: onCollapseTap,
+                                borderRadius: BorderRadius.circular(999),
+                                child: Ink(
+                                  width: compact ? 34 : 38,
+                                  height: compact ? 34 : 38,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF3F7FD),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: const Color(0xFFE2E9F2),
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    Icons.chevron_left_rounded,
+                                    size: compact ? 21 : 24,
+                                    color: AppColors.brandBlue,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: compact ? 14 : 18),
+                        Text(
+                          'Social Workspace',
+                          style: AppTypography.card(
+                            fontSize: compact ? 18 : 20,
+                            color: AppColors.brandBlue,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: compact ? 6 : 8),
+                        Text(
+                          'Manage publishing, accounts, and content planning from one place.',
+                          style: AppTypography.body(
+                            fontSize: compact ? 12.6 : 13.6,
+                            color: AppColors.mutedText,
+                            height: 1.45,
+                          ),
+                        ),
+                        SizedBox(height: compact ? 16 : 18),
+                        _SidebarActionTile(
+                          label: 'Dashboard',
+                          icon: Icons.dashboard_customize_outlined,
+                          isSelected: isDashboardSelected,
+                          compact: compact,
+                          onTap: onDashboardTap,
+                        ),
+                        const SizedBox(height: 8),
+                        _SidebarActionTile(
+                          label: 'Accounts',
+                          icon: Icons.groups_outlined,
+                          isSelected: isAccountsSelected,
+                          compact: compact,
+                          onTap: onAccountsTap,
+                        ),
+                        const SizedBox(height: 8),
+                        _SidebarActionTile(
+                          label: 'Create',
+                          icon: Icons.add_circle_outline_rounded,
+                          isSelected: isCreateSelected,
+                          compact: compact,
+                          onTap: onCreateTap,
+                        ),
+                        const SizedBox(height: 8),
+                        _SidebarActionTile(
+                          label: 'Creatives',
+                          icon: Icons.image_outlined,
+                          isSelected: isCreativesSelected,
+                          compact: compact,
+                          onTap: onCreativesTap,
+                        ),
+                        const SizedBox(height: 8),
+                        _SidebarActionTile(
+                          label: 'Calendar',
+                          icon: Icons.calendar_month_outlined,
+                          isSelected: isCalendarSelected,
+                          compact: compact,
+                          onTap: onCalendarTap,
+                        ),
+                        const SizedBox(height: 8),
+                        _SidebarActionTile(
+                          label: 'Scheduler',
+                          icon: Icons.schedule_rounded,
+                          isSelected: isSchedulerSelected,
+                          compact: compact,
+                          onTap: onSchedulerTap,
+                        ),
+                        const SizedBox(height: 8),
+                        _SidebarActionTile(
+                          label: 'Posts',
+                          icon: Icons.task_alt_rounded,
+                          isSelected: isPostsSelected,
+                          compact: compact,
+                          onTap:
+                              onPostsTap ??
+                              () => Get.offNamed(AppRoutes.socialPosts),
+                        ),
+                        const SizedBox(height: 8),
+                        _SidebarActionTile(
+                          label: 'Analytics',
+                          icon: Icons.bar_chart_rounded,
+                          isSelected: isAnalyticsSelected,
+                          compact: compact,
+                          onTap:
+                              onAnalyticsTap ??
+                              () => Get.offNamed(AppRoutes.socialAnalytics),
+                        ),
+                        const SizedBox(height: 8),
+                        _SidebarActionTile(
+                          label: 'Reports',
+                          icon: Icons.assessment_outlined,
+                          isSelected: isReportsSelected,
+                          compact: compact,
+                          onTap:
+                              onReportsTap ??
+                              () => Get.offNamed(AppRoutes.socialReports),
+                        ),
+                        const SizedBox(height: 8),
+                        _SidebarActionTile(
+                          label: 'Profile',
+                          icon: Icons.person_outline_rounded,
+                          isSelected: isProfileSelected,
+                          compact: compact,
+                          onTap: onProfileTap,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    compact ? 12 : 16,
+                    0,
+                    compact ? 12 : 16,
+                    12 + safeBottomInset,
+                  ),
+                  child: _SidebarUserCard(
+                    user: user,
+                    compact: compact,
+                    onLogoutTap: onLogoutTap,
+                  ),
+                ),
               ],
             ),
           ),

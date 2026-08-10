@@ -34,6 +34,52 @@ class AuthMeResponse {
   final Map<String, dynamic> rawData;
 
   bool get hasBusiness => businessId.isNotEmpty;
+  bool get hasActiveBusinessSelection =>
+      businessId.isNotEmpty && locationId.isNotEmpty;
+  bool get hasPaidAccess {
+    final subscriptionStatus = _asString(
+      subscription['status'],
+    ).trim().toUpperCase();
+    return _isAccessibleStatus(subscriptionStatus) ||
+        businessHasPaidAccess(primaryBusiness);
+  }
+
+  bool get hasAnyBusinessPaidAccess {
+    if (hasPaidAccess) {
+      return true;
+    }
+    return availableBusinesses.any(businessHasPaidAccess);
+  }
+
+  Map<String, dynamic>? get firstAccessibleBusiness {
+    for (final business in availableBusinesses) {
+      if (businessHasPaidAccess(business)) {
+        return business;
+      }
+    }
+    return null;
+  }
+
+  bool businessHasPaidAccess(Map<String, dynamic>? business) {
+    if (business == null) {
+      return false;
+    }
+    if (_readBool(business['isPaused']) || _readBool(business['locked'])) {
+      return false;
+    }
+    if (_readBool(business['trialActive']) ||
+        _readBool(business['introActive'])) {
+      return true;
+    }
+    final activationStatus = _asString(
+      business['activationStatus'],
+    ).trim().toUpperCase();
+    final subscriptionStatus = _asString(
+      business['subscriptionStatus'],
+    ).trim().toUpperCase();
+    return _isAccessibleStatus(activationStatus) ||
+        _isAccessibleStatus(subscriptionStatus);
+  }
 
   Map<String, dynamic>? get primaryBusiness {
     if (availableBusinesses.isEmpty) {
@@ -73,6 +119,7 @@ class AuthMeResponse {
             .whereType<Map>()
             .map((item) => Map<String, dynamic>.from(item))
             .toList();
+    final subscriptionStatus = _asString(subscription['status']).toUpperCase();
 
     return AuthMeResponse(
       authenticated: _readBool(map['authenticated']),
@@ -85,10 +132,7 @@ class AuthMeResponse {
       googleConnected: _readBool(map['googleConnected']),
       surveyDone: _readBool(map['surveyDone']),
       emailVerified: _readBool(map['emailVerified']),
-      subscriptionActive:
-          _readBool(subscription['subscriptionActive']) ||
-          _readBool(subscription['trialActive']) ||
-          _readBool(subscription['status'] == 'ACTIVE'),
+      subscriptionActive: subscriptionStatus == 'ACTIVE',
       availableBusinesses: businesses,
       locationQuota: locationQuota,
       subscription: subscription,
@@ -134,5 +178,15 @@ class AuthMeResponse {
       return normalized == 'true' || normalized == '1' || normalized == 'yes';
     }
     return false;
+  }
+
+  static bool _isAccessibleStatus(String status) {
+    return status == 'ACTIVE' ||
+        status == 'TRIALING' ||
+        status == 'TRIAL_ACTIVE' ||
+        status == 'INTRO_ACTIVE' ||
+        status == 'ACTIVE_MANUAL' ||
+        status == 'AUTOPAY_ACTIVE' ||
+        status == 'CANCEL_AT_PERIOD_END';
   }
 }

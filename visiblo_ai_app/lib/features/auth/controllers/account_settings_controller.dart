@@ -407,7 +407,7 @@ class AccountSettingsController extends GetxController {
       } else {
         await _authApiService.clearSession();
         await _localAuthService.logout();
-        Get.offAllNamed(AppRoutes.welcome);
+        Get.offAllNamed(AppRoutes.signUp);
         Get.snackbar(
           'Business profile deleted',
           message,

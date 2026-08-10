@@ -20,6 +20,7 @@ import '../models/report_models.dart';
 import '../models/review_poster_models.dart';
 import '../models/seo_tools_models.dart';
 import '../models/settings_models.dart';
+import '../models/subscription_payment_record.dart';
 import '../models/website_manager_models.dart';
 
 class AuthApiService extends GetxService {
@@ -196,6 +197,7 @@ class AuthApiService extends GetxService {
 
       debugPrint('--- DYNAMIC VALUES FROM BACKEND ---');
       debugPrint('Authenticated: ${me.authenticated}');
+      debugPrint('Email: ${me.email}');
       debugPrint('User ID: ${me.userId}');
       debugPrint('Business ID: ${me.businessId}');
       debugPrint('Google Connected: ${me.googleConnected}');
@@ -334,6 +336,9 @@ class AuthApiService extends GetxService {
   Future<GoogleLocationSearchResult> searchLocations() async {
     try {
       final response = await _api.get('/onboarding/search-locations');
+      debugPrint('--- SEARCH LOCATIONS RAW RESPONSE ---');
+      debugPrint(response.data.toString());
+      debugPrint('-------------------------------------');
       return GoogleLocationSearchResult.fromMap(_asMap(response.data));
     } on DioException catch (error) {
       throw Exception(_readErrorMessage(error));
@@ -702,7 +707,11 @@ class AuthApiService extends GetxService {
     return fragmentError;
   }
 
-  Future<GbpLocation?> fetchGbpLocation(String businessId) async {
+  Future<GbpLocation?> fetchGbpLocation(
+    String businessId, {
+    String expectedGmbLocationId = '',
+    String expectedBackendLocationId = '',
+  }) async {
     try {
       final response = await _api.get(
         '/gmb/locations',
@@ -711,7 +720,47 @@ class AuthApiService extends GetxService {
       final data = _asMap(response.data);
       final locations = data['locations'] as List?;
       if (locations != null && locations.isNotEmpty) {
-        return GbpLocation.fromMap(_asMap(locations[0]));
+        Map<String, dynamic> selected = _asMap(locations[0]);
+        final normalizedGmbLocationId = expectedGmbLocationId.trim();
+        final normalizedBackendLocationId = expectedBackendLocationId.trim();
+
+        for (final item in locations) {
+          final candidate = _asMap(item);
+          final candidateName = (candidate['name'] ?? '').toString().trim();
+          final candidateGmbLocationId =
+              (candidate['gmbLocationId'] ?? candidate['locationId'] ?? '')
+                  .toString()
+                  .trim();
+          final candidateBackendLocationId =
+              (candidate['backendLocationId'] ??
+                      candidate['dbLocationId'] ??
+                      candidate['businessLocationId'] ??
+                      '')
+                  .toString()
+                  .trim();
+
+          final matchesGmbLocation =
+              normalizedGmbLocationId.isNotEmpty &&
+              (candidateGmbLocationId == normalizedGmbLocationId ||
+                  candidateName.endsWith('/$normalizedGmbLocationId'));
+          final matchesBackendLocation =
+              normalizedBackendLocationId.isNotEmpty &&
+              candidateBackendLocationId == normalizedBackendLocationId;
+
+          if (matchesGmbLocation || matchesBackendLocation) {
+            selected = candidate;
+            break;
+          }
+        }
+
+        debugPrint(
+          'fetchGbpLocation: selected title=${selected['title']} '
+          'name=${selected['name']} '
+          'gmbLocationId=${selected['gmbLocationId'] ?? selected['locationId']} '
+          'backendLocationId=${selected['backendLocationId'] ?? selected['dbLocationId'] ?? selected['businessLocationId']}',
+        );
+
+        return GbpLocation.fromMap(selected);
       }
       return null;
     } catch (e) {
@@ -1550,6 +1599,55 @@ class AuthApiService extends GetxService {
         _readUnexpectedError(
           error,
           fallback: 'Unable to load billing usage right now.',
+        ),
+      );
+    }
+  }
+
+  Future<List<SubscriptionPaymentRecord>> fetchBillingInvoices({
+    String? businessId,
+  }) async {
+    try {
+      final response = await _api.get(
+        '/billing/invoices',
+        queryParameters: <String, dynamic>{
+          if (businessId != null && businessId.trim().isNotEmpty)
+            'businessId': businessId.trim(),
+        },
+      );
+      final data = _asMap(response.data);
+      final invoices =
+          (data['invoices'] as List<dynamic>? ?? const <dynamic>[])
+              .whereType<Map<String, dynamic>>()
+              .map(SubscriptionPaymentRecord.fromInvoiceMap)
+              .toList(growable: false);
+      return invoices;
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to load invoice history right now.',
+        ),
+      );
+    }
+  }
+
+  Future<List<int>> downloadBillingInvoice(String invoiceId) async {
+    try {
+      final response = await _api.get<List<int>>(
+        '/billing/invoices/${invoiceId.trim()}/download',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return response.data ?? const <int>[];
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to download the invoice right now.',
         ),
       );
     }

@@ -46,6 +46,10 @@ class GbpManagerView extends GetView<GbpManagerController> {
                   averageRating: controller.averageRatingLabel,
                   totalReviews: controller.totalReviews,
                 ),
+                if (controller.hasQuotaData) ...[
+                  const SizedBox(height: AuthViewSpacing.cardGap),
+                  _QuotaSummaryCard(controller: controller),
+                ],
                 if (controller.errorMessage.value != null) ...[
                   const SizedBox(height: AuthViewSpacing.cardGap),
                   _InlineBanner(
@@ -159,7 +163,9 @@ class GbpManagerView extends GetView<GbpManagerController> {
                       ),
                     ),
                     TextButton.icon(
-                      onPressed: _showAddLocationSheet,
+                      onPressed: controller.canAddLocation
+                          ? _showAddLocationSheet
+                          : null,
                       style: TextButton.styleFrom(
                         foregroundColor: AppColors.brandBlue,
                         padding: EdgeInsets.zero,
@@ -174,7 +180,11 @@ class GbpManagerView extends GetView<GbpManagerController> {
                 ),
                 const SizedBox(height: AuthViewSpacing.cardGap),
                 if (!hasLocations)
-                  _EmptyLocationsCard(onAddLocation: _showAddLocationSheet)
+                  _EmptyLocationsCard(
+                    onAddLocation: controller.canAddLocation
+                        ? _showAddLocationSheet
+                        : null,
+                  )
                 else
                   Column(
                     children: locations
@@ -229,6 +239,17 @@ class GbpManagerView extends GetView<GbpManagerController> {
   }
 
   Future<void> _showAddLocationSheet() async {
+    if (!controller.canAddLocation) {
+      _showSnack(
+        title: 'Location quota reached',
+        message:
+            'All location slots are used. Upgrade or free a slot before adding another location.',
+        accent: const Color(0xFFD64545),
+        icon: Icons.error_outline_rounded,
+      );
+      return;
+    }
+
     final nameController = TextEditingController();
     final addressController = TextEditingController();
     final phoneController = TextEditingController();
@@ -779,6 +800,159 @@ class _HeroInfoChip extends StatelessWidget {
   }
 }
 
+class _QuotaSummaryCard extends StatelessWidget {
+  const _QuotaSummaryCard({required this.controller});
+
+  final GbpManagerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final exhausted = !controller.canAddLocation;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: exhausted ? const Color(0xFFFFF5F5) : const Color(0xFFF7FBFF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: exhausted ? const Color(0xFFFFD7D7) : const Color(0xFFDCEAF8),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: exhausted
+                      ? const Color(0xFFFFE8E8)
+                      : const Color(0xFFEAF4FF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  exhausted
+                      ? Icons.lock_outline_rounded
+                      : Icons.space_dashboard_rounded,
+                  size: 18,
+                  color: exhausted
+                      ? const Color(0xFFD64545)
+                      : AppColors.brandBlue,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      exhausted ? 'Location quota used up' : 'Location quota',
+                      style: const TextStyle(
+                        fontSize: 14.2,
+                        color: AppColors.brandBlue,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      exhausted
+                          ? 'Manual add is disabled until a slot becomes available.'
+                          : 'Backend-enforced slot usage for this workspace.',
+                      style: const TextStyle(
+                        fontSize: 12.2,
+                        color: AppColors.mutedText,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _QuotaMetricTile(
+                  label: 'Used',
+                  value: controller.quotaUsedLabel,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _QuotaMetricTile(
+                  label: 'Max',
+                  value: controller.quotaMaxLabel,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _QuotaMetricTile(
+                  label: 'Remaining',
+                  value: controller.quotaRemainingLabel,
+                  valueColor: exhausted
+                      ? const Color(0xFFD64545)
+                      : const Color(0xFF188B63),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuotaMetricTile extends StatelessWidget {
+  const _QuotaMetricTile({
+    required this.label,
+    required this.value,
+    this.valueColor = AppColors.brandBlue,
+  });
+
+  final String label;
+  final String value;
+  final Color valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE1E8F2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11.2,
+              color: AppColors.mutedText,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              height: 1,
+              color: valueColor,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _VerificationBanner extends StatelessWidget {
   const _VerificationBanner({
     required this.verifiedLocations,
@@ -1231,7 +1405,7 @@ class _SheetField extends StatelessWidget {
 class _EmptyLocationsCard extends StatelessWidget {
   const _EmptyLocationsCard({required this.onAddLocation});
 
-  final VoidCallback onAddLocation;
+  final VoidCallback? onAddLocation;
 
   @override
   Widget build(BuildContext context) {

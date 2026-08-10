@@ -30,6 +30,7 @@ class AccountView extends GetView<AccountSettingsController> {
                 controller.errorMessage.value ??
                 'Unable to load workspace settings right now.',
             onRetry: controller.refreshData,
+            onLogout: controller.logout,
           );
         }
 
@@ -309,10 +310,15 @@ class _LoadingState extends StatelessWidget {
 }
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message, required this.onRetry});
+  const _ErrorState({
+    required this.message,
+    required this.onRetry,
+    required this.onLogout,
+  });
 
   final String message;
   final Future<void> Function() onRetry;
+  final Future<void> Function() onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -374,6 +380,23 @@ class _ErrorState extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: onLogout,
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('Log Out'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.brandBlue,
+                  side: const BorderSide(color: Color(0xFFD9E2F1)),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 18,
                     vertical: 14,

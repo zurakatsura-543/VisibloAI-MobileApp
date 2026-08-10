@@ -244,18 +244,25 @@ class SeoToolsController extends GetxController {
     }
     errorMessage.value = null;
     try {
+      // Fetch locations and primary SEO data in parallel for faster startup.
       final loadedLocations = await _authApiService.fetchBusinessLocations();
       locations.assignAll(loadedLocations);
       if (loadedLocations.isNotEmpty && selectedLocationId.value.isEmpty) {
         selectedLocationId.value = loadedLocations.first.id;
       }
-      await _loadSeoData();
+      // Load core keyword workspace — this makes the Keywords tab renderable.
+      await _refreshKeywordWorkspace();
+      // Release the loading spinner immediately so the user sees keywords.
+      isLoading.value = false;
+      isRefreshing.value = false;
+      // Then load secondary data (history, recommendations) in the background.
+      // Competitors and heatmap are loaded lazily when the user taps those tabs.
+      unawaited(_backgroundLoadSecondaryData());
     } catch (error) {
       errorMessage.value = _humanizeError(
         error,
         fallback: 'Failed to load SEO tools right now.',
       );
-    } finally {
       isLoading.value = false;
       isRefreshing.value = false;
     }
@@ -281,12 +288,17 @@ class SeoToolsController extends GetxController {
   Future<void> selectKeyword(String keywordId) async {
     if (selectedKeywordId.value == keywordId) return;
     selectedKeywordId.value = keywordId;
+    // Always reload ranking history and recommendations (Keywords tab core data).
     await Future.wait<void>([
       loadRankingHistory(),
       loadRecommendations(),
-      loadCompetitorData(refresh: false),
-      loadHeatmapData(generate: false),
     ]);
+    // Reload competitors/heatmap only if the user is actively viewing those tabs.
+    if (activeTab.value == SeoMobileTab.competitors) {
+      unawaited(loadCompetitorData(refresh: false));
+    } else if (activeTab.value == SeoMobileTab.heatmap) {
+      unawaited(loadHeatmapData(generate: false));
+    }
   }
 
   Future<void> setRankHistoryDays(int days) async {
@@ -535,6 +547,9 @@ class SeoToolsController extends GetxController {
     trackedKeywordSort.value = sort;
   }
 
+  /// Clears all SEO state and reloads everything for the current location.
+  /// After keywords are ready the spinner is released; secondary data loads
+  /// in the background so the user is never blocked waiting for all 8+ APIs.
   Future<void> _loadSeoData() async {
     final location = selectedLocationId.value;
     if (location.isEmpty) {
@@ -551,15 +566,16 @@ class SeoToolsController extends GetxController {
       return;
     }
 
+    // Step 1: Load core keyword data. The caller releases isLoading after this.
     await _refreshKeywordWorkspace();
-    await _reloadDependentSeoData();
+    // Step 2: Background-load ranking history + recommendations.
+    // Competitors and heatmap are loaded lazily on tab switch.
+    unawaited(_backgroundLoadSecondaryData());
   }
 
   Future<void> _refreshKeywordWorkspace() async {
     final location = selectedLocationId.value;
-    if (location.isEmpty) {
-      return;
-    }
+    if (location.isEmpty) return;
 
     final results = await Future.wait<dynamic>([
       _authApiService.fetchSeoOverview(location),
@@ -582,12 +598,25 @@ class SeoToolsController extends GetxController {
     }
   }
 
+  /// Loads ranking history + recommendations silently in the background.
+  /// Does NOT load competitors or heatmap — those are lazy-loaded on tab switch.
+  Future<void> _backgroundLoadSecondaryData() async {
+    await Future.wait<void>([
+      loadRankingHistory(),
+      loadRecommendations(),
+    ]);
+  }
+
+  /// Legacy full reload — kept for addKeyword / removeKeyword flows where
+  /// we do want to refresh everything after a user action.
   Future<void> _reloadDependentSeoData() async {
     await Future.wait<void>([
       loadRankingHistory(),
       loadRecommendations(),
-      if (selectedKeyword != null) loadCompetitorData(refresh: false),
-      if (selectedKeyword != null) loadHeatmapData(generate: false),
+      if (selectedKeyword != null && activeTab.value == SeoMobileTab.competitors)
+        loadCompetitorData(refresh: false),
+      if (selectedKeyword != null && activeTab.value == SeoMobileTab.heatmap)
+        loadHeatmapData(generate: false),
     ]);
   }
 
