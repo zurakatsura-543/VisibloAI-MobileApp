@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
@@ -25,6 +26,12 @@ class PaymentView extends GetView<PaymentController> {
       final liveProfile = controller.remoteProfile.value;
       if (liveProfile != null && controller.requiresIntroActivationPayment) {
         return _TrialUnlockView(controller: controller);
+      }
+
+      if (liveProfile != null &&
+          (controller.requiresRenewalPayment ||
+              controller.hasExternalBillingTarget)) {
+        return _ExpiredRenewalView(controller: controller);
       }
 
       return AuthNavigationShell(
@@ -305,6 +312,1459 @@ class _TrialUnlockView extends StatelessWidget {
             ),
           );
         }),
+      ),
+    );
+  }
+}
+
+class _ExpiredRenewalView extends StatelessWidget {
+  const _ExpiredRenewalView({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAFCFF),
+      body: SafeArea(
+        child: Obx(() {
+          final isLoading =
+              controller.isLoading.value &&
+              controller.remoteProfile.value == null;
+          if (isLoading) {
+            return const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            );
+          }
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 14, 24, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: () {
+                        if (Get.previousRoute.isNotEmpty) {
+                          Get.back();
+                          return;
+                        }
+                        Get.offAllNamed(AppRoutes.locationSelection);
+                      },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 40,
+                        height: 40,
+                      ),
+                      icon: const Icon(
+                        Icons.arrow_back_rounded,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    const Spacer(),
+                    const AppLogo(iconSize: 42, centered: true),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF1F1),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: const Color(0xFFFFC8C8)),
+                      ),
+                      child: Text(
+                        'PLAN EXPIRED',
+                        style: GoogleFonts.manrope(
+                          fontSize: 10.5,
+                          color: const Color(0xFFFF3B30),
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Continue your visibility engine',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 28,
+                    height: 1.08,
+                    color: AppColors.brandBlue,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 9),
+                Text(
+                  '${_expiredAgoLabel(controller.hasExternalBillingTarget ? null : controller.renewalDate)}. Pick up where you left off.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.manrope(
+                    fontSize: 14.5,
+                    color: AppColors.mutedText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${controller.selectedBusinessName} is the expired business.',
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.manrope(
+                    fontSize: 12.8,
+                    color: const Color(0xFF0D7F95),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _ExpiredRenewalHero(controller: controller),
+                const SizedBox(height: 14),
+                _ExpiredBillingCycleToggle(controller: controller),
+                const SizedBox(height: 14),
+                _ExpiredPaymentModeSelector(controller: controller),
+                const SizedBox(height: 12),
+                _ExpiredLockedBanner(controller: controller),
+                const SizedBox(height: 12),
+                _ExpiredPlanSummaryCard(controller: controller),
+                const SizedBox(height: 12),
+                _ExpiredPriceBreakdown(controller: controller),
+                const SizedBox(height: 10),
+                _ExpiredCouponRow(controller: controller),
+                const SizedBox(height: 10),
+                _ExpiredRestoreButton(controller: controller),
+                const SizedBox(height: 14),
+                _ExpiredTrustRow(),
+                const SizedBox(height: 18),
+                _ExpiredPlanActions(controller: controller),
+                const SizedBox(height: 10),
+                Text(
+                  'You can cancel anytime. No hidden charges.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.manrope(
+                    fontSize: 12.2,
+                    color: AppColors.mutedText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (controller.errorMessage.value != null) ...[
+                  const SizedBox(height: 14),
+                  _FeedbackBanner(
+                    message: controller.errorMessage.value!,
+                    isError: true,
+                    onDismiss: controller.clearError,
+                  ),
+                ],
+                if (controller.infoMessage.value != null) ...[
+                  const SizedBox(height: 14),
+                  _FeedbackBanner(
+                    message: controller.infoMessage.value!,
+                    onDismiss: controller.clearInfo,
+                  ),
+                ],
+              ],
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _ExpiredRenewalHero extends StatelessWidget {
+  const _ExpiredRenewalHero({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final plan = controller.selectedPlan;
+      final cycle = controller.selectedBillingCycle.value;
+      final isYearly = cycle == 'yearly';
+      final savings = plan.annualSavingsInr();
+
+      return Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 18, 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFF8FC6FF)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x14003F70),
+              blurRadius: 24,
+              offset: Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 11,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _formatInr(controller.estimatedTotalInr),
+                      maxLines: 1,
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 38,
+                        height: 0.95,
+                        color: AppColors.brandBlue,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -1.2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${_renewalPlanTitle(plan)} Renewal',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 14.5,
+                      color: AppColors.primaryDark,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    isYearly
+                        ? '12-month access • yearly billing'
+                        : '1-month access • monthly billing',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.manrope(
+                      fontSize: 12.4,
+                      color: AppColors.mutedText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (isYearly && savings > 0) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE9FCF7),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.sell_outlined,
+                            size: 14,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Save ${_formatInr(savings)} yearly',
+                            style: GoogleFonts.manrope(
+                              fontSize: 11.4,
+                              color: AppColors.primaryDark,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Container(
+              width: 1,
+              height: 104,
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+              color: const Color(0xFFE1E8F2),
+            ),
+            Expanded(
+              flex: 8,
+              child: Image.asset(
+                'assets/images/app-banner7.png',
+                height: 126,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _ExpiredBillingCycleToggle extends StatelessWidget {
+  const _ExpiredBillingCycleToggle({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final selectedCycle = controller.selectedBillingCycle.value;
+      return Center(
+        child: Container(
+          width: 230,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0F3F8),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _ExpiredCyclePill(
+                  label: 'Monthly',
+                  selected: selectedCycle == 'monthly',
+                  onTap: () => controller.setBillingCycle('monthly'),
+                ),
+              ),
+              Expanded(
+                child: _ExpiredCyclePill(
+                  label: 'Yearly',
+                  badge: '-20%',
+                  selected: selectedCycle == 'yearly',
+                  onTap: () => controller.setBillingCycle('yearly'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+}
+
+class _ExpiredCyclePill extends StatelessWidget {
+  const _ExpiredCyclePill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.badge,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: selected
+              ? const [
+                  BoxShadow(
+                    color: Color(0x18003F70),
+                    blurRadius: 10,
+                    offset: Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.manrope(
+                fontSize: 12.8,
+                color: selected ? AppColors.brandBlue : AppColors.mutedText,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            if (badge != null) ...[
+              const SizedBox(width: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2FAF5),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  badge!,
+                  style: GoogleFonts.manrope(
+                    fontSize: 9.5,
+                    color: const Color(0xFF0F8C7E),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExpiredPaymentModeSelector extends StatelessWidget {
+  const _ExpiredPaymentModeSelector({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final selectedMode = controller.selectedBillingMode.value;
+      return Row(
+        children: [
+          Expanded(
+            child: _ExpiredModeCard(
+              icon: Icons.credit_card_rounded,
+              title: 'Pay manually',
+              subtitle: 'One-time checkout for the selected billing cycle.',
+              selected: selectedMode == 'MANUAL',
+              enabled: true,
+              onTap: () => controller.setBillingMode('MANUAL'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _ExpiredModeCard(
+              icon: Icons.verified_user_outlined,
+              title: 'Enable AutoPay',
+              subtitle:
+                  'Creates a Razorpay subscription mandate for recurring charges.',
+              selected: selectedMode == 'AUTOPAY',
+              enabled: true,
+              onTap: () => controller.setBillingMode('AUTOPAY'),
+            ),
+          ),
+        ],
+      );
+    });
+  }
+}
+
+class _ExpiredModeCard extends StatelessWidget {
+  const _ExpiredModeCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        constraints: const BoxConstraints(minHeight: 104),
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFF4FEFF) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? const Color(0xFF169CFF) : const Color(0xFFE0E7F0),
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: enabled ? AppColors.primary : AppColors.mutedText,
+                ),
+                const Spacer(),
+                Icon(
+                  selected
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 20,
+                  color: selected
+                      ? const Color(0xFF0E73FF)
+                      : const Color(0xFFB8C3D2),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 12.8,
+                color: enabled ? AppColors.brandBlue : AppColors.mutedText,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              subtitle,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.manrope(
+                fontSize: 11.5,
+                height: 1.28,
+                color: AppColors.mutedText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExpiredLockedBanner extends StatelessWidget {
+  const _ExpiredLockedBanner({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFAEA),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFD47A)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFE2A8),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.lock_outline_rounded,
+              size: 18,
+              color: Color(0xFFF39C12),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Business access is locked',
+                  style: GoogleFonts.manrope(
+                    fontSize: 12.6,
+                    color: AppColors.brandBlue,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${controller.selectedBusinessName} is locked until billing is restored.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.manrope(
+                    fontSize: 10.8,
+                    height: 1.18,
+                    color: AppColors.mutedText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'RESTORE_ACCESS',
+            style: GoogleFonts.manrope(
+              fontSize: 9.2,
+              color: const Color(0xFFD88400),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: Color(0xFFD88400),
+            size: 18,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExpiredPlanSummaryCard extends StatelessWidget {
+  const _ExpiredPlanSummaryCard({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final plan = controller.selectedPlan;
+      final features = plan.features.take(4).toList(growable: false);
+
+      return Container(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        decoration: _cardDecoration(
+          border: Border.all(color: const Color(0xFFE1E9F2)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: const BoxDecoration(
+                color: AppColors.brandBlue,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.workspace_premium_outlined,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _renewalPlanTitle(plan),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 17,
+                            color: AppColors.brandBlue,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF007FA5),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          'YOUR PLAN',
+                          style: GoogleFonts.manrope(
+                            fontSize: 7.8,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _renewalPlanSubtitle(plan),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.manrope(
+                      fontSize: 11.4,
+                      height: 1.22,
+                      color: AppColors.mutedText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Column(
+                    children: [
+                      for (var index = 0; index < features.length; index += 2)
+                        Padding(
+                          padding: EdgeInsets.only(
+                            bottom: index + 2 < features.length ? 8 : 0,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _ExpiredFeatureCheck(
+                                  label: _shortFeature(features[index]),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: index + 1 < features.length
+                                    ? _ExpiredFeatureCheck(
+                                        label: _shortFeature(
+                                          features[index + 1],
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _ExpiredPriceBreakdown extends StatelessWidget {
+  const _ExpiredPriceBreakdown({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final plan = controller.selectedPlan;
+      final isYearly = controller.selectedBillingCycle.value == 'yearly';
+      final subtotal = controller.estimatedDiscountedSubtotalInr;
+      final originalYearly = plan.monthlyPriceInr * 12;
+      final savings = isYearly ? plan.annualSavingsInr() : 0;
+
+      return Container(
+        padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
+        decoration: _cardDecoration(
+          border: Border.all(color: const Color(0xFFE1E9F2)),
+        ),
+        child: Column(
+          children: [
+            _ExpiredAmountRow(
+              label:
+                  '${_renewalPlanTitle(plan)} (${isYearly ? '12 months' : '1 month'})',
+              value: _formatInr(subtotal),
+              strikedValue: isYearly && originalYearly > subtotal
+                  ? _formatInr(originalYearly)
+                  : null,
+            ),
+            const SizedBox(height: 9),
+            _ExpiredAmountRow(
+              label: 'GST (18%)',
+              value: _formatInr(controller.estimatedGstInr),
+              info: true,
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 9),
+              child: Divider(height: 1, color: Color(0xFFE5ECF4)),
+            ),
+            _ExpiredAmountRow(
+              label: 'Total',
+              value: _formatInr(controller.estimatedTotalInr),
+              large: true,
+            ),
+            if (savings > 0) ...[
+              const SizedBox(height: 2),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'You save ${_formatInr(savings)}',
+                  style: GoogleFonts.manrope(
+                    fontSize: 10.6,
+                    color: const Color(0xFF019878),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _ExpiredFeatureCheck extends StatelessWidget {
+  const _ExpiredFeatureCheck({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 15,
+          height: 15,
+          margin: const EdgeInsets.only(top: 1),
+          decoration: const BoxDecoration(
+            color: Color(0xFFE8F8F0),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.check_rounded,
+            size: 11,
+            color: Color(0xFF21A564),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.manrope(
+              fontSize: 10.8,
+              height: 1.2,
+              color: AppColors.text,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ExpiredAmountRow extends StatelessWidget {
+  const _ExpiredAmountRow({
+    required this.label,
+    required this.value,
+    this.strikedValue,
+    this.info = false,
+    this.large = false,
+  });
+
+  final String label;
+  final String value;
+  final String? strikedValue;
+  final bool info;
+  final bool large;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: large ? 15.2 : 12.6,
+                    color: AppColors.brandBlue,
+                    fontWeight: large ? FontWeight.w900 : FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (info) ...[
+                const SizedBox(width: 5),
+                const Icon(
+                  Icons.info_outline_rounded,
+                  size: 13,
+                  color: Color(0xFF90A0B7),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (strikedValue != null) ...[
+          Text(
+            strikedValue!,
+            style: GoogleFonts.manrope(
+              fontSize: 10.8,
+              color: const Color(0xFF9AA7BA),
+              fontWeight: FontWeight.w700,
+              decoration: TextDecoration.lineThrough,
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        Text(
+          value,
+          style: GoogleFonts.spaceGrotesk(
+            fontSize: large ? 25 : 12.8,
+            height: 1,
+            color: AppColors.brandBlue,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ExpiredCouponRow extends StatelessWidget {
+  const _ExpiredCouponRow({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final couponResult = controller.couponResult.value;
+      if (controller.selectedBillingMode.value == 'AUTOPAY') {
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0FCFF),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFBFEAF2)),
+          ),
+          child: Text(
+            'Coupon discounts are available on manual checkout only. Use AutoPay when you want recurring renewals without re-entering payment details.',
+            style: GoogleFonts.manrope(
+              fontSize: 11.5,
+              height: 1.35,
+              color: const Color(0xFF08758B),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        );
+      }
+
+      if (couponResult != null) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0FBF6),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFC4EAD4)),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.local_offer_rounded,
+                color: Color(0xFF1D8F58),
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${couponResult.coupon?.code ?? controller.couponCode.value} applied',
+                  style: GoogleFonts.manrope(
+                    fontSize: 12.2,
+                    color: const Color(0xFF126B42),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: controller.removeCoupon,
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+        );
+      }
+
+      final canApplyCoupon =
+          !controller.isApplyingCoupon.value &&
+          controller.couponCode.value.trim().isNotEmpty;
+
+      return Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller.couponCodeController,
+              textCapitalization: TextCapitalization.characters,
+              decoration: _couponInputDecoration().copyWith(
+                hintText: 'Have a coupon code?',
+                prefixIcon: const Icon(
+                  Icons.sell_outlined,
+                  size: 18,
+                  color: Color(0xFF8EA0B7),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            height: 48,
+            child: FilledButton(
+              onPressed: canApplyCoupon ? controller.applyCoupon : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                disabledBackgroundColor: const Color(0xFFE9EFF6),
+                foregroundColor: Colors.white,
+                disabledForegroundColor: const Color(0xFF9AA8BA),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: controller.isApplyingCoupon.value
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      'Apply',
+                      style: GoogleFonts.spaceGrotesk(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      );
+    });
+  }
+}
+
+class _ExpiredRestoreButton extends StatelessWidget {
+  const _ExpiredRestoreButton({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final isAutopay = controller.selectedBillingMode.value == 'AUTOPAY';
+      final cycleLabel = controller.selectedBillingCycle.value == 'yearly'
+          ? 'Yearly'
+          : 'Monthly';
+      final label = controller.couponResult.value?.skipPayment == true
+          ? 'Restore Access'
+          : isAutopay
+          ? 'Start AutoPay - $cycleLabel'
+          : 'Pay ${_formatInr(controller.estimatedTotalInr)} & Restore Access';
+
+      return Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF0D62FF), Color(0xFF08BFA8)],
+          ),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x2A0D8BE8),
+              blurRadius: 18,
+              offset: Offset(0, 10),
+            ),
+          ],
+        ),
+        child: FilledButton.icon(
+          onPressed: controller.isSelectedPlanBusy
+              ? null
+              : controller.checkoutSelectedPlan,
+          icon: controller.isSelectedPlanBusy
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.1,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.lock_outline_rounded, size: 22),
+          label: Text(label),
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            disabledBackgroundColor: Colors.transparent,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            textStyle: GoogleFonts.manrope(
+              fontSize: 16.5,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      );
+    });
+  }
+}
+
+class _ExpiredTrustRow extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    const items = <({IconData icon, String label, Color color})>[
+      (
+        icon: Icons.verified_user_outlined,
+        label: 'Secure checkout',
+        color: Color(0xFF00A978),
+      ),
+      (
+        icon: Icons.shield_outlined,
+        label: 'Razorpay verified',
+        color: Color(0xFF2C7BFF),
+      ),
+      (
+        icon: Icons.receipt_long_outlined,
+        label: 'GST invoice',
+        color: Color(0xFF2C7BFF),
+      ),
+    ];
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var index = 0; index < items.length; index++) ...[
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(items[index].icon, size: 16, color: items[index].color),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    items[index].label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.manrope(
+                      fontSize: 10.8,
+                      color: AppColors.mutedText,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (index != items.length - 1) const SizedBox(width: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _ExpiredPlanActions extends StatelessWidget {
+  const _ExpiredPlanActions({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => _showExpiredPlanPicker(context, controller),
+            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+            label: const Text('Want a different plan?'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primaryDark,
+              side: const BorderSide(color: Color(0xFFBFEAF2)),
+              backgroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              textStyle: GoogleFonts.manrope(
+                fontSize: 12.8,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _openPricingComparison,
+            icon: const Icon(Icons.chevron_right_rounded, size: 20),
+            label: const Text('Compare all features'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.brandBlue,
+              side: const BorderSide(color: Color(0xFFD8E2EC)),
+              backgroundColor: const Color(0xFFF8FAFD),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              textStyle: GoogleFonts.manrope(
+                fontSize: 12.8,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+void _showExpiredPlanPicker(
+  BuildContext context,
+  PaymentController controller,
+) {
+  Get.bottomSheet(
+    _ExpiredPlanPickerSheet(controller: controller),
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+  );
+}
+
+Future<void> _openPricingComparison() async {
+  final uri = Uri.parse('https://www.visibloai.com/pricing');
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!opened) {
+    Get.snackbar(
+      'Unable to open pricing',
+      'Please visit www.visibloai.com/pricing to compare all features.',
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  }
+}
+
+class _ExpiredPlanPickerSheet extends StatelessWidget {
+  const _ExpiredPlanPickerSheet({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.82,
+        ),
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 20),
+        decoration: const BoxDecoration(
+          color: Color(0xFFFAFCFF),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Obx(() {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD5DFEA),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Choose a renewal plan',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 22,
+                  color: AppColors.brandBlue,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Selected plan updates the expired checkout immediately.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.manrope(
+                  fontSize: 12.6,
+                  color: AppColors.mutedText,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: controller.plans.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final plan = controller.plans[index];
+                    return _ExpiredSelectablePlanCard(
+                      controller: controller,
+                      plan: plan,
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _ExpiredSelectablePlanCard extends StatelessWidget {
+  const _ExpiredSelectablePlanCard({
+    required this.controller,
+    required this.plan,
+  });
+
+  final PaymentController controller;
+  final BillingPlanDefinition plan;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = controller.selectedPlanCode.value == plan.code;
+    final isYearly = controller.selectedBillingCycle.value == 'yearly';
+    final subtotal = plan.subtotalFor(controller.selectedBillingCycle.value);
+    final gst = (subtotal * 0.18).round();
+    final total = subtotal + gst;
+    final originalYearly = plan.monthlyPriceInr * 12;
+    final accent = _planAccentColor(plan.code);
+
+    return InkWell(
+      onTap: () {
+        controller.selectPlan(plan.code);
+        Get.back();
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? accent : const Color(0xFFE1E9F2),
+            width: selected ? 1.6 : 1,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0D003F70),
+              blurRadius: 16,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _renewalPlanTitle(plan),
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 18,
+                      color: AppColors.brandBlue,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                if (plan.recommended && !selected)
+                  _PlanMiniBadge(label: 'MOST POPULAR', color: accent),
+                if (selected) _PlanMiniBadge(label: 'SELECTED', color: accent),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              plan.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.manrope(
+                fontSize: 12.2,
+                color: AppColors.mutedText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (isYearly && originalYearly > subtotal) ...[
+                  Text(
+                    _formatInr(originalYearly),
+                    style: GoogleFonts.manrope(
+                      fontSize: 11.8,
+                      color: const Color(0xFF9AA7BA),
+                      fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.lineThrough,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  isYearly
+                      ? _formatInr(plan.yearlyMonthlyPriceInr)
+                      : _formatInr(plan.monthlyPriceInr),
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 26,
+                    height: 0.95,
+                    color: AppColors.brandBlue,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  '/mo',
+                  style: GoogleFonts.manrope(
+                    fontSize: 12,
+                    color: AppColors.mutedText,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'Total: ${_formatInr(total)} incl. GST',
+              style: GoogleFonts.manrope(
+                fontSize: 11.4,
+                color: const Color(0xFF7D8CA4),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 13),
+            for (final feature in plan.features.take(5)) ...[
+              _ExpiredFeatureCheck(label: _shortFeature(feature)),
+              const SizedBox(height: 8),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanMiniBadge extends StatelessWidget {
+  const _PlanMiniBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.manrope(
+          fontSize: 8.5,
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.2,
+        ),
       ),
     );
   }
@@ -1703,7 +3163,6 @@ class _MiniPlanCard extends StatelessWidget {
       'SINGLE' => 'TRENDING',
       'PRO' => 'POPULAR',
       'PREMIUM' => 'BEST VALUE',
-      'ENTERPRISE' => 'SCALE',
       _ => 'PLAN',
     };
     final accentColor = _planAccentColor(plan.code);
@@ -2958,8 +4417,6 @@ Color _planAccentColor(String code) {
       return const Color(0xFF1FA5D4);
     case 'PREMIUM':
       return const Color(0xFF322D93);
-    case 'ENTERPRISE':
-      return const Color(0xFF0F766E);
     default:
       return AppColors.primary;
   }
@@ -2967,10 +4424,7 @@ Color _planAccentColor(String code) {
 
 String _planDisplayTitle(BillingPlanDefinition plan) {
   if (plan.code == 'PREMIUM') {
-    return 'Premium Plan';
-  }
-  if (plan.code == 'ENTERPRISE') {
-    return 'Enterprise Plan';
+    return 'Business Pro';
   }
   return plan.name.replaceAll(' Package', ' Plan');
 }
@@ -2982,11 +4436,30 @@ String _shortPlanTitle(BillingPlanDefinition plan) {
     case 'PRO':
       return 'Growth';
     case 'PREMIUM':
-      return 'Premium';
-    case 'ENTERPRISE':
-      return 'Enterprise';
+      return 'Business Pro';
     default:
       return plan.name;
+  }
+}
+
+String _renewalPlanTitle(BillingPlanDefinition plan) {
+  final name = plan.name.trim();
+  if (name.isEmpty) {
+    return _shortPlanTitle(plan);
+  }
+  return name.replaceAll(' Package', '').replaceAll(' Plan', '');
+}
+
+String _renewalPlanSubtitle(BillingPlanDefinition plan) {
+  switch (plan.code) {
+    case 'SINGLE':
+      return 'Small businesses starting online';
+    case 'PRO':
+      return 'For continuous inquiries and branding';
+    case 'PREMIUM':
+      return 'Maximum AI automation • Up to 5 business locations';
+    default:
+      return plan.suitableFor;
   }
 }
 
@@ -2995,9 +4468,9 @@ String _historyPlanTitle(String planId) {
     case 'starter':
       return 'Starter Plan';
     case 'premium':
-      return 'Premium Plan';
+      return 'Business Pro Plan';
     case 'enterprise':
-      return 'Enterprise Plan';
+      return 'Business Pro Plan';
     case 'growth':
     default:
       return 'Growth Plan';
@@ -3048,4 +4521,30 @@ String _formatDate(DateTime value) {
     'Dec',
   ];
   return '${months[value.month - 1]} ${value.day}, ${value.year}';
+}
+
+String _expiredAgoLabel(DateTime? expiredAt) {
+  if (expiredAt == null) {
+    return 'Plan expired';
+  }
+
+  final diff = DateTime.now().difference(expiredAt);
+  if (diff.inMinutes < 1) {
+    return 'Expired just now';
+  }
+  if (diff.inHours < 1) {
+    return 'Expired ${diff.inMinutes}m ago';
+  }
+  if (diff.inDays < 1) {
+    return 'Expired ${diff.inHours}h ago';
+  }
+  if (diff.inDays < 30) {
+    return 'Expired ${diff.inDays}d ago';
+  }
+  final months = (diff.inDays / 30).floor();
+  if (months < 12) {
+    return 'Expired ${months}mo ago';
+  }
+  final years = (diff.inDays / 365).floor();
+  return 'Expired ${years}y ago';
 }

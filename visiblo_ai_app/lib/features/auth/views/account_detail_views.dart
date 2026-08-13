@@ -625,7 +625,10 @@ class AccountGoogleBusinessProfileView extends GetView<OnboardingController> {
                         onTap: () => _openEmail(_displayEmail(user)),
                         action: TextButton.icon(
                           onPressed: () => _openEmail(_displayEmail(user)),
-                          icon: const Icon(Icons.arrow_outward_rounded, size: 16),
+                          icon: const Icon(
+                            Icons.arrow_outward_rounded,
+                            size: 16,
+                          ),
                           label: const Text('Send'),
                           style: TextButton.styleFrom(
                             foregroundColor: AppColors.primary,
@@ -1384,10 +1387,7 @@ class _ConnectedAccountRow extends StatelessWidget {
               ],
             ),
           ),
-          if (action != null) ...[
-            const SizedBox(width: 8),
-            action!,
-          ],
+          if (action != null) ...[const SizedBox(width: 8), action!],
         ],
       ),
     );
@@ -1946,25 +1946,25 @@ _PlanSummary _planSummaryFor(
     case 'starter':
       return const _PlanSummary(
         title: 'Starter',
-        monthlyPrice: 3999,
+        monthlyPrice: 1999,
         locationsLabel: '1 Included',
       );
     case 'enterprise':
       return const _PlanSummary(
-        title: 'Enterprise',
-        monthlyPrice: 24999,
-        locationsLabel: 'Unlimited',
+        title: 'Business Pro',
+        monthlyPrice: 4999,
+        locationsLabel: '5 Included',
       );
     case 'premium':
       return const _PlanSummary(
-        title: 'Premium',
-        monthlyPrice: 14999,
-        locationsLabel: 'Unlimited',
+        title: 'Business Pro',
+        monthlyPrice: 4999,
+        locationsLabel: '5 Included',
       );
     default:
       return const _PlanSummary(
         title: 'Growth',
-        monthlyPrice: 7999,
+        monthlyPrice: 2999,
         locationsLabel: '3 Included',
       );
   }

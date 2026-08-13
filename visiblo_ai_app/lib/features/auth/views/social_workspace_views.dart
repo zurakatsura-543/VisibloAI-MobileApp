@@ -1,3 +1,5 @@
+// ignore_for_file: unused_element, unused_element_parameter
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -1551,18 +1553,18 @@ class _SocialCreateViewState extends State<SocialCreateView> {
       : Get.put(SocialSchedulerController());
   late final TextEditingController _topicController;
   bool _isSidebarOpen = false;
-  bool _includeVisual = true;
-  bool _includeHashtags = true;
-  bool _addEmojis = true;
-  bool _advancedExpanded = false;
-  String _selectedTone = 'Friendly';
-  String _selectedLanguage = 'English';
-  String _selectedAudience = 'Local Business Owners';
+  final bool _includeVisual = true;
+  final bool _includeHashtags = true;
+  final bool _addEmojis = true;
+  final String _selectedTone = 'Friendly';
+  String _selectedLanguage = 'Hindi';
+  final String _selectedAudience = 'Local Business Owners';
   String _selectedTextLength = 'Short (2-3 lines)';
   String _selectedQuality = 'Good (10s)';
-  String _selectedStyle = 'Modern & Clean';
-  String _selectedImageType = 'Realistic Photo';
-  String _selectedBusinessType = 'Local Business';
+  String _selectedPostType = 'Festival';
+  final String _selectedStyle = 'Modern & Clean';
+  final String _selectedImageType = 'Realistic Photo';
+  final String _selectedBusinessType = 'Local Business';
   String _selectedCreativeGoal = 'Boost Engagement';
   Color _selectedThemeColor = const Color(0xFF5A52FF);
   String? _pendingDraftIdToOpen;
@@ -1589,6 +1591,29 @@ class _SocialCreateViewState extends State<SocialCreateView> {
       creativeGoal: _selectedCreativeGoal,
       colorTheme: _hexFromColor(_selectedThemeColor),
     );
+  }
+
+  GeneratedSocialPost? get _previewPost {
+    if (_createController.generatedPosts.isEmpty) {
+      return null;
+    }
+    return _createController.generatedPosts.first;
+  }
+
+  Future<void> _postNowFromGenerator() async {
+    if (_createController.isGenerating.value ||
+        _createController.publishingPlatform.value != null) {
+      return;
+    }
+    if (_createController.generatedPosts.isEmpty) {
+      return;
+    }
+    final posts = List<GeneratedSocialPost>.from(
+      _createController.generatedPosts,
+    );
+    for (final post in posts.where((post) => !post.isPublished)) {
+      await _createController.publishPost(post);
+    }
   }
 
   Future<void> _editGeneratedPost(GeneratedSocialPost post) async {
@@ -1763,9 +1788,10 @@ class _SocialCreateViewState extends State<SocialCreateView> {
       _createController.successMessage.value =
           '${post.platform} post scheduled for ${_formatSchedulerDateTime(scheduledAt)}.';
     } catch (error) {
-      _createController.errorMessage.value = error
-          .toString()
-          .replaceFirst('Exception: ', '');
+      _createController.errorMessage.value = error.toString().replaceFirst(
+        'Exception: ',
+        '',
+      );
     }
   }
 
@@ -2273,360 +2299,194 @@ class _SocialCreateViewState extends State<SocialCreateView> {
           );
         }
         return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SocialCreateTopBar(onMenuTap: () => _openSidebar(user)),
-              const SizedBox(height: 18),
+              _AiGeneratorTopBar(onMenuTap: () => _openSidebar(user)),
+              const SizedBox(height: 28),
               const Text(
                 'AI Post Generator',
                 style: TextStyle(
                   fontFamily: 'Inter',
-                  color: Color(0xFF111827),
-                  fontSize: 18.8,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.25,
+                  color: Color(0xFF060B34),
+                  fontSize: 26,
+                  height: 1.05,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.45,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               const Text(
                 'Create engaging social media posts with AI.',
                 style: TextStyle(
                   fontFamily: 'Inter',
-                  color: Color(0xFF6C7692),
-                  fontSize: 13.2,
+                  color: Color(0xFF243A67),
+                  fontSize: 16,
+                  height: 1.28,
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(height: 18),
-              const _SocialCreateStepper(),
-              const SizedBox(height: 18),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFFE8EEF5)),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x120F2746),
-                      blurRadius: 18,
-                      offset: Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'What would you like to post about?',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        color: Color(0xFF111827),
-                        fontSize: 14.2,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.1,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _topicController,
-                      maxLines: 3,
-                      minLines: 3,
-                      maxLength: 300,
-                      cursorColor: const Color(0xFF184A96),
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        color: Color(0xFF233357),
-                        fontSize: 13.8,
-                        height: 1.45,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      decoration: InputDecoration(
-                        counterText: '',
-                        contentPadding: const EdgeInsets.fromLTRB(
-                          14,
-                          14,
-                          14,
-                          14,
-                        ),
-                        filled: true,
-                        fillColor: Colors.white,
-                        hintText: 'Describe what you want to post about.',
-                        hintStyle: const TextStyle(
-                          fontFamily: 'Inter',
-                          color: Color(0xFF8A98B8),
-                          fontSize: 13.4,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFDDE7F2),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF36CFC9),
-                            width: 1.4,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        '${_topicController.text.length}/300',
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          color: Color(0xFF7080A3),
-                          fontSize: 12.0,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _CreateSelectField(
-                            icon: Icons.sentiment_satisfied_rounded,
-                            iconColor: Color(0xFFF4B740),
-                            label: 'Tone',
-                            value: _selectedTone,
-                            options: const [
-                              'Professional',
-                              'Friendly',
-                              'Humorous',
-                              'Promotional',
-                            ],
-                            onSelected: (value) {
-                              setState(() => _selectedTone = value);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _CreateSelectField(
-                            icon: Icons.language_rounded,
-                            iconColor: Color(0xFF2563EB),
-                            label: 'Language',
-                            value: _selectedLanguage,
-                            options: const [
-                              'English',
-                              'Hindi',
-                              'Marathi',
-                              'Hinglish',
-                              'Bengali',
-                              'Telugu',
-                              'Punjabi',
-                              'Gujarati',
-                            ],
-                            onSelected: (value) {
-                              setState(() => _selectedLanguage = value);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _CreateSelectField(
-                            icon: Icons.people_outline_rounded,
-                            iconColor: Color(0xFF0F766E),
-                            label: 'Audience',
-                            value: _selectedAudience,
-                            options: const [
-                              'Local Business Owners',
-                              'Consumers',
-                              'B2B Professionals',
-                              'Students',
-                            ],
-                            onSelected: (value) {
-                              setState(() => _selectedAudience = value);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _CreateSelectField(
-                            icon: Icons.star_rounded,
-                            iconColor: Color(0xFFE0A11B),
-                            label: 'Quality',
-                            value: _selectedQuality,
-                            options: const [
-                              'Good (10s)',
-                              'High (20s)',
-                              'Highest (60s)',
-                            ],
-                            optionLabels: const {
-                              'Good (10s)':
-                                  'Good Quality (wait for 10 seconds)',
-                              'High (20s)':
-                                  'High Quality (wait for 20 seconds)',
-                              'Highest (60s)':
-                                  'Highest Quality (wait for 60 seconds)',
-                            },
-                            onSelected: (value) {
-                              setState(() => _selectedQuality = value);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    _CreateSelectField(
-                      icon: Icons.notes_rounded,
-                      iconColor: const Color(0xFF0A3F85),
-                      label: 'Text Word Size',
-                      value: _selectedTextLength,
-                      options: _socialTextLengthOptions,
-                      onSelected: (value) {
-                        setState(() => _selectedTextLength = value);
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    _CreateToggleRow(
-                      icon: Icons.image_outlined,
-                      iconColor: const Color(0xFF2563EB),
-                      label: 'Text + Image',
-                      value: _includeVisual,
-                      onChanged: (value) {
-                        setState(() => _includeVisual = value);
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    const Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: Color(0xFFE9EEF6),
-                    ),
-                    const SizedBox(height: 10),
-                    _CreateToggleRow(
-                      icon: Icons.tag_rounded,
-                      iconColor: const Color(0xFF184A96),
-                      label: 'Include Hashtags',
-                      value: _includeHashtags,
-                      onChanged: (value) {
-                        setState(() => _includeHashtags = value);
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    const Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: Color(0xFFE9EEF6),
-                    ),
-                    const SizedBox(height: 10),
-                    _CreateToggleRow(
-                      icon: Icons.sentiment_satisfied_rounded,
-                      iconColor: const Color(0xFFF4B740),
-                      label: 'Add Emojis',
-                      value: _addEmojis,
-                      onChanged: (value) {
-                        setState(() => _addEmojis = value);
-                      },
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 30),
+              const _AiGeneratorSectionTitle(
+                'What would you like to post about?',
               ),
               const SizedBox(height: 14),
-              _CreateAdvancedOptionsCard(
-                isExpanded: _advancedExpanded,
-                selectedStyle: _selectedStyle,
-                selectedImageType: _selectedImageType,
-                selectedBusinessType: _selectedBusinessType,
-                selectedCreativeGoal: _selectedCreativeGoal,
-                selectedThemeColor: _selectedThemeColor,
-                onToggle: () {
-                  setState(() => _advancedExpanded = !_advancedExpanded);
-                },
-                onStyleSelected: (value) {
-                  setState(() => _selectedStyle = value);
-                },
-                onImageTypeSelected: (value) {
-                  setState(() => _selectedImageType = value);
-                },
-                onBusinessTypeSelected: (value) {
-                  setState(() => _selectedBusinessType = value);
-                },
-                onCreativeGoalSelected: (value) {
-                  setState(() => _selectedCreativeGoal = value);
-                },
-                onThemeSelected: (value) {
-                  setState(() => _selectedThemeColor = value);
-                },
-                onCustomThemeTap: _pickCustomThemeColor,
-              ),
-              const SizedBox(height: 14),
-              const _CreateAssistantCard(),
-              const SizedBox(height: 16),
-              Obx(() {
-                final isGenerating = _createController.isGenerating.value;
-                return GestureDetector(
-                  onTap: isGenerating ? null : _generateContent,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    decoration: BoxDecoration(
-                      color: isGenerating
-                          ? const Color(0xFF7E93B6)
-                          : const Color(0xFF0A3F85),
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x220F2746),
-                          blurRadius: 16,
-                          offset: Offset(0, 8),
-                        ),
-                      ],
+              TextField(
+                controller: _topicController,
+                maxLines: 4,
+                minLines: 4,
+                maxLength: 300,
+                onChanged: (_) => setState(() {}),
+                cursorColor: const Color(0xFF075EEB),
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFF070B2E),
+                  fontSize: 16,
+                  height: 1.36,
+                  fontWeight: FontWeight.w500,
+                ),
+                decoration: InputDecoration(
+                  counterText: '',
+                  contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                  filled: true,
+                  fillColor: Colors.white,
+                  hintText: 'Tell VisibloAI what this post should say.',
+                  hintStyle: const TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF8792AC),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(11),
+                    borderSide: const BorderSide(color: Color(0xFFD3DDED)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(11),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF1768FF),
+                      width: 1.4,
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${_topicController.text.length}/300',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF243A67),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: _AiQualityPicker(
+                      value: _selectedQuality,
+                      onSelected: (value) => setState(() {
+                        _selectedQuality = value;
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 6,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (isGenerating)
-                          const SizedBox(
-                            width: 19,
-                            height: 19,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
-                            ),
-                          )
-                        else
-                          const Icon(
-                            Icons.auto_awesome_rounded,
-                            size: 19,
-                            color: Colors.white,
-                          ),
-                        const SizedBox(width: 8),
-                        Text(
-                          isGenerating
-                              ? 'Generating Posts...'
-                              : 'Generate Content',
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.1,
-                          ),
+                        const _AiFieldLabel('TEXT WORD SIZE'),
+                        const SizedBox(height: 7),
+                        _AiTextLengthPicker(
+                          value: _selectedTextLength,
+                          onSelected: (value) => setState(() {
+                            _selectedTextLength = value;
+                          }),
                         ),
                       ],
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const _AiGeneratorSectionTitle('Choose Language'),
+              const SizedBox(height: 13),
+              _AiLanguageTabs(
+                selectedLanguage: _selectedLanguage,
+                onSelected: (value) => setState(() {
+                  _selectedLanguage = value;
+                }),
+              ),
+              const SizedBox(height: 27),
+              const _AiGeneratorSectionTitle('Select Post Type'),
+              const SizedBox(height: 13),
+              Row(
+                children: [
+                  Expanded(
+                    child: _AiPostTypeCard(
+                      emoji: '🎉',
+                      label: 'Festival',
+                      selected: _selectedPostType == 'Festival',
+                      onTap: () => setState(() {
+                        _selectedPostType = 'Festival';
+                        _selectedCreativeGoal = 'Boost Engagement';
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: _AiPostTypeCard(
+                      emoji: '🏷️',
+                      label: 'Offer',
+                      selected: _selectedPostType == 'Offer',
+                      onTap: () => setState(() {
+                        _selectedPostType = 'Offer';
+                        _selectedCreativeGoal = 'Drive Sales';
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: _AiPostTypeCard(
+                      icon: Icons.article_outlined,
+                      label: 'General',
+                      selected: _selectedPostType == 'General',
+                      onTap: () => setState(() {
+                        _selectedPostType = 'General';
+                        _selectedCreativeGoal = 'Build Awareness';
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Obx(() {
+                final isGenerating = _createController.isGenerating.value;
+                final hasPreview = _previewPost != null;
+                return _AiPostNowButton(
+                  isBusy: isGenerating,
+                  icon: isGenerating
+                      ? Icons.stop_circle_outlined
+                      : Icons.auto_awesome_rounded,
+                  label: isGenerating
+                      ? 'Stop'
+                      : hasPreview
+                      ? 'Regenerate Post'
+                      : 'Generate Post',
+                  onTap: isGenerating
+                      ? _createController.stopGeneration
+                      : _generateContent,
                 );
               }),
-              const SizedBox(height: 14),
+              const SizedBox(height: 24),
               _GeneratedSocialPostsSection(
                 controller: _createController,
                 onSchedulePost: _showSuggestedScheduleDialogForGenerated,
@@ -2641,6 +2501,673 @@ class _SocialCreateViewState extends State<SocialCreateView> {
   }
 }
 
+class _AiGeneratorTopBar extends StatelessWidget {
+  const _AiGeneratorTopBar({required this.onMenuTap});
+
+  final VoidCallback onMenuTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: onMenuTap,
+          behavior: HitTestBehavior.opaque,
+          child: const AppLogo(iconSize: 48, fontSize: 31),
+        ),
+        const Spacer(),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const SizedBox(
+              width: 40,
+              height: 40,
+              child: Icon(
+                Icons.notifications_none_rounded,
+                size: 31,
+                color: Color(0xFF061044),
+              ),
+            ),
+            Positioned(
+              right: 0,
+              top: 1,
+              child: Container(
+                width: 19,
+                height: 19,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF2738),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: const Text(
+                  '12',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AiGeneratorSectionTitle extends StatelessWidget {
+  const _AiGeneratorSectionTitle(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontFamily: 'Inter',
+        color: Color(0xFF070B2E),
+        fontSize: 18,
+        height: 1.15,
+        fontWeight: FontWeight.w900,
+        letterSpacing: -0.15,
+      ),
+    );
+  }
+}
+
+class _AiFieldLabel extends StatelessWidget {
+  const _AiFieldLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        fontFamily: 'Inter',
+        color: Color(0xFF526A96),
+        fontSize: 11,
+        letterSpacing: 1.4,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+}
+
+class _AiQualityPicker extends StatelessWidget {
+  const _AiQualityPicker({required this.value, required this.onSelected});
+
+  final String value;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      onSelected: onSelected,
+      color: Colors.white,
+      surfaceTintColor: Colors.white,
+      elevation: 12,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Color(0xFFD2DCEB)),
+      ),
+      itemBuilder: (context) =>
+          const ['Good (10s)', 'High (20s)', 'Highest (60s)']
+              .map(
+                (option) => PopupMenuItem<String>(
+                  height: 42,
+                  value: option,
+                  child: Text(
+                    option,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF070B2E),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              )
+              .toList(growable: false),
+      child: Container(
+        height: 50,
+        padding: const EdgeInsets.symmetric(horizontal: 11),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFD2DCEB)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.star_rounded, size: 21, color: Color(0xFFF3B417)),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Quality',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF53658B),
+                      fontSize: 10.5,
+                      height: 1.1,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF070B2E),
+                      fontSize: 13,
+                      height: 1.1,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 21,
+              color: Color(0xFF061044),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AiTextLengthPicker extends StatelessWidget {
+  const _AiTextLengthPicker({required this.value, required this.onSelected});
+
+  final String value;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      onSelected: onSelected,
+      color: Colors.white,
+      surfaceTintColor: Colors.white,
+      elevation: 12,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Color(0xFFD2DCEB)),
+      ),
+      itemBuilder: (context) =>
+          const ['Short (2-3 lines)', 'Medium (4-5 lines)', 'Long (6-8 lines)']
+              .map(
+                (option) => PopupMenuItem<String>(
+                  height: 42,
+                  value: option,
+                  child: Text(
+                    option,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF070B2E),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              )
+              .toList(growable: false),
+      child: Container(
+        height: 50,
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 11),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: const Color(0xFFD2DCEB)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFF070B2E),
+                  fontSize: 12.8,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 22,
+              color: Color(0xFF8A97AF),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AiLanguageTabs extends StatelessWidget {
+  const _AiLanguageTabs({
+    required this.selectedLanguage,
+    required this.onSelected,
+  });
+
+  final String selectedLanguage;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <({String label, String value})>[
+      (label: 'English', value: 'English'),
+      (label: 'हिंदी', value: 'Hindi'),
+      (label: 'मराठी', value: 'Marathi'),
+    ];
+    final moreLanguageLabels = <String, String>{
+      'Hinglish': 'Hinglish',
+      'Gujarati': 'ગુજરાતી',
+      'Bengali': 'বাংলা',
+      'Telugu': 'తెలుగు',
+      'Punjabi': 'ਪੰਜਾਬੀ',
+    };
+    final moreLabel = moreLanguageLabels[selectedLanguage] ?? 'More';
+
+    return Container(
+      height: 51,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: const Color(0xFFD2DCEB)),
+      ),
+      child: Row(
+        children: [
+          for (final item in items) ...[
+            Expanded(
+              child: _AiLanguageTab(
+                label: item.label,
+                selected: selectedLanguage == item.value,
+                onTap: () => onSelected(item.value),
+              ),
+            ),
+            if (item != items.last)
+              const VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: Color(0xFFD2DCEB),
+              ),
+          ],
+          Expanded(
+            child: PopupMenuButton<String>(
+              onSelected: onSelected,
+              color: Colors.white,
+              surfaceTintColor: Colors.white,
+              elevation: 12,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: Color(0xFFD2DCEB)),
+              ),
+              itemBuilder: (context) {
+                const languages = <({String label, String value})>[
+                  (label: 'Hinglish', value: 'Hinglish'),
+                  (label: 'ગુજરાતી', value: 'Gujarati'),
+                  (label: 'বাংলা', value: 'Bengali'),
+                  (label: 'తెలుగు', value: 'Telugu'),
+                  (label: 'ਪੰਜਾਬੀ', value: 'Punjabi'),
+                ];
+                return languages
+                    .map(
+                      (language) => PopupMenuItem<String>(
+                        height: 42,
+                        value: language.value,
+                        child: Text(
+                          language.label,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF070B2E),
+                            fontSize: 14,
+                            height: 1.1,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(growable: false);
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    moreLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF070B2E),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiLanguageTab extends StatelessWidget {
+  const _AiLanguageTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        height: double.infinity,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF075EFF) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: selected ? Colors.white : const Color(0xFF070B2E),
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AiPostTypeCard extends StatelessWidget {
+  const _AiPostTypeCard({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.emoji,
+    this.icon,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final String? emoji;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        height: 60,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(
+            color: selected ? const Color(0xFF075EFF) : const Color(0xFFD2DCEB),
+            width: selected ? 1.5 : 1,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x100F2746),
+              blurRadius: 13,
+              offset: Offset(0, 7),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (emoji != null)
+              Text(emoji!, style: const TextStyle(fontSize: 23))
+            else
+              Icon(icon, size: 24, color: const Color(0xFF070B2E)),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFF070B2E),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AiSecondaryActionButton extends StatelessWidget {
+  const _AiSecondaryActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF075EFF),
+        backgroundColor: Colors.white,
+        side: const BorderSide(color: Color(0xFFD2DCEB)),
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      icon: Icon(icon, size: 22),
+      label: Text(
+        label,
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 15.5,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _AiPostTargetsRow extends StatelessWidget {
+  const _AiPostTargetsRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: const [
+        Expanded(
+          child: _AiPostTarget(
+            assetPath: 'assets/images/google-my-business-icon.png',
+            label: 'Google Business\nProfile',
+            iconSize: 48,
+          ),
+        ),
+        Expanded(
+          child: _AiPostTarget(
+            assetPath: 'assets/images/facebook.png',
+            label: 'Facebook',
+            iconSize: 49,
+          ),
+        ),
+        Expanded(
+          child: _AiPostTarget(
+            assetPath: 'assets/images/instagram.png',
+            label: 'Instagram',
+            iconSize: 49,
+          ),
+        ),
+        Expanded(
+          child: _AiPostTarget(
+            assetPath: 'assets/images/link.png',
+            label: 'LinkedIn',
+            iconSize: 45,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AiPostTarget extends StatelessWidget {
+  const _AiPostTarget({
+    required this.assetPath,
+    required this.label,
+    required this.iconSize,
+  });
+
+  final String assetPath;
+  final String label;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Image.asset(
+              assetPath,
+              width: iconSize,
+              height: iconSize,
+              fit: BoxFit.contain,
+            ),
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22B573),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: const Icon(
+                  Icons.check_rounded,
+                  size: 13,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 7),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            color: Color(0xFF061044),
+            fontSize: 12.5,
+            height: 1.25,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AiPostNowButton extends StatelessWidget {
+  const _AiPostNowButton({
+    required this.isBusy,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final bool isBusy;
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: double.infinity,
+        height: 56,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isBusy
+                ? const [Color(0xFF7E93B6), Color(0xFF7E93B6)]
+                : const [Color(0xFF063B73), Color(0xFF063B73)],
+          ),
+          borderRadius: BorderRadius.circular(9),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x26063B73),
+              blurRadius: 18,
+              offset: Offset(0, 9),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 27, color: Colors.white),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                color: Colors.white,
+                fontSize: 19,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 String _qualityKeyFromLabel(String value) {
   final normalized = value.toLowerCase();
   if (normalized.contains('highest')) return 'highest';
@@ -2648,7 +3175,7 @@ String _qualityKeyFromLabel(String value) {
   return 'good';
 }
 
-class _GeneratedSocialPostsSection extends StatelessWidget {
+class _GeneratedSocialPostsSection extends StatefulWidget {
   const _GeneratedSocialPostsSection({
     required this.controller,
     required this.onSchedulePost,
@@ -2662,16 +3189,44 @@ class _GeneratedSocialPostsSection extends StatelessWidget {
   final ValueChanged<GeneratedSocialPost> onDeletePost;
 
   @override
+  State<_GeneratedSocialPostsSection> createState() =>
+      _GeneratedSocialPostsSectionState();
+}
+
+class _GeneratedSocialPostsSectionState
+    extends State<_GeneratedSocialPostsSection> {
+  static const int _pageSize = 20;
+  int _currentPage = 0;
+
+  void _goToPage(int page) {
+    setState(() => _currentPage = page);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final posts = controller.generatedPosts;
-      final error = controller.errorMessage.value;
-      final success = controller.successMessage.value;
+      final posts = widget.controller.generatedPosts;
+      final error = widget.controller.errorMessage.value;
+      final success = widget.controller.successMessage.value;
+      final totalPages = math.max(1, (posts.length / _pageSize).ceil());
+      final safePage = posts.isEmpty
+          ? 0
+          : _currentPage.clamp(0, totalPages - 1).toInt();
+      if (safePage != _currentPage) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() => _currentPage = safePage);
+          }
+        });
+      }
+      final startIndex = safePage * _pageSize;
+      final endIndex = math.min(startIndex + _pageSize, posts.length);
+      final pagedPosts = posts.skip(startIndex).take(_pageSize).toList();
 
       if (posts.isEmpty &&
           error == null &&
           success == null &&
-          !controller.isLoadingDrafts.value) {
+          !widget.controller.isLoadingDrafts.value) {
         return const SizedBox.shrink();
       }
 
@@ -2709,7 +3264,8 @@ class _GeneratedSocialPostsSection extends StatelessWidget {
               ),
               if (posts.isNotEmpty) const SizedBox(height: 12),
             ],
-            if (posts.isNotEmpty || controller.isLoadingDrafts.value) ...[
+            if (posts.isNotEmpty ||
+                widget.controller.isLoadingDrafts.value) ...[
               Row(
                 children: const [
                   Expanded(
@@ -2727,7 +3283,7 @@ class _GeneratedSocialPostsSection extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              if (controller.isLoadingDrafts.value && posts.isEmpty)
+              if (widget.controller.isLoadingDrafts.value && posts.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 18),
                   child: Center(
@@ -2735,23 +3291,40 @@ class _GeneratedSocialPostsSection extends StatelessWidget {
                   ),
                 )
               else
-                ...posts.map(
+                ...pagedPosts.map(
                   (post) => Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _GeneratedSocialPostCard(
                       post: post,
                       isPublishing:
-                          controller.publishingPlatform.value == post.platform,
-                      onPublish: () => controller.publishPost(post),
+                          widget.controller.publishingPlatform.value ==
+                          post.platform,
+                      onPublish: () => widget.controller.publishPost(post),
                       onSchedule: post.isPublished
                           ? null
-                          : () => onSchedulePost(post),
-                      onEdit: post.isPublished ? null : () => onEditPost(post),
+                          : () => widget.onSchedulePost(post),
+                      onEdit: post.isPublished
+                          ? null
+                          : () => widget.onEditPost(post),
                       onDelete: post.isPublished
                           ? null
-                          : () => onDeletePost(post),
+                          : () => widget.onDeletePost(post),
                     ),
                   ),
+                ),
+              if (posts.length > _pageSize)
+                _GeneratedPostsPagination(
+                  currentPage: safePage,
+                  totalPages: totalPages,
+                  startItem: startIndex + 1,
+                  endItem: endIndex,
+                  totalItems: posts.length,
+                  onPrevious: safePage == 0
+                      ? null
+                      : () => _goToPage(safePage - 1),
+                  onNext: safePage >= totalPages - 1
+                      ? null
+                      : () => _goToPage(safePage + 1),
                 ),
             ],
           ],
@@ -2821,6 +3394,99 @@ class _CreateSavedDraftChip extends StatelessWidget {
           color: Color(0xFF09A86F),
           fontSize: 11,
           fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _GeneratedPostsPagination extends StatelessWidget {
+  const _GeneratedPostsPagination({
+    required this.currentPage,
+    required this.totalPages,
+    required this.startItem,
+    required this.endItem,
+    required this.totalItems,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final int currentPage;
+  final int totalPages;
+  final int startItem;
+  final int endItem;
+  final int totalItems;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '$startItem-$endItem of $totalItems posts',
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF61708E),
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          _GeneratedPostsPageButton(
+            icon: Icons.chevron_left_rounded,
+            onTap: onPrevious,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '${currentPage + 1}/$totalPages',
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: Color(0xFF0A3F85),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(width: 8),
+          _GeneratedPostsPageButton(
+            icon: Icons.chevron_right_rounded,
+            onTap: onNext,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GeneratedPostsPageButton extends StatelessWidget {
+  const _GeneratedPostsPageButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: enabled ? const Color(0xFFEAF3FF) : const Color(0xFFF3F6FA),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: enabled ? const Color(0xFFBFD3EC) : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Icon(
+          icon,
+          size: 22,
+          color: enabled ? const Color(0xFF0A3F85) : const Color(0xFF9AA7BA),
         ),
       ),
     );
@@ -2971,26 +3637,6 @@ class _GeneratedSocialPostCard extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: _GeneratedPostMetaChip(
-                        icon: Icons.bolt_rounded,
-                        label: 'High Reach',
-                        color: const Color(0xFF7446F8),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _GeneratedPostMetaChip(
-                        icon: Icons.cloud_done_outlined,
-                        label: 'Saved Draft',
-                        color: const Color(0xFF18B884),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
                       child: GestureDetector(
                         onTap: post.isPublished || isPublishing
                             ? null
@@ -3042,7 +3688,9 @@ class _GeneratedSocialPostCard extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: GestureDetector(
-                        onTap: post.isPublished || isPublishing ? null : onPublish,
+                        onTap: post.isPublished || isPublishing
+                            ? null
+                            : onPublish,
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 180),
                           width: double.infinity,
@@ -3135,49 +3783,6 @@ class _GeneratedPostActionIcon extends StatelessWidget {
   }
 }
 
-class _GeneratedPostMetaChip extends StatelessWidget {
-  const _GeneratedPostMetaChip({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.09),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 15),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: color,
-                fontSize: 11.2,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 Future<void> _showSocialPostEditDialog({
   required BuildContext context,
   required String title,
@@ -3238,7 +3843,8 @@ class _SocialPostEditDialog extends StatefulWidget {
   final String? initialImageUrl;
   final String initialTextLength;
   final String initialImageQuality;
-  final Future<SocialContentResult> Function(String textLength) onRegenerateText;
+  final Future<SocialContentResult> Function(String textLength)
+  onRegenerateText;
   final Future<SocialContentResult> Function(
     String imageQuality,
     dio.CancelToken cancelToken,
@@ -3410,7 +4016,9 @@ class _SocialPostEditDialogState extends State<_SocialPostEditDialog> {
                     ),
                   ),
                   IconButton(
-                    onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+                    onPressed: _isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close_rounded),
                   ),
                 ],
@@ -3586,10 +4194,14 @@ class _SocialPostEditDialogState extends State<_SocialPostEditDialog> {
                                       width: 46,
                                       height: 46,
                                       decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.14),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.14,
+                                        ),
                                         borderRadius: BorderRadius.circular(14),
                                         border: Border.all(
-                                          color: Colors.white.withValues(alpha: 0.26),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.26,
+                                          ),
                                         ),
                                       ),
                                       child: const Icon(
@@ -3643,16 +4255,22 @@ class _SocialPostEditDialogState extends State<_SocialPostEditDialog> {
                             icon: Icons.flash_on_rounded,
                             iconColor: const Color(0xFFE0A11B),
                             label: 'Image Quality',
-                            value: _socialEditImageQualityLabels[_selectedImageQuality] ??
+                            value:
+                                _socialEditImageQualityLabels[_selectedImageQuality] ??
                                 'Good (Fast)',
-                            options: _socialEditImageQualityLabels.values.toList(),
+                            options: _socialEditImageQualityLabels.values
+                                .toList(),
                             onSelected: (value) {
-                              final selected = _socialEditImageQualityLabels.entries
+                              final selected = _socialEditImageQualityLabels
+                                  .entries
                                   .firstWhere(
                                     (entry) => entry.value == value,
-                                    orElse: () => const MapEntry('good', 'Good (Fast)'),
+                                    orElse: () =>
+                                        const MapEntry('good', 'Good (Fast)'),
                                   );
-                              setState(() => _selectedImageQuality = selected.key);
+                              setState(
+                                () => _selectedImageQuality = selected.key,
+                              );
                             },
                           ),
                         ),
@@ -3666,7 +4284,9 @@ class _SocialPostEditDialogState extends State<_SocialPostEditDialog> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+                    onPressed: _isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                   ),
                   const SizedBox(width: 10),
@@ -4339,10 +4959,7 @@ class _CalendarEmptyMessage extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [
-                      _socialBrandButtonStart,
-                      _socialBrandButtonEnd,
-                    ],
+                    colors: [_socialBrandButtonStart, _socialBrandButtonEnd],
                   ),
                   borderRadius: BorderRadius.circular(999),
                 ),
@@ -6362,10 +6979,7 @@ class _PostsActionButton extends StatelessWidget {
           gradient: outlined
               ? null
               : const LinearGradient(
-                  colors: [
-                    _socialBrandButtonStart,
-                    _socialBrandButtonEnd,
-                  ],
+                  colors: [_socialBrandButtonStart, _socialBrandButtonEnd],
                 ),
           color: outlined ? Colors.white : null,
           borderRadius: BorderRadius.circular(16),
@@ -14682,7 +15296,9 @@ class _ScheduledQueueCardState extends State<_ScheduledQueueCard> {
   }
 
   DateTime _sortValue(SchedulerQueueItem post) {
-    return post.createdAt ?? post.scheduledAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+    return post.createdAt ??
+        post.scheduledAt ??
+        DateTime.fromMillisecondsSinceEpoch(0);
   }
 
   @override
@@ -14694,8 +15310,7 @@ class _ScheduledQueueCardState extends State<_ScheduledQueueCard> {
               .map((item) => item.toLowerCase().trim())
               .contains(widget.selectedPlatform);
       return matchesPlatform && _matchesStatus(post);
-    }).toList()
-      ..sort((a, b) => _sortValue(b).compareTo(_sortValue(a)));
+    }).toList()..sort((a, b) => _sortValue(b).compareTo(_sortValue(a)));
     final totalPages = visiblePosts.isEmpty
         ? 1
         : ((visiblePosts.length + _pageSize - 1) ~/ _pageSize);
@@ -14954,17 +15569,25 @@ class _SchedulerQueueStatusChips extends StatelessWidget {
               onTap: () => onSelected(item.$1),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   gradient: selected
                       ? const LinearGradient(
-                          colors: [_socialBrandButtonStart, _socialBrandButtonEnd],
+                          colors: [
+                            _socialBrandButtonStart,
+                            _socialBrandButtonEnd,
+                          ],
                         )
                       : null,
                   color: selected ? null : const Color(0xFFF8FAFD),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: selected ? Colors.transparent : const Color(0xFFE0E8F2),
+                    color: selected
+                        ? Colors.transparent
+                        : const Color(0xFFE0E8F2),
                   ),
                 ),
                 child: Text(
@@ -16400,11 +17023,7 @@ class _SchedulerManualField extends StatelessWidget {
             borderRadius: BorderRadius.circular(22),
             border: Border.all(color: const Color(0xFFE7EDF6)),
           ),
-          child: Icon(
-            leadingIcon,
-            color: const Color(0xFF0A3F85),
-            size: 32,
-          ),
+          child: Icon(leadingIcon, color: const Color(0xFF0A3F85), size: 32),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -16504,10 +17123,7 @@ class _SchedulerModalCard extends StatelessWidget {
 }
 
 class _SchedulerModalHeader extends StatelessWidget {
-  const _SchedulerModalHeader({
-    required this.title,
-    required this.onClose,
-  });
+  const _SchedulerModalHeader({required this.title, required this.onClose});
 
   final String title;
   final VoidCallback onClose;
@@ -16630,7 +17246,8 @@ class _SchedulerTimePickerDialog extends StatefulWidget {
       _SchedulerTimePickerDialogState();
 }
 
-class _SchedulerTimePickerDialogState extends State<_SchedulerTimePickerDialog> {
+class _SchedulerTimePickerDialogState
+    extends State<_SchedulerTimePickerDialog> {
   late int _selectedHour;
   late int _selectedMinute;
   late bool _isAm;
@@ -16644,8 +17261,12 @@ class _SchedulerTimePickerDialogState extends State<_SchedulerTimePickerDialog> 
     _isAm = hour24 < 12;
     _selectedHour = hour24 % 12 == 0 ? 12 : hour24 % 12;
     _selectedMinute = widget.initialTime.minute;
-    _hourController = FixedExtentScrollController(initialItem: _selectedHour - 1);
-    _minuteController = FixedExtentScrollController(initialItem: _selectedMinute);
+    _hourController = FixedExtentScrollController(
+      initialItem: _selectedHour - 1,
+    );
+    _minuteController = FixedExtentScrollController(
+      initialItem: _selectedMinute,
+    );
   }
 
   @override
@@ -17869,7 +18490,6 @@ class _ThemeDot extends StatelessWidget {
 
 // Kept with its original hot-reload shape so running sessions do not reject
 // reloads after the dynamic gallery migration.
-// ignore: unused_element
 class _CreativeGalleryItem {
   const _CreativeGalleryItem({
     required this.image,
@@ -19281,10 +19901,7 @@ class _SocialAccountsHero extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [
-                  _socialBrandButtonStart,
-                  _socialBrandButtonEnd,
-                ],
+                colors: [_socialBrandButtonStart, _socialBrandButtonEnd],
               ),
               borderRadius: BorderRadius.circular(17),
               boxShadow: const [

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
@@ -9,15 +8,13 @@ import '../../../app/theme/app_typography.dart';
 import '../../../app/widgets/app_logo.dart';
 import '../../onboarding/controllers/onboarding_controller.dart';
 import '../models/gbp_review.dart';
-import '../models/test_account.dart';
 import '../widgets/auth_navigation_shell.dart';
 
-enum _ClientReviewFilter { all, needsReply, positive, negative }
+enum _ClientReviewFilter { all, unread, replied }
 
 const String _reviewFontFamily = 'Inter';
 const Color _reviewInk = Color(0xFF102641);
 const Color _reviewBlue = Color(0xFF11418C);
-const Color _reviewTeal = Color(0xFF18C2D0);
 const Color _reviewMuted = Color(0xFF61738C);
 const Color _reviewBorder = Color(0xFFDCE6F1);
 const Color _reviewPurple = Color(0xFF6D45F4);
@@ -56,213 +53,111 @@ class _ClientReviewsViewState extends State<ClientReviewsView> {
 
         final reviews = _controller.liveGbpReviews.isNotEmpty
             ? _controller.liveGbpReviews
-            : (user.backendAuthenticated ||
-                      user.googleBusinessProfileConnected)
-                  ? const <GbpReview>[]
-                  : _controller
-                        .businessReviewsFor(user)
-                        .map(
-                          (br) => GbpReview(
-                            id: br.id,
-                            reviewId: br.id,
-                            reviewerName: br.reviewerName,
-                            starRating: br.rating,
-                            commentText: br.comment,
-                            reviewCreatedAt:
-                                '', // Mock data doesn't have ISO date
-                            reviewUpdatedAt: '',
-                            ownerReplyText: br.ownerReply,
-                            ownerReplyUpdatedAt: br.ownerReply,
-                            showSuggestedReplyCard:
-                                br.showSuggestedReplyCard,
-                          ),
-                        )
-                        .toList();
+            : (user.backendAuthenticated || user.googleBusinessProfileConnected)
+            ? const <GbpReview>[]
+            : _controller
+                  .businessReviewsFor(user)
+                  .map(
+                    (br) => GbpReview(
+                      id: br.id,
+                      reviewId: br.id,
+                      reviewerName: br.reviewerName,
+                      starRating: br.rating,
+                      commentText: br.comment,
+                      reviewCreatedAt: '', // Mock data doesn't have ISO date
+                      reviewUpdatedAt: '',
+                      ownerReplyText: br.ownerReply,
+                      ownerReplyUpdatedAt: br.ownerReply,
+                      showSuggestedReplyCard: br.showSuggestedReplyCard,
+                    ),
+                  )
+                  .toList();
         final filteredReviews = _filteredReviews(reviews);
-        final averageRating = _controller.averageBusinessReviewScore(
-          user: user,
-        );
+        final allCount = reviews.length;
+        final unreadCount = reviews
+            .where((review) => !review.hasOwnerReply)
+            .length;
+        final repliedCount = reviews
+            .where((review) => review.hasOwnerReply)
+            .length;
 
         return Column(
           children: [
-            _ReviewsTopBar(onCreatePost: () => Get.toNamed(AppRoutes.gbpPosts)),
+            const _ReviewsTopBar(),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 100),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Colors.white,
-                            Color(0xFFF7FAFF),
-                            Color(0xFFEEF8FF),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: const Color(0xFFE2EAF4)),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x100F2746),
-                            blurRadius: 28,
-                            offset: Offset(0, 14),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Client Reviews',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleLarge?.copyWith(
-                                    fontFamily: _reviewFontFamily,
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.w800,
-                                    color: _reviewInk,
-                                    height: 1.05,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                RichText(
-                                  text: TextSpan(
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                          fontFamily: _reviewFontFamily,
-                                          fontSize: 14,
-                                          color: _reviewMuted,
-                                          height: 1.5,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                    children: const [
-                                      TextSpan(
-                                        text:
-                                            'Manage and respond to Google Business Profile reviews powered by ',
-                                      ),
-                                      TextSpan(
-                                        text: 'VisibloAI',
-                                        style: TextStyle(
-                                          fontFamily: _reviewFontFamily,
-                                          color: _reviewBlue,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Container(
-                            width: 58,
-                            height: 58,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [
-                                  Color(0xFFEFF5FF),
-                                  Color(0xFFE7FCFF),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(18),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x142696D1),
-                                  blurRadius: 18,
-                                  offset: Offset(0, 10),
-                                ),
-                              ],
-                            ),
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: const [
-                                Icon(
-                                  Icons.auto_awesome_rounded,
-                                  size: 24,
-                                  color: _reviewBlue,
-                                ),
-                                Positioned(
-                                  right: 12,
-                                  top: 12,
-                                  child: Icon(
-                                    Icons.star_rounded,
-                                    size: 10,
-                                    color: _reviewTeal,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    _SyncReviewsButton(
-                      onTap: () async {
-                        await _controller.syncBusinessReviewsFromGoogle();
-                        if (!mounted) {
-                          return;
-                        }
-                        final syncedCount = _controller.liveGbpReviews.length;
-                        Get.snackbar(
-                          'Sync complete',
-                          '$syncedCount reviews synced from Google.',
-                          snackPosition: SnackPosition.BOTTOM,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    _LocationSummaryCard(
-                      user: user,
-                      averageRating: averageRating,
-                      reviewCount: reviews.length,
-                    ),
-                    const SizedBox(height: 18),
                     Text(
-                      'Reviews',
+                      'Review Management',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontFamily: _reviewFontFamily,
-                        fontSize: 22,
+                        fontSize: 21,
+                        height: 1.08,
                         fontWeight: FontWeight.w800,
                         color: _reviewInk,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: _ClientReviewFilter.values
-                            .map(
-                              (filter) => Padding(
-                                padding: const EdgeInsets.only(right: 6),
-                                child: _ReviewFilterChip(
-                                  label: _filterLabel(filter),
-                                  selected: filter == _selectedFilter,
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedFilter = filter;
-                                    });
-                                  },
-                                ),
-                              ),
-                            )
-                            .toList(),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Manage and reply to your customer reviews',
+                      style: TextStyle(
+                        fontFamily: _reviewFontFamily,
+                        fontSize: 14,
+                        height: 1.2,
+                        color: Color(0xFF42516A),
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _ReviewFilterChip(
+                            label: 'All',
+                            count: allCount,
+                            selected:
+                                _selectedFilter == _ClientReviewFilter.all,
+                            onTap: () {
+                              setState(() {
+                                _selectedFilter = _ClientReviewFilter.all;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _ReviewFilterChip(
+                            label: 'Unread',
+                            count: unreadCount,
+                            selected:
+                                _selectedFilter == _ClientReviewFilter.unread,
+                            onTap: () {
+                              setState(() {
+                                _selectedFilter = _ClientReviewFilter.unread;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _ReviewFilterChip(
+                            label: 'Replied',
+                            count: repliedCount,
+                            selected:
+                                _selectedFilter == _ClientReviewFilter.replied,
+                            onTap: () {
+                              setState(() {
+                                _selectedFilter = _ClientReviewFilter.replied;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
                     if (filteredReviews.isEmpty)
                       const _EmptyReviewState()
                     else
@@ -273,7 +168,7 @@ class _ClientReviewsViewState extends State<ClientReviewsView> {
                         physics: const NeverScrollableScrollPhysics(),
                         itemCount: filteredReviews.length,
                         separatorBuilder: (context, index) =>
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 12),
                         itemBuilder: (context, index) {
                           final review = filteredReviews[index];
                           final isExpanded = _expandedReviewIds.contains(
@@ -325,12 +220,10 @@ class _ClientReviewsViewState extends State<ClientReviewsView> {
   List<GbpReview> _filteredReviews(List<GbpReview> reviews) {
     return switch (_selectedFilter) {
       _ClientReviewFilter.all => reviews,
-      _ClientReviewFilter.needsReply =>
+      _ClientReviewFilter.unread =>
         reviews.where((review) => !review.hasOwnerReply).toList(),
-      _ClientReviewFilter.positive =>
-        reviews.where((review) => review.isPositive).toList(),
-      _ClientReviewFilter.negative =>
-        reviews.where((review) => review.isNegative).toList(),
+      _ClientReviewFilter.replied =>
+        reviews.where((review) => review.hasOwnerReply).toList(),
     };
   }
 
@@ -455,9 +348,7 @@ class _ClientReviewsViewState extends State<ClientReviewsView> {
 }
 
 class _ReviewsTopBar extends StatelessWidget {
-  const _ReviewsTopBar({required this.onCreatePost});
-
-  final VoidCallback onCreatePost;
+  const _ReviewsTopBar();
 
   @override
   Widget build(BuildContext context) {
@@ -470,426 +361,20 @@ class _ReviewsTopBar extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Row(
           children: [
-            const AuthShellBackButton(),
-            const SizedBox(width: 10),
-            const AppLogo(iconSize: 34, fontSize: 22),
+            const AppLogo(iconSize: 33, fontSize: 23),
             const Spacer(),
-            InkWell(
-              onTap: onCreatePost,
-              borderRadius: BorderRadius.circular(999),
-              child: Ink(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 9,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FBFF),
-                  border: Border.all(color: const Color(0xFFD9E6F6)),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.edit_outlined, size: 15, color: _reviewBlue),
-                    SizedBox(width: 7),
-                    Text(
-                      'Create Post',
-                      style: TextStyle(
-                        fontFamily: _reviewFontFamily,
-                        fontSize: 13,
-                        color: _reviewBlue,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SyncReviewsButton extends StatelessWidget {
-  const _SyncReviewsButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [_reviewBlue, _reviewTeal],
-            ),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x2418B6CA),
-                blurRadius: 24,
-                offset: Offset(0, 14),
-              ),
-            ],
-          ),
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.sync_rounded, size: 18, color: Colors.white),
-              SizedBox(width: 8),
-              Text(
-                'Sync from Google',
-                style: TextStyle(
-                  fontFamily: _reviewFontFamily,
-                  fontSize: 14,
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              SizedBox(width: 10),
-              Icon(Icons.auto_awesome_rounded, size: 15, color: Colors.white),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LocationSummaryCard extends StatelessWidget {
-  const _LocationSummaryCard({
-    required this.user,
-    required this.averageRating,
-    required this.reviewCount,
-  });
-
-  final TestAccount user;
-  final double averageRating;
-  final int reviewCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isTight = constraints.maxWidth < 360;
-        final cardHeight = isTight ? 142.0 : 136.0;
-
-        return SizedBox(
-          height: cardHeight,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                flex: isTight ? 7 : 8,
-                child: _LocationMapPreview(user: user),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: isTight ? 4 : 3,
-                child: _ReviewScoreCard(
-                  averageRating: averageRating,
-                  reviewCount: reviewCount,
-                  compact: true,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _LocationMapPreview extends StatelessWidget {
-  const _LocationMapPreview({required this.user});
-
-  final TestAccount user;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _openBusinessMap(user),
-        borderRadius: BorderRadius.circular(22),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: _reviewBorder),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x100F2746),
-                blurRadius: 20,
-                offset: Offset(0, 12),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(22),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                SvgPicture.asset(
-                  'assets/images/location_map_preview.svg',
-                  fit: BoxFit.cover,
-                ),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.white.withValues(alpha: 0.08),
-                        const Color(0xFF0F2746).withValues(alpha: 0.18),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 10,
-                  right: 10,
-                  bottom: 10,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.93),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _businessDisplayName(user),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: _reviewFontFamily,
-                            fontSize: 12.8,
-                            color: _reviewInk,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.only(top: 1),
-                              child: Icon(
-                                Icons.place_rounded,
-                                size: 12,
-                                color: Color(0xFF6F7B8C),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                _businessLocationWords(user),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontFamily: _reviewFontFamily,
-                                  fontSize: 10.8,
-                                  height: 1.25,
-                                  color: _reviewMuted,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const Positioned(
-                  left: 10,
-                  top: 10,
-                  child: Icon(
-                    Icons.place_rounded,
-                    size: 20,
-                    color: Color(0xFF33B7C8),
-                  ),
-                ),
-                Positioned(
-                  right: 8,
-                  bottom: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.92),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.map_outlined,
-                          size: 12,
-                          color: Color(0xFF29538A),
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Open map',
-                          style: TextStyle(
-                            fontFamily: _reviewFontFamily,
-                            fontSize: 10.6,
-                            color: _reviewBlue,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ReviewScoreCard extends StatelessWidget {
-  const _ReviewScoreCard({
-    required this.averageRating,
-    required this.reviewCount,
-    this.compact = false,
-  });
-
-  final double averageRating;
-  final int reviewCount;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final compactContent = LayoutBuilder(
-      builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 104;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'GOOGLE REVIEW',
-                maxLines: 1,
-                style: TextStyle(
-                  fontFamily: _reviewFontFamily,
-                  fontSize: isNarrow ? 9.8 : 10.2,
-                  color: _reviewMuted,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.35,
-                ),
-              ),
-            ),
-            const Spacer(),
-            Text(
-              averageRating.toStringAsFixed(1),
-              style: TextStyle(
-                fontFamily: _reviewFontFamily,
-                fontSize: isNarrow ? 26 : 28,
-                height: 1,
+            IconButton(
+              onPressed: () => Get.toNamed(AppRoutes.alerts),
+              splashRadius: 22,
+              icon: const Icon(
+                Icons.notifications_none_rounded,
                 color: _reviewInk,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 5),
-            const FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: _StarRatingRow(stars: 5),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              '$reviewCount reviews',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: _reviewFontFamily,
-                fontSize: isNarrow ? 10.2 : 11,
-                color: _reviewMuted,
-                fontWeight: FontWeight.w500,
+                size: 25,
               ),
             ),
           ],
-        );
-      },
-    );
-
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        compact ? 10 : 12,
-        compact ? 10 : 14,
-        compact ? 10 : 12,
-        compact ? 9 : 12,
-      ),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Colors.white, Color(0xFFF8FBFF)],
         ),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _reviewBorder),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x100F2746),
-            blurRadius: 20,
-            offset: Offset(0, 12),
-          ),
-        ],
       ),
-      child: compact
-          ? compactContent
-          : Row(
-              children: [
-                Text(
-                  averageRating.toStringAsFixed(1),
-                  style: const TextStyle(
-                    fontSize: 34,
-                    height: 1,
-                    color: Color(0xFF214B7B),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _StarRatingRow(stars: 5),
-                    const SizedBox(height: 4),
-                    Text(
-                      'avg rating | $reviewCount Google reviews',
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        color: Color(0xFF7C8798),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
     );
   }
 }
@@ -897,11 +382,13 @@ class _ReviewScoreCard extends StatelessWidget {
 class _ReviewFilterChip extends StatelessWidget {
   const _ReviewFilterChip({
     required this.label,
+    required this.count,
     required this.selected,
     required this.onTap,
   });
 
   final String label;
+  final int count;
   final bool selected;
   final VoidCallback onTap;
 
@@ -913,25 +400,57 @@ class _ReviewFilterChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            gradient: selected
-                ? const LinearGradient(colors: [_reviewBlue, _reviewTeal])
-                : null,
-            color: selected ? null : AppColors.white,
-            borderRadius: BorderRadius.circular(999),
+            color: selected ? const Color(0xFFE8F1FF) : AppColors.white,
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: selected ? Colors.transparent : _reviewBorder,
+              color: selected ? const Color(0xFFDCE8FF) : _reviewBorder,
             ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0C0F2746),
+                blurRadius: 10,
+                offset: Offset(0, 5),
+              ),
+            ],
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontFamily: _reviewFontFamily,
-              fontSize: 12.2,
-              color: selected ? Colors.white : _reviewMuted,
-              fontWeight: FontWeight.w700,
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: _reviewFontFamily,
+                  fontSize: 14,
+                  color: selected ? const Color(0xFF1768E8) : _reviewInk,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (count > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selected ? Colors.white : const Color(0xFFEAF2FF),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: const TextStyle(
+                      fontFamily: _reviewFontFamily,
+                      fontSize: 12,
+                      color: Color(0xFF1768E8),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -960,147 +479,133 @@ class _ReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final needsExpand = review.comment.length > 85;
-
-    return InkWell(
-      onTap: review.hasOwnerReply ? onEditReply : onCustomizeSuggestion,
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.white, Color(0xFFF9FBFE)],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE3EAF3)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F2746),
+            blurRadius: 16,
+            offset: Offset(0, 7),
           ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: _reviewBorder),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x100F2746),
-              blurRadius: 22,
-              offset: Offset(0, 12),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _ReviewerAvatar(
-                  label: review.reviewerInitial,
-                  tone: review.avatarTone,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        review.reviewerName,
-                        style: const TextStyle(
-                          fontFamily: _reviewFontFamily,
-                          fontSize: 15.6,
-                          color: _reviewInk,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Text(
-                        review.reviewDateLabel,
-                        style: const TextStyle(
-                          fontFamily: _reviewFontFamily,
-                          fontSize: 11.5,
-                          color: _reviewMuted,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                _StarRatingRow(stars: review.starRating),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF6F9FD),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFE7EEF7)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ReviewerAvatar(
+                label: review.reviewerInitial,
+                tone: review.avatarTone,
               ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      review.reviewerName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: _reviewFontFamily,
+                        fontSize: 14.3,
+                        height: 1.05,
+                        color: _reviewInk,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        _StarRatingRow(stars: review.starRating),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            _reviewTimeLabel(review),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: _reviewFontFamily,
+                              fontSize: 10.5,
+                              color: Color(0xFF6B7586),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const _GoogleBusinessBadge(),
+            ],
+          ),
+          const SizedBox(height: 11),
+          Text(
+            review.comment,
+            maxLines: isExpanded ? null : 3,
+            overflow: isExpanded ? null : TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: _reviewFontFamily,
+              fontSize: 13.2,
+              height: 1.24,
+              color: Color(0xFF101827),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          if (review.comment.length > 95) ...[
+            const SizedBox(height: 5),
+            InkWell(
+              onTap: onToggleExpanded,
               child: Text(
-                review.comment,
-                maxLines: isExpanded || !needsExpand ? null : 4,
-                overflow: isExpanded || !needsExpand
-                    ? null
-                    : TextOverflow.ellipsis,
+                isExpanded ? 'Show less' : 'Read more',
                 style: const TextStyle(
                   fontFamily: _reviewFontFamily,
-                  fontSize: 14.2,
-                  height: 1.6,
-                  color: Color(0xFF304156),
-                  fontWeight: FontWeight.w500,
+                  fontSize: 12,
+                  color: Color(0xFF1768E8),
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
-            if (needsExpand) ...[
-              const SizedBox(height: 6),
-              InkWell(
-                onTap: onToggleExpanded,
-                child: Text(
-                  isExpanded ? 'Show less' : 'View full review...',
-                  style: const TextStyle(
+          ],
+          if (!review.hasOwnerReply) ...[
+            const SizedBox(height: 13),
+            _SuggestedReplyCard(
+              replyText: review.suggestedReply,
+              onApply: onApplySuggestion,
+              onCustomize: onCustomizeSuggestion,
+            ),
+          ] else ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDDF8E7),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'Replied',
+                  style: TextStyle(
                     fontFamily: _reviewFontFamily,
-                    fontSize: 12.6,
-                    color: _reviewBlue,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: Color(0xFF26A45F),
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-            ],
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                _ReviewStatusChip(review: review),
-                _ReviewTextAction(
-                  label: review.hasOwnerReply ? 'Edit reply' : 'Type reply',
-                  color: const Color(0xFFEA8A3A),
-                  onTap: onEditReply,
-                ),
-                _ReviewTextAction(
-                  label: review.hasOwnerReply
-                      ? 'Delete reply'
-                      : 'Apply suggestion',
-                  color: review.hasOwnerReply
-                      ? const Color(0xFFE45B52)
-                      : const Color(0xFF4A20C9),
-                  onTap: review.hasOwnerReply
-                      ? onDeleteReply
-                      : onApplySuggestion,
-                ),
-              ],
             ),
-            if (!review.hasOwnerReply && review.showSuggestedReplyCard) ...[
-              const SizedBox(height: 10),
-              _SuggestedReplyCard(
-                replyText: review.suggestedReply,
-                onApply: onApplySuggestion,
-                onCustomize: onCustomizeSuggestion,
-              ),
-            ],
-            if (review.hasOwnerReply) ...[
-              const SizedBox(height: 10),
-              _OwnerReplyCard(review: review),
-            ],
           ],
-        ),
+        ],
       ),
     );
   }
@@ -1115,29 +620,77 @@ class _ReviewerAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const tones = <Color>[
-      Color(0xFFE8E3FF),
-      Color(0xFFFFE0F1),
-      Color(0xFFE5F4FF),
-      Color(0xFFE7FFE8),
-      Color(0xFFFFF0D8),
-      Color(0xFFE1F1FF),
+      Color(0xFF7247D8),
+      Color(0xFF8B5CF6),
+      Color(0xFF7C6A64),
+      Color(0xFF2563EB),
+      Color(0xFF0F766E),
+      Color(0xFFB45309),
     ];
 
     final background = tones[tone % tones.length];
 
     return Container(
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(color: background, shape: BoxShape.circle),
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: background,
+        shape: BoxShape.circle,
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x160F2746),
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
       alignment: Alignment.center,
       child: Text(
         label,
         style: const TextStyle(
           fontFamily: _reviewFontFamily,
-          fontSize: 14,
-          color: _reviewBlue,
+          fontSize: 17,
+          color: Colors.white,
           fontWeight: FontWeight.w800,
         ),
+      ),
+    );
+  }
+}
+
+class _GoogleBusinessBadge extends StatelessWidget {
+  const _GoogleBusinessBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 91,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Image.asset(
+            'assets/images/google-my-business-icon.png',
+            width: 34,
+            height: 34,
+            fit: BoxFit.contain,
+          ),
+          const SizedBox(width: 5),
+          const Flexible(
+            child: Text(
+              'Google\nBusiness Profile',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: _reviewFontFamily,
+                fontSize: 9.6,
+                height: 1.05,
+                color: _reviewInk,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1156,94 +709,8 @@ class _StarRatingRow extends StatelessWidget {
         5,
         (index) => Icon(
           index < stars ? Icons.star_rounded : Icons.star_border_rounded,
-          size: 15,
+          size: 15.5,
           color: const Color(0xFFF6B600),
-        ),
-      ),
-    );
-  }
-}
-
-class _ReviewStatusChip extends StatelessWidget {
-  const _ReviewStatusChip({required this.review});
-
-  final GbpReview review;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasReply = review.hasOwnerReply;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: hasReply ? const Color(0xFFEAF9EE) : const Color(0xFFE8F8FA),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: hasReply ? const Color(0xFFB9E5C5) : const Color(0xFFBDE7EA),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            hasReply
-                ? Icons.check_circle_outline_rounded
-                : Icons.chat_bubble_outline_rounded,
-            size: 13,
-            color: hasReply ? const Color(0xFF49A15E) : const Color(0xFF2C98A6),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            hasReply ? 'REPLIED' : 'NEEDS REPLY',
-            style: TextStyle(
-              fontFamily: _reviewFontFamily,
-              fontSize: 11,
-              color: hasReply
-                  ? const Color(0xFF49A15E)
-                  : const Color(0xFF2C98A6),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReviewTextAction extends StatelessWidget {
-  const _ReviewTextAction({
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: color.withValues(alpha: 0.18)),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontFamily: _reviewFontFamily,
-              fontSize: 12,
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
         ),
       ),
     );
@@ -1265,67 +732,115 @@ class _SuggestedReplyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      padding: const EdgeInsets.fromLTRB(9, 8, 9, 9),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFFBF9FF), Color(0xFFF5F0FF)],
+          colors: [Color(0xFFF2F9FF), Color(0xFFEAF5FF)],
         ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE7DDFF)),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: const Color(0xFFD8E7F6)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: const [
-              _SuggestedReplyBadge(),
-              SizedBox(width: 8),
+              Icon(
+                Icons.auto_awesome_rounded,
+                size: 17,
+                color: Color(0xFF0BBBD3),
+              ),
+              SizedBox(width: 7),
               Text(
-                'VISIBLOAI SUGGESTED\nREPLY',
+                'AI Suggested Reply',
                 style: TextStyle(
                   fontFamily: _reviewFontFamily,
-                  fontSize: 11,
-                  height: 1.15,
-                  color: _reviewPurple,
+                  fontSize: 12.8,
+                  height: 1.1,
+                  color: _reviewInk,
                   fontWeight: FontWeight.w800,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(
-            replyText,
-            style: const TextStyle(
-              fontFamily: _reviewFontFamily,
-              fontSize: 13.1,
-              height: 1.45,
-              color: Color(0xFF4D5566),
-              fontWeight: FontWeight.w500,
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(10, 9, 8, 9),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0xFFCBDCEC)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    replyText,
+                    style: const TextStyle(
+                      fontFamily: _reviewFontFamily,
+                      fontSize: 12.8,
+                      height: 1.28,
+                      color: Color(0xFF182236),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () async {
+                    await Clipboard.setData(ClipboardData(text: replyText));
+                    Get.snackbar(
+                      'Copied',
+                      'AI suggested reply copied.',
+                      snackPosition: SnackPosition.BOTTOM,
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.copy_rounded,
+                      size: 18,
+                      color: Color(0xFF66779A),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton(
                   onPressed: onCustomize,
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 11),
-                    side: const BorderSide(color: Color(0xFFCCBEFF)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    side: const BorderSide(color: Color(0xFFD4DFEC)),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                    foregroundColor: _reviewPurple,
+                    foregroundColor: _reviewInk,
+                    backgroundColor: Colors.white,
                   ),
-                  child: const Text(
-                    'Edit Reply',
-                    style: TextStyle(
-                      fontFamily: _reviewFontFamily,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.edit_outlined, size: 17),
+                      SizedBox(width: 7),
+                      Text(
+                        'Edit',
+                        style: TextStyle(
+                          fontFamily: _reviewFontFamily,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1341,20 +856,29 @@ class _SuggestedReplyCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 11),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [_reviewBlue, _reviewPurple],
+                          colors: [Color(0xFF1768FF), Color(0xFF075EEB)],
                         ),
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      child: const Center(
-                        child: Text(
-                          'Apply Suggestion',
-                          style: TextStyle(
-                            fontFamily: _reviewFontFamily,
-                            fontSize: 12,
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.send_rounded,
+                            size: 16,
                             color: Colors.white,
-                            fontWeight: FontWeight.w700,
                           ),
-                        ),
+                          SizedBox(width: 7),
+                          Text(
+                            'Reply',
+                            style: TextStyle(
+                              fontFamily: _reviewFontFamily,
+                              fontSize: 13,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -1362,108 +886,6 @@ class _SuggestedReplyCard extends StatelessWidget {
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SuggestedReplyBadge extends StatelessWidget {
-  const _SuggestedReplyBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 20,
-      height: 20,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: const [
-          Positioned(
-            left: 4.5,
-            bottom: 3.5,
-            child: Icon(
-              Icons.auto_fix_high_rounded,
-              size: 10.5,
-              color: Color(0xFF5A31E6),
-            ),
-          ),
-          Positioned(
-            top: 3.5,
-            right: 4,
-            child: Icon(Icons.star_rounded, size: 5, color: Color(0xFF5A31E6)),
-          ),
-          Positioned(
-            top: 7.5,
-            left: 4,
-            child: Icon(
-              Icons.star_rounded,
-              size: 3.8,
-              color: Color(0xFF8A6BFF),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OwnerReplyCard extends StatelessWidget {
-  const _OwnerReplyCard({required this.review});
-
-  final GbpReview review;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4FBFF),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD4EEF5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '# Owner Reply',
-            style: TextStyle(
-              fontFamily: _reviewFontFamily,
-              fontSize: 11.5,
-              color: const Color(0xFF1C7E90).withValues(alpha: 0.9),
-              fontWeight: FontWeight.w700,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            review.ownerReply,
-            style: const TextStyle(
-              fontFamily: _reviewFontFamily,
-              fontSize: 13.4,
-              height: 1.45,
-              color: Color(0xFF4D5566),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          if (review.ownerReplyUpdatedLabel.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              review.ownerReplyUpdatedLabel,
-              style: const TextStyle(
-                fontFamily: _reviewFontFamily,
-                fontSize: 11,
-                color: _reviewMuted,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -2216,7 +1638,9 @@ class _ReplyActionChip extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         foregroundColor: filled ? Colors.white : foreground,
         side: BorderSide(
-          color: filled ? Colors.transparent : foreground.withValues(alpha: 0.35),
+          color: filled
+              ? Colors.transparent
+              : foreground.withValues(alpha: 0.35),
         ),
         backgroundColor: filled ? foreground : Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -2270,64 +1694,36 @@ class _EmptyReviewState extends StatelessWidget {
 _ClientReviewFilter _filterFromArgument(Object? argument) {
   final filterValue = argument is String ? argument : 'all';
   return switch (filterValue) {
-    'needsReply' => _ClientReviewFilter.needsReply,
-    'positive' => _ClientReviewFilter.positive,
-    'negative' => _ClientReviewFilter.negative,
+    'needsReply' || 'unread' => _ClientReviewFilter.unread,
+    'replied' => _ClientReviewFilter.replied,
     _ => _ClientReviewFilter.all,
   };
 }
 
-String _filterLabel(_ClientReviewFilter filter) {
-  return switch (filter) {
-    _ClientReviewFilter.all => 'All',
-    _ClientReviewFilter.needsReply => 'Needs reply',
-    _ClientReviewFilter.positive => 'Positive',
-    _ClientReviewFilter.negative => 'Negative',
-  };
-}
-
-String _businessDisplayName(TestAccount user) {
-  if (user.businessName.trim().isNotEmpty) {
-    return user.businessName.trim();
+String _reviewTimeLabel(GbpReview review) {
+  final createdAt = review.reviewCreatedAt.trim();
+  if (createdAt.isEmpty) {
+    return review.reviewDateLabel;
   }
-  if (user.fullName.trim().isNotEmpty) {
-    return user.fullName.trim();
+  final date = DateTime.tryParse(createdAt);
+  if (date == null) {
+    return review.reviewDateLabel;
   }
-  return 'Your business';
-}
-
-String _businessLocationLabel(TestAccount user) {
-  final city = user.city.trim();
-  final country = user.country.trim();
-
-  if (city.isNotEmpty && country.isNotEmpty) {
-    return '$city, $country';
+  final diff = DateTime.now().difference(date.toLocal());
+  if (diff.inMinutes < 1) {
+    return 'Just now';
   }
-  if (city.isNotEmpty) {
-    return city;
+  if (diff.inHours < 1) {
+    return '${diff.inMinutes} min ago';
   }
-  if (country.isNotEmpty) {
-    return country;
+  if (diff.inDays < 1) {
+    return '${diff.inHours} hours ago';
   }
-  return 'your area';
-}
-
-String _businessLocationWords(TestAccount user) {
-  final street = user.streetAddress.trim();
-  final location = _businessLocationLabel(user);
-
-  if (street.isNotEmpty) {
-    return '$street, $location';
+  if (diff.inDays == 1) {
+    return '1 day ago';
   }
-  return location;
-}
-
-Future<void> _openBusinessMap(TestAccount user) async {
-  final query = Uri.encodeComponent(
-    '${_businessDisplayName(user)}, ${_businessLocationWords(user)}',
-  );
-  final uri = Uri.parse(
-    'https://www.google.com/maps/search/?api=1&query=$query',
-  );
-  await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (diff.inDays < 7) {
+    return '${diff.inDays} days ago';
+  }
+  return review.reviewDateLabel;
 }

@@ -1411,6 +1411,26 @@ class OnboardingController extends GetxController {
         snackPosition: SnackPosition.BOTTOM,
       );
     } catch (error) {
+      if (error is BusinessSubscriptionRequiredException) {
+        final billingTarget = Map<String, dynamic>.from(business);
+        billingTarget['id'] = error.businessId.isNotEmpty
+            ? error.businessId
+            : businessId;
+        billingTarget['name'] = error.businessName.isNotEmpty
+            ? error.businessName
+            : businessName;
+        billingTarget['locationId'] = locationId;
+        billingTarget['subscriptionStatus'] = error.subscriptionStatus;
+        billingTarget['locked'] = true;
+        Get.toNamed(
+          AppRoutes.payment,
+          arguments: <String, dynamic>{
+            'billingTargetBusiness': billingTarget,
+            'showExpiredRenewal': true,
+          },
+        );
+        return;
+      }
       Get.snackbar(
         'Switch failed',
         _humanizeError(error),

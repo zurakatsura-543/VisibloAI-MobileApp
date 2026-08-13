@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
@@ -30,18 +31,10 @@ class _KeywordRankingViewState extends State<KeywordRankingView> {
   late final SeoToolsController _controller;
   late final PaymentController _paymentController;
   final GlobalKey _keywordSnapshotKey = GlobalKey();
-  final GlobalKey _commandCenterKey = GlobalKey();
-  final GlobalKey _keywordCommandCenterKey = GlobalKey();
-  final GlobalKey _aiSuggestionsKey = GlobalKey();
   final GlobalKey _keywordRankingKey = GlobalKey();
-  final GlobalKey _proofSummaryKey = GlobalKey();
-  final GlobalKey _rankingGraphKey = GlobalKey();
-  final GlobalKey _recommendationsKey = GlobalKey();
-  final GlobalKey _trackedKeywordsKey = GlobalKey();
   final GlobalKey _heatmapCommandKey = GlobalKey();
   final GlobalKey _heatmapGridKey = GlobalKey();
   final GlobalKey _heatmapInsightsKey = GlobalKey();
-  int _visibleSuggestedCount = 5;
 
   @override
   void initState() {
@@ -107,27 +100,17 @@ class _KeywordRankingViewState extends State<KeywordRankingView> {
                       billingBanner,
                     ],
                     const SizedBox(height: 12),
-                    _OverviewHero(
-                      overview: _controller.overview.value,
-                      location: selectedLocation,
-                    ),
-                    const SizedBox(height: 12),
+                    if (_controller.activeTab.value != SeoMobileTab.keywords)
+                      _OverviewHero(
+                        overview: _controller.overview.value,
+                        location: selectedLocation,
+                      ),
+                    if (_controller.activeTab.value != SeoMobileTab.keywords)
+                      const SizedBox(height: 12),
                     _LocationSelectorCard(
                       locations: _controller.locations,
                       selectedLocationId: _controller.selectedLocationId.value,
                       onChanged: _controller.selectLocation,
-                    ),
-                    const SizedBox(height: 12),
-                    _SeoSectionSwitcher(
-                      activeTab: _controller.activeTab.value,
-                      onChanged: _handleTabChange,
-                    ),
-                    const SizedBox(height: 12),
-                    _QuickSectionNav(
-                      activeTab: _controller.activeTab.value,
-                      onAddKeywordTap: _showAddKeywordSheet,
-                      onRunCompetitorTap: _handleCompetitorDiscovery,
-                      onGenerateHeatmapTap: _handleHeatmapGeneration,
                     ),
                     const SizedBox(height: 12),
                     if (_controller.isLoading.value &&
@@ -138,35 +121,18 @@ class _KeywordRankingViewState extends State<KeywordRankingView> {
                       switch (_controller.activeTab.value) {
                         SeoMobileTab.keywords => _KeywordsTab(
                           controller: _controller,
+                          selectedLocation: selectedLocation,
                           selectedKeyword: selectedKeyword,
                           onAddKeywordTap: _showAddKeywordSheet,
-                          onAddSuggestedKeyword: _handleSuggestedKeywordAdd,
+                          onAddSuggestedKeyword: _handleKeywordAdd,
                           onScanKeyword: _handleScanKeyword,
-                          visibleSuggestedCount: _visibleSuggestedCount,
-                          onToggleSuggested: () {
-                            setState(() {
-                              final total =
-                                  _controller.availableSuggestions.length;
-                              if (_visibleSuggestedCount >= total) {
-                                _visibleSuggestedCount = 5;
-                              } else {
-                                _visibleSuggestedCount = math.min(
-                                  _visibleSuggestedCount + 5,
-                                  total,
-                                );
-                              }
-                            });
-                          },
-                          commandCenterKey: _commandCenterKey,
-                          keywordCommandCenterKey: _keywordCommandCenterKey,
-                          aiSuggestionsKey: _aiSuggestionsKey,
-                          keywordRankingKey: _keywordRankingKey,
-                          proofSummaryKey: _proofSummaryKey,
-                          rankingGraphKey: _rankingGraphKey,
-                          recommendationsKey: _recommendationsKey,
-                          trackedKeywordsKey: _trackedKeywordsKey,
-                          onJumpToSection: _jumpToSection,
+                          onKeywordChanged: _handleKeywordSelection,
+                          onRadiusChanged: _controller.setRadiusKm,
                           keywordSnapshotKey: _keywordSnapshotKey,
+                          keywordRankingKey: _keywordRankingKey,
+                          onChangeKeywordTap: _showKeywordPickerSheet,
+                          onOpenMapTap: () =>
+                              _openLocationInMaps(selectedLocation),
                         ),
                         SeoMobileTab.competitors => _CompetitorsTab(
                           controller: _controller,
@@ -204,40 +170,37 @@ class _KeywordRankingViewState extends State<KeywordRankingView> {
     }
   }
 
-  String _routeForTab(SeoMobileTab tab) {
-    switch (tab) {
-      case SeoMobileTab.keywords:
-        return AppRoutes.keywordRanking;
-      case SeoMobileTab.competitors:
-        return AppRoutes.seoCompetitors;
-      case SeoMobileTab.heatmap:
-        return AppRoutes.seoHeatmap;
+  Future<void> _handleKeywordAdd(String keyword) async {
+    final cleaned = keyword.trim();
+    if (cleaned.isEmpty) {
+      return;
     }
-  }
-
-  Future<void> _handleTabChange(SeoMobileTab tab) async {
-    await _controller.changeTab(tab);
-    final route = _routeForTab(tab);
-    if (Get.currentRoute != route) {
-      Get.offNamed(route);
-    }
-  }
-
-  Future<void> _handleSuggestedKeywordAdd(String keyword) async {
     if (!await _guardKeywordCreation()) {
       return;
     }
-    await _controller.addKeyword(keyword);
+    await _controller.addKeyword(cleaned);
     if (!mounted) return;
-    setState(() {
-      _visibleSuggestedCount = 5;
-    });
-    await Future<void>.delayed(const Duration(milliseconds: 180));
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    final sectionContext = _keywordRankingKey.currentContext;
+    if (sectionContext != null && sectionContext.mounted) {
+      await Scrollable.ensureVisible(
+        sectionContext,
+        duration: const Duration(milliseconds: 360),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+    }
+  }
+
+  Future<void> _handleKeywordSelection(String keywordId) async {
+    await _controller.selectKeyword(keywordId);
+    if (!mounted) return;
+    await Future<void>.delayed(const Duration(milliseconds: 140));
     final sectionContext = _keywordSnapshotKey.currentContext;
     if (sectionContext != null && sectionContext.mounted) {
       await Scrollable.ensureVisible(
         sectionContext,
-        duration: const Duration(milliseconds: 320),
+        duration: const Duration(milliseconds: 360),
         curve: Curves.easeOutCubic,
         alignment: 0.08,
       );
@@ -300,167 +263,339 @@ class _KeywordRankingViewState extends State<KeywordRankingView> {
       ),
       builder: (context) {
         final suggestions = _controller.availableSuggestions;
+        final sheetHeight = MediaQuery.of(context).size.height * 0.82;
+        return SafeArea(
+          top: false,
+          child: SizedBox(
+            height: sheetHeight,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                22,
+                20,
+                22 + MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Top Search Queries',
+                    style: AppTypography.card(
+                      fontSize: 20,
+                      color: AppColors.brandBlue,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Terms people used to find your profile',
+                    style: AppTypography.body(
+                      fontSize: 13.5,
+                      color: const Color(0xFF65758B),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'Add your own keyword',
+                      filled: true,
+                      fillColor: const Color(0xFFF8FBFD),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: const BorderSide(color: Color(0xFFD9E5EF)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: const BorderSide(color: Color(0xFFD9E5EF)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: const BorderSide(color: Color(0xFF2DB6C4)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () async {
+                        final keyword = controller.text.trim();
+                        if (keyword.isEmpty) return;
+                        Navigator.of(context).pop();
+                        await _handleKeywordAdd(keyword);
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.brandBlue,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                      child: const Text('Add keyword'),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Expanded(
+                    child: suggestions.isEmpty
+                        ? Text(
+                            'No fresh unused suggestions are available right now. You can still add a keyword manually.',
+                            style: AppTypography.body(
+                              fontSize: 12.6,
+                              color: const Color(0xFF7A879A),
+                            ),
+                          )
+                        : Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(22),
+                              border: Border.all(color: const Color(0xFFDDE8F0)),
+                            ),
+                            child: ListView.separated(
+                              padding: EdgeInsets.zero,
+                              itemCount: suggestions.length,
+                              separatorBuilder: (context, index) => const Divider(
+                                height: 1,
+                                color: Color(0xFFE8EEF4),
+                              ),
+                              itemBuilder: (context, index) {
+                                final item = suggestions[index];
+                                return InkWell(
+                                  onTap: () async {
+                                    Navigator.of(context).pop();
+                                    await _handleKeywordAdd(item.keyword);
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 14,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        SizedBox(
+                                          width: 24,
+                                          child: Text(
+                                            '${index + 1}',
+                                            style: AppTypography.label(
+                                              fontSize: 12,
+                                              color: const Color(0xFF8A97AA),
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            item.keyword,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.label(
+                                              fontSize: 14,
+                                              color: AppColors.brandBlue,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          '${item.searchVolume}',
+                                          style: AppTypography.label(
+                                            fontSize: 13,
+                                            color: AppColors.brandBlue,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 5,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF1F5F9),
+                                            borderRadius: BorderRadius.circular(999),
+                                          ),
+                                          child: Text(
+                                            'SEARCHES',
+                                            style: AppTypography.label(
+                                              fontSize: 9.8,
+                                              color: const Color(0xFF7B8798),
+                                              fontWeight: FontWeight.w900,
+                                              letterSpacing: 0.4,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showKeywordPickerSheet() async {
+    final items = _controller.keywords;
+    if (items.isEmpty) {
+      await _showAddKeywordSheet();
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
         return SafeArea(
           top: false,
           child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              22,
-              20,
-              22 + MediaQuery.of(context).viewInsets.bottom,
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Add a new keyword',
+                  'Change keyword',
                   style: AppTypography.card(
-                    fontSize: 20,
+                    fontSize: 19,
                     color: AppColors.brandBlue,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Track money keywords, service + city terms, and nearby intent terms first.',
+                  'Choose one of your tracked keywords to inspect its local rank.',
                   style: AppTypography.body(
-                    fontSize: 13.5,
-                    color: const Color(0xFF65758B),
+                    fontSize: 13,
+                    color: const Color(0xFF68778F),
                   ),
                 ),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: controller,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    hintText: 'e.g. kurti manufacturers in mumbai',
-                    filled: true,
-                    fillColor: const Color(0xFFF8FBFD),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(18),
-                      borderSide: const BorderSide(color: Color(0xFFD9E5EF)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(18),
-                      borderSide: const BorderSide(color: Color(0xFFD9E5EF)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(18),
-                      borderSide: const BorderSide(color: Color(0xFF2DB6C4)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () async {
-                      final keyword = controller.text.trim();
-                      if (keyword.isEmpty) return;
-                      Navigator.of(context).pop();
-                      await _handleSuggestedKeywordAdd(keyword);
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.brandBlue,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 360),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: items.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final keyword = items[index];
+                      final selected =
+                          _controller.selectedKeywordId.value == keyword.id;
+                      return InkWell(
+                        onTap: () async {
+                          Navigator.of(context).pop();
+                          await _handleKeywordSelection(keyword.id);
+                        },
                         borderRadius: BorderRadius.circular(18),
-                      ),
-                    ),
-                    child: const Text('Add keyword'),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  'Suggested keywords from GBP demand',
-                  style: AppTypography.label(
-                    fontSize: 12.8,
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                if (suggestions.isEmpty)
-                  Text(
-                    'No fresh unused suggestions are available right now. You can still add a keyword manually.',
-                    style: AppTypography.body(
-                      fontSize: 12.6,
-                      color: const Color(0xFF7A879A),
-                    ),
-                  )
-                else
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 260),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: suggestions.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        final item = suggestions[index];
-                        return Container(
-                          padding: const EdgeInsets.all(12),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF8FBFD),
+                            color: selected
+                                ? const Color(0xFFEAF8F8)
+                                : const Color(0xFFF8FBFD),
                             borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: const Color(0xFFDDE8F0)),
+                            border: Border.all(
+                              color: selected
+                                  ? const Color(0xFF2DB6C4)
+                                  : const Color(0xFFDDE8F0),
+                            ),
                           ),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      item.keyword,
+                                      keyword.keyword,
                                       style: AppTypography.label(
-                                        fontSize: 13.2,
+                                        fontSize: 13.4,
                                         color: AppColors.brandBlue,
                                         fontWeight: FontWeight.w800,
                                       ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      item.reason ??
-                                          'Relevant local demand idea',
-                                      style: AppTypography.body(
-                                        fontSize: 11.8,
-                                        color: const Color(0xFF6C7A90),
-                                      ),
+                                    const SizedBox(height: 6),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        _Chip(
+                                          label: _rankLabel(keyword),
+                                          color: _qualitySurface(
+                                            keyword.rankingQuality,
+                                          ),
+                                        ),
+                                        _Chip(
+                                          label: keyword.intentType.label,
+                                          color: const Color(0xFFEAF2FF),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              _InlineButton(
-                                label: 'Add',
-                                icon: Icons.add_rounded,
-                                filled: true,
-                                onTap: () async {
-                                  Navigator.of(context).pop();
-                                  await _handleSuggestedKeywordAdd(
-                                    item.keyword,
-                                  );
-                                },
+                              Icon(
+                                selected
+                                    ? Icons.check_circle_rounded
+                                    : Icons.chevron_right_rounded,
+                                color: selected
+                                    ? const Color(0xFF21A7B5)
+                                    : const Color(0xFF8FA1B9),
                               ),
                             ],
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    },
                   ),
+                ),
               ],
             ),
           ),
         );
       },
     );
+  }
+
+  Future<void> _openLocationInMaps(BusinessLocationSummary? location) async {
+    if (location == null) {
+      return;
+    }
+
+    final parts = [
+      location.name,
+      location.addressLine1,
+      location.city,
+      location.state,
+      location.postalCode,
+    ].where((value) => value.trim().isNotEmpty).toList(growable: false);
+    if (parts.isEmpty) {
+      return;
+    }
+
+    final query = Uri.encodeComponent(parts.join(', '));
+    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   BillingUsageInfo? get _billingUsage => _paymentController.billingUsage.value;
@@ -673,216 +808,95 @@ class _KeywordRankingViewState extends State<KeywordRankingView> {
 class _KeywordsTab extends StatelessWidget {
   const _KeywordsTab({
     required this.controller,
+    required this.selectedLocation,
     required this.selectedKeyword,
     required this.onAddKeywordTap,
     required this.onAddSuggestedKeyword,
     required this.onScanKeyword,
-    required this.visibleSuggestedCount,
-    required this.onToggleSuggested,
-    required this.commandCenterKey,
-    required this.keywordCommandCenterKey,
-    required this.aiSuggestionsKey,
-    required this.keywordRankingKey,
-    required this.proofSummaryKey,
-    required this.rankingGraphKey,
-    required this.recommendationsKey,
-    required this.trackedKeywordsKey,
-    required this.onJumpToSection,
+    required this.onKeywordChanged,
+    required this.onRadiusChanged,
     required this.keywordSnapshotKey,
+    required this.keywordRankingKey,
+    required this.onChangeKeywordTap,
+    required this.onOpenMapTap,
   });
 
   final SeoToolsController controller;
+  final BusinessLocationSummary? selectedLocation;
   final TrackedKeyword? selectedKeyword;
   final VoidCallback onAddKeywordTap;
   final ValueChanged<String> onAddSuggestedKeyword;
   final Future<void> Function(String keywordId, {int? radiusKm}) onScanKeyword;
-  final int visibleSuggestedCount;
-  final VoidCallback onToggleSuggested;
-  final GlobalKey commandCenterKey;
-  final GlobalKey keywordCommandCenterKey;
-  final GlobalKey aiSuggestionsKey;
-  final GlobalKey keywordRankingKey;
-  final GlobalKey proofSummaryKey;
-  final GlobalKey rankingGraphKey;
-  final GlobalKey recommendationsKey;
-  final GlobalKey trackedKeywordsKey;
-  final Future<void> Function(GlobalKey key) onJumpToSection;
+  final ValueChanged<String> onKeywordChanged;
+  final ValueChanged<int> onRadiusChanged;
   final GlobalKey keywordSnapshotKey;
+  final GlobalKey keywordRankingKey;
+  final Future<void> Function() onChangeKeywordTap;
+  final Future<void> Function() onOpenMapTap;
 
   @override
   Widget build(BuildContext context) {
-    final sections = controller.keywordSections.value;
-    final overview = controller.overview.value;
-    final recommendations = controller.recommendations.value;
-    final suggestedKeywords = controller.availableSuggestions;
-    final visibleSuggestions = suggestedKeywords
-        .take(math.min(visibleSuggestedCount, suggestedKeywords.length))
-        .toList();
+    final suggestedKeywords = controller.availableSuggestions.take(4).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionCard(
-          key: keywordSnapshotKey,
-          title: 'Jump to any part of the keyword page.',
-          eyebrow: 'page navigation',
-          child: _PageNavigationCard(
-            items: [
-              _PageJumpItem(
-                label: 'Local SEO Command Center',
-                icon: Icons.adjust_rounded,
-                onTap: () => onJumpToSection(commandCenterKey),
-              ),
-              _PageJumpItem(
-                label: 'Keyword Command Center',
-                icon: Icons.filter_center_focus_rounded,
-                onTap: () => onJumpToSection(keywordCommandCenterKey),
-              ),
-              _PageJumpItem(
-                label: 'AI Suggested next keywords',
-                icon: Icons.auto_awesome_rounded,
-                onTap: () => onJumpToSection(aiSuggestionsKey),
-              ),
-              _PageJumpItem(
-                label: 'What VisibloAI thinks you should do next',
-                icon: Icons.verified_user_outlined,
-                onTap: () => onJumpToSection(recommendationsKey),
-              ),
-              _PageJumpItem(
-                label: 'Keyword Ranking',
-                icon: Icons.show_chart_rounded,
-                onTap: () => onJumpToSection(keywordRankingKey),
-              ),
-              _PageJumpItem(
-                label: 'Proof summary',
-                icon: Icons.pin_drop_outlined,
-                onTap: () => onJumpToSection(proofSummaryKey),
-              ),
-              _PageJumpItem(
-                label: 'Tracked Keywords',
-                icon: Icons.search_rounded,
-                onTap: () => onJumpToSection(trackedKeywordsKey),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        _SectionCard(
-          key: commandCenterKey,
-          title: 'Local SEO Command Center',
-          eyebrow: 'owner overview',
+          title: 'Keyword Ranking',
+          eyebrow: 'selected keyword',
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _MiniMetricCard(
-                      label: 'Visibility',
-                      value: '${overview?.localVisibilityScore ?? 0}',
-                      tone: const Color(0xFFEAF8F8),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _MiniMetricCard(
-                      label: 'Verified avg',
-                      value: overview?.verifiedAverageRank != null
-                          ? '#${overview!.verifiedAverageRank!.toStringAsFixed(1)}'
-                          : 'Build proof',
-                      tone: const Color(0xFFEAF2FF),
-                    ),
-                  ),
-                ],
+              _KeywordSelectionHero(
+                selectedKeyword: selectedKeyword,
+                selectedLocation: selectedLocation,
+                onChangeTap: onChangeKeywordTap,
+                onOpenMapTap: onOpenMapTap,
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _MiniMetricCard(
-                      label: 'Top 3',
-                      value: '${overview?.top3CoveragePercent ?? 0}%',
-                      tone: const Color(0xFFEAF9F1),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _MiniMetricCard(
-                      label: 'Top 10',
-                      value: '${overview?.top10CoveragePercent ?? 0}%',
-                      tone: const Color(0xFFFFF6E8),
-                    ),
-                  ),
-                ],
-              ),
+              if (selectedKeyword != null) ...[
+                const SizedBox(height: 14),
+                _KeywordRankingSnapshot(
+                  key: keywordSnapshotKey,
+                  keyword: selectedKeyword!,
+                  rankingHistory: controller.rankingHistory,
+                  radiusKm: controller.selectedRadiusKm.value,
+                  showScanButton: false,
+                ),
+              ],
             ],
           ),
         ),
         const SizedBox(height: 12),
         _SectionCard(
-          key: keywordCommandCenterKey,
-          title: 'Keyword Command Center',
-          eyebrow: 'grouped action lanes',
-          trailing: _SoftActionButton(
+          title: 'AI Suggested Keywords',
+          eyebrow: 'quick ideas',
+          trailing: _OutlineActionButton(
             label: 'Add keyword',
             icon: Icons.add_rounded,
-            onTap: onAddKeywordTap,
+            onTap: () async => onAddKeywordTap(),
           ),
-          child: Column(
-            children: [
-              _KeywordLane(
-                title: 'Quick wins',
-                subtitle: 'Closest keywords to visible movement.',
-                tone: const Color(0xFFEAF9F1),
-                items: sections?.quickWins ?? const <TrackedKeyword>[],
-                selectedId: controller.selectedKeywordId.value,
-                onTap: controller.selectKeyword,
-              ),
-              const SizedBox(height: 10),
-              _KeywordLane(
-                title: 'Needs attention',
-                subtitle: 'Weak coverage that needs stronger proof.',
-                tone: const Color(0xFFFFF0F3),
-                items: sections?.needsAttention ?? const <TrackedKeyword>[],
-                selectedId: controller.selectedKeywordId.value,
-                onTap: controller.selectKeyword,
-              ),
-              const SizedBox(height: 10),
-              _KeywordLane(
-                title: 'Defend winners',
-                subtitle: 'Already strong keywords to protect.',
-                tone: const Color(0xFFEAF5FF),
-                items: sections?.defend ?? const <TrackedKeyword>[],
-                selectedId: controller.selectedKeywordId.value,
-                onTap: controller.selectKeyword,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        _SectionCard(
-          key: aiSuggestionsKey,
-          title: 'AI Suggested next keywords 🪄',
-          eyebrow: 'smart expansion ideas',
           child: suggestedKeywords.isEmpty
               ? const _EmptyStateCard(
                   title: 'No suggestions yet',
                   copy:
-                      'Add 2-3 core service keywords first so VisibloAI can suggest fresh unused next ideas.',
+                      'Add a few business keywords first and VisibloAI will suggest more local keyword ideas here.',
                 )
               : Column(
                   children: [
-                    ...visibleSuggestions.map((item) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
+                    ...suggestedKeywords.map(
+                      (item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
                         child: Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF8FBFD),
-                            borderRadius: BorderRadius.circular(18),
+                            borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: const Color(0xFFDDE8F0)),
                           ),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
                                 child: Column(
@@ -890,257 +904,659 @@ class _KeywordsTab extends StatelessWidget {
                                   children: [
                                     Text(
                                       item.keyword,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                       style: AppTypography.label(
-                                        fontSize: 13.2,
+                                        fontSize: 13,
                                         color: AppColors.brandBlue,
                                         fontWeight: FontWeight.w800,
                                       ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      item.reason ?? 'Relevant local idea',
-                                      style: AppTypography.body(
-                                        fontSize: 11.8,
-                                        color: const Color(0xFF6C7A90),
+                                    if ((item.reason ?? '').trim().isNotEmpty) ...[
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        item.reason!,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTypography.body(
+                                          fontSize: 11.4,
+                                          color: const Color(0xFF7A879A),
+                                        ),
                                       ),
-                                    ),
+                                    ],
                                   ],
                                 ),
                               ),
                               const SizedBox(width: 10),
                               _InlineButton(
-                                label: 'Add keyword',
+                                label: 'Add',
                                 icon: Icons.add_rounded,
                                 filled: true,
-                                onTap: () =>
-                                    onAddSuggestedKeyword(item.keyword),
+                                onTap: () => onAddSuggestedKeyword(item.keyword),
                               ),
                             ],
                           ),
                         ),
-                      );
-                    }),
-                    if (suggestedKeywords.length > 5)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: _SoftActionButton(
-                          label:
-                              visibleSuggestedCount >= suggestedKeywords.length
-                              ? 'See less'
-                              : 'See 5 more',
-                          icon:
-                              visibleSuggestedCount >= suggestedKeywords.length
-                              ? Icons.expand_less_rounded
-                              : Icons.expand_more_rounded,
-                          onTap: onToggleSuggested,
-                        ),
                       ),
+                    ),
                   ],
                 ),
         ),
         const SizedBox(height: 12),
-        if (selectedKeyword != null) ...[
-          _SectionCard(
-            key: keywordRankingKey,
-            title: 'Keyword Ranking',
-            eyebrow: 'track movement from 50+ to the map pack',
-            trailing: _RadiusSelector(
-              value: controller.selectedRadiusKm.value,
-              onChanged: (value) => controller.setRadiusKm(value),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  selectedKeyword!.keyword,
-                  style: AppTypography.card(
-                    fontSize: 18.2,
-                    color: AppColors.brandBlue,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Switch the scan radius, refresh proof, and watch this keyword move from discoverable to visible to map-pack strength.',
-                  style: AppTypography.body(
-                    fontSize: 12.8,
-                    color: const Color(0xFF68778F),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _InlineButton(
-                        label:
-                            controller.checkingKeywordId.value ==
-                                selectedKeyword!.id
-                            ? 'Scanning...'
-                            : 'Scan now',
-                        icon:
-                            controller.checkingKeywordId.value ==
-                                selectedKeyword!.id
-                            ? Icons.hourglass_top_rounded
-                            : Icons.sync_rounded,
-                        filled: true,
-                        onTap:
-                            controller.checkingKeywordId.value ==
-                                selectedKeyword!.id
-                            ? null
-                            : () => onScanKeyword(selectedKeyword!.id),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _MiniMetricCard(
-                        label: 'Current proof',
-                        value: _rankLabel(selectedKeyword!),
-                        tone: _qualitySurface(selectedKeyword!.rankingQuality),
-                        compact: true,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _SectionCard(
-            key: proofSummaryKey,
-            title: 'Proof summary',
-            eyebrow: 'verified proof vs estimates',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _KeywordProofStrip(keyword: selectedKeyword!),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _MiniMetricCard(
-                        label: 'Maps rank',
-                        value: selectedKeyword!.latestMapsRank == null
-                            ? '20+'
-                            : 'Avg #${selectedKeyword!.latestMapsRank}',
-                        tone: const Color(0xFFEAF2FF),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _MiniMetricCard(
-                        label: 'Coverage',
-                        value: '${selectedKeyword!.geoGridCoveragePercent}%',
-                        tone: const Color(0xFFEAF8F8),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _MiniMetricCard(
-                        label: 'Strength',
-                        value: '${selectedKeyword!.mapsStrength}%',
-                        tone: const Color(0xFFFFF6E8),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _MiniMetricCard(
-                        label: 'Priority',
-                        value: '${selectedKeyword!.priorityScore}',
-                        tone: const Color(0xFFEAF2FF),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _SectionCard(
-            key: rankingGraphKey,
-            title: 'Ranking growth graph',
-            eyebrow: 'lower is better',
-            child: _HistoryStrip(
-              history: controller.rankingHistory,
-              days: controller.rankHistoryDays.value,
-              onDaysChanged: controller.setRankHistoryDays,
-              keyword: selectedKeyword!,
-              radiusKm: controller.selectedRadiusKm.value,
-              keywords: controller.keywords,
-              onKeywordChanged: controller.selectKeyword,
-              onRadiusChanged: controller.setRadiusKm,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _SectionCard(
-            key: recommendationsKey,
-            title: 'What VisibloAI thinks you should do next',
-            eyebrow: 'recommended actions',
-            child: _RecommendationList(
-              title: selectedKeyword!.keyword,
-              items:
-                  recommendations?.items
-                      .map((item) => item.reason)
-                      .take(3)
-                      .toList() ??
-                  selectedKeyword!.recommendations.take(3).toList(),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
         _SectionCard(
-          key: trackedKeywordsKey,
-          title: 'Tracked Keywords',
-          eyebrow: 'live tracked list',
-          child: controller.keywords.isEmpty
+          key: keywordRankingKey,
+          title: 'Scan And Check Ranking',
+          eyebrow: 'choose radius and scan',
+          child: selectedKeyword == null
               ? const _EmptyStateCard(
-                  title: 'No keywords tracked yet',
+                  title: 'Choose a keyword first',
                   copy:
-                      'Add your first money keyword, service + city keyword, and nearby intent keyword to begin.',
+                      'Pick a tracked keyword to see its rank, nearby coverage, and movement across local areas.',
                 )
-              : Column(
-                  children: [
-                    _TrackedKeywordToolbar(controller: controller),
-                    const SizedBox(height: 12),
-                    if (controller.filteredTrackedKeywords.isEmpty)
-                      const _EmptyStateCard(
-                        title: 'No tracked keywords match these filters',
-                        copy:
-                            'Try a broader trust filter, clear the search, or sort differently to find the keyword you want.',
-                      )
-                    else
-                      ...controller.filteredTrackedKeywords.map((keyword) {
-                        final isSelected =
-                            controller.selectedKeywordId.value == keyword.id;
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _KeywordTrackedCard(
-                            keyword: keyword,
-                            selected: isSelected,
-                            checking:
-                                controller.checkingKeywordId.value ==
-                                keyword.id,
-                            deleting:
-                                controller.removingKeywordId.value ==
-                                keyword.id,
-                            selectedRadiusKm: controller.selectedRadiusKm.value,
-                            onTap: () => controller.selectKeyword(keyword.id),
-                            onScan: ({radiusKm}) =>
-                                onScanKeyword(keyword.id, radiusKm: radiusKm),
-                            onDelete: () =>
-                                controller.removeKeyword(keyword.id),
-                          ),
-                        );
-                      }),
-                  ],
+              : _KeywordScanActionCard(
+                  keywords: controller.keywords,
+                  keyword: selectedKeyword!,
+                  radiusKm: controller.selectedRadiusKm.value,
+                  isScanning:
+                      controller.checkingKeywordId.value == selectedKeyword!.id,
+                  onKeywordChanged: onKeywordChanged,
+                  onRadiusChanged: onRadiusChanged,
+                  onScanTap: () => onScanKeyword(selectedKeyword!.id),
                 ),
         ),
       ],
     );
   }
+}
+
+class _KeywordSelectionHero extends StatelessWidget {
+  const _KeywordSelectionHero({
+    required this.selectedKeyword,
+    required this.selectedLocation,
+    required this.onChangeTap,
+    required this.onOpenMapTap,
+  });
+
+  final TrackedKeyword? selectedKeyword;
+  final BusinessLocationSummary? selectedLocation;
+  final Future<void> Function() onChangeTap;
+  final Future<void> Function() onOpenMapTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final locationLine = [
+      selectedLocation?.city,
+      selectedLocation?.state,
+      selectedLocation?.postalCode,
+    ].where((value) => (value ?? '').trim().isNotEmpty).join(', ');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F8FB),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.search_rounded,
+                color: Color(0xFF21A7B5),
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Selected Keyword',
+                    style: AppTypography.label(
+                      fontSize: 11.6,
+                      color: const Color(0xFF6C7A90),
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    selectedKeyword?.keyword ?? 'Choose a keyword to begin',
+                    style: AppTypography.card(
+                      fontSize: 17.2,
+                      color: AppColors.brandBlue,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            _OutlineActionButton(
+              label: 'Change',
+              icon: Icons.swap_horiz_rounded,
+              onTap: onChangeTap,
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FBFD),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFDDE8F0)),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.location_on_outlined,
+                color: Color(0xFF5A6C85),
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      selectedLocation?.name ?? 'Business location',
+                      style: AppTypography.label(
+                        fontSize: 13.6,
+                        color: AppColors.brandBlue,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (locationLine.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        locationLine,
+                        style: AppTypography.body(
+                          fontSize: 12.4,
+                          color: const Color(0xFF6B778C),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              _OutlineActionButton(
+                label: 'View on Map',
+                icon: Icons.map_outlined,
+                onTap: onOpenMapTap,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _KeywordRankingSnapshot extends StatelessWidget {
+  const _KeywordRankingSnapshot({
+    super.key,
+    required this.keyword,
+    required this.rankingHistory,
+    required this.radiusKm,
+    this.showScanButton = true,
+  });
+
+  final TrackedKeyword keyword;
+  final List<KeywordRankingPoint> rankingHistory;
+  final int radiusKm;
+  final bool showScanButton;
+
+  @override
+  Widget build(BuildContext context) {
+    final liveRank = _normalizeLiveMapsRank(
+      rankingHistory.isEmpty ? null : rankingHistory.first.mapsRank,
+    );
+    final ranks = _buildRadiusRanks(
+      keyword,
+      selectedRadiusKm: radiusKm,
+      selectedRadiusRank: liveRank,
+    );
+    final averageRank =
+        ranks
+            .map((entry) => entry.rank)
+            .whereType<int>()
+            .fold<double>(0, (sum, rank) => sum + rank) /
+        math.max(1, ranks.map((entry) => entry.rank).whereType<int>().length);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Average Rank (lower is better)',
+          style: AppTypography.label(
+            fontSize: 12.2,
+            color: const Color(0xFF22A8B5),
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 14),
+        _StaticRankingChart(ranks: ranks),
+        const SizedBox(height: 14),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FBFD),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFDDE8F0)),
+          ),
+          child: Text(
+            'Showing a launch-safe ranking snapshot for "${keyword.keyword}". '
+            '${liveRank == null ? 'Latest ${radiusKm}km scan is not in the top 20 yet.' : 'Latest ${radiusKm}km scan rank is #$liveRank.'} '
+            'Average preview rank is ${averageRank.toStringAsFixed(1)}.',
+            style: AppTypography.body(
+              fontSize: 12.4,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Rankings by Radius',
+                style: AppTypography.card(
+                  fontSize: 18,
+                  color: AppColors.brandBlue,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Text(
+              'Static preview',
+              style: AppTypography.label(
+                fontSize: 11.5,
+                color: const Color(0xFF6C7A90),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ...ranks.map(
+          (entry) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _RadiusRankRow(
+              data: entry,
+              isSelected: entry.radiusKm == radiusKm,
+              showLiveData: entry.radiusKm == radiusKm,
+            ),
+          ),
+        ),
+        if (showScanButton) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: _InlineButton(
+              label: 'Scan now',
+              icon: Icons.sync_rounded,
+              filled: true,
+              onTap: null,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _KeywordScanActionCard extends StatelessWidget {
+  const _KeywordScanActionCard({
+    required this.keywords,
+    required this.keyword,
+    required this.radiusKm,
+    required this.isScanning,
+    required this.onKeywordChanged,
+    required this.onRadiusChanged,
+    required this.onScanTap,
+  });
+
+  final List<TrackedKeyword> keywords;
+  final TrackedKeyword keyword;
+  final int radiusKm;
+  final bool isScanning;
+  final ValueChanged<String> onKeywordChanged;
+  final ValueChanged<int> onRadiusChanged;
+  final VoidCallback onScanTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFD),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFDDE8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Choose keyword',
+                  style: AppTypography.label(
+                    fontSize: 11.6,
+                    color: const Color(0xFF22A8B5),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              if (keywords.length > 1)
+                Text(
+                  '${keywords.length} tracked',
+                  style: AppTypography.label(
+                    fontSize: 11.2,
+                    color: const Color(0xFF8A97AA),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          IgnorePointer(
+            ignoring: isScanning,
+            child: Opacity(
+              opacity: isScanning ? 0.65 : 1,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFDDE8F0)),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: keyword.id,
+                    isExpanded: true,
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.brandBlue,
+                    ),
+                    items: keywords
+                        .map(
+                          (item) => DropdownMenuItem<String>(
+                            value: item.id,
+                            child: Text(
+                              item.keyword,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.label(
+                                fontSize: 13.6,
+                                color: AppColors.brandBlue,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) {
+                      if (value != null && value != keyword.id) {
+                        onKeywordChanged(value);
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Choose a radius above, then run a live scan to check how this keyword ranks in your local area.',
+            style: AppTypography.body(
+              fontSize: 12.8,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 14),
+          IgnorePointer(
+            ignoring: isScanning,
+            child: Opacity(
+              opacity: isScanning ? 0.65 : 1,
+              child: _RadiusSelector(
+                value: radiusKm,
+                onChanged: onRadiusChanged,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFDDE8F0)),
+            ),
+            child: Text(
+              'Current scan radius: ${radiusKm}km. This scan will trigger the live ranking checker for "${keyword.keyword}".',
+              style: AppTypography.body(
+                fontSize: 12.4,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: _InlineButton(
+              label: isScanning ? 'Scanning...' : 'Scan now',
+              icon: isScanning
+                  ? Icons.hourglass_top_rounded
+                  : Icons.sync_rounded,
+              filled: true,
+              onTap: isScanning ? null : onScanTap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StaticRankingChart extends StatelessWidget {
+  const _StaticRankingChart({required this.ranks});
+
+  final List<_RadiusRankData> ranks;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxRank = ranks.map((entry) => entry.rank).reduce(math.max).toDouble();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFD),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFDDE8F0)),
+      ),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 180,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: ranks.map((entry) {
+                final heightFactor = 1 - ((entry.rank - 1) / (maxRank <= 1 ? 1 : maxRank));
+                return Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: entry.color,
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          entry.displayRank,
+                          style: AppTypography.label(
+                            fontSize: 12.2,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        width: 18,
+                        height: 110 * heightFactor.clamp(0.18, 1.0),
+                        decoration: BoxDecoration(
+                          color: entry.color.withValues(alpha: 0.22),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '${entry.radiusKm} km',
+                        style: AppTypography.label(
+                          fontSize: 11.8,
+                          color: AppColors.brandBlue,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        entry.label,
+                        style: AppTypography.body(
+                          fontSize: 10.8,
+                          color: const Color(0xFF6C7A90),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(growable: false),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RadiusRankRow extends StatelessWidget {
+  const _RadiusRankRow({
+    required this.data,
+    required this.isSelected,
+    required this.showLiveData,
+  });
+
+  final _RadiusRankData data;
+  final bool isSelected;
+  final bool showLiveData;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFFF1F8FB) : const Color(0xFFF8FBFD),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isSelected ? const Color(0xFF2DB6C4) : const Color(0xFFDDE8F0),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: data.color.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.adjust_rounded, color: data.color, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${data.radiusKm} km Radius',
+                  style: AppTypography.label(
+                    fontSize: 13.4,
+                    color: AppColors.brandBlue,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  showLiveData ? data.label : 'Select this radius to get ranking',
+                  style: AppTypography.body(
+                    fontSize: 12.1,
+                    color: showLiveData
+                        ? data.color
+                        : const Color(0xFF8A97AA),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                showLiveData ? data.displayRank : '--',
+                style: AppTypography.card(
+                  fontSize: 22,
+                  color: AppColors.brandBlue,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                showLiveData ? '/20' : 'select',
+                style: AppTypography.body(
+                  fontSize: 11.5,
+                  color: const Color(0xFF8A97AA),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RadiusRankData {
+  const _RadiusRankData({
+    required this.radiusKm,
+    required this.rank,
+    required this.displayRank,
+    required this.label,
+    required this.color,
+  });
+
+  final int radiusKm;
+  final int rank;
+  final String displayRank;
+  final String label;
+  final Color color;
 }
 
 class _CompetitorsTab extends StatelessWidget {
@@ -1975,281 +2391,100 @@ class _LocationSelectorCard extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFDDE8F1)),
-      ),
-      child: DropdownButtonFormField<String>(
-        isExpanded: true,
-        initialValue: selectedLocationId.isEmpty ? null : selectedLocationId,
-        decoration: InputDecoration(
-          labelText: 'Business location',
-          labelStyle: AppTypography.body(
-            fontSize: 12.8,
-            color: const Color(0xFF64748B),
-          ),
-          filled: true,
-          fillColor: const Color(0xFFF8FBFD),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(color: Color(0xFFD9E5EF)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(color: Color(0xFFD9E5EF)),
-          ),
-        ),
-        selectedItemBuilder: (context) {
-          return locations.map((location) {
-            return Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                locationLabel(location),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.body(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.brandBlue,
-                ),
-              ),
-            );
-          }).toList();
-        },
-        items: locations.map((location) {
-          return DropdownMenuItem<String>(
-            value: location.id,
-            child: Text(
-              locationLabel(location),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          );
-        }).toList(),
-        onChanged: (value) {
-          if (value != null) {
-            onChanged(value);
-          }
-        },
-      ),
-    );
-  }
-}
-
-class _SeoSectionSwitcher extends StatelessWidget {
-  const _SeoSectionSwitcher({required this.activeTab, required this.onChanged});
-
-  final SeoMobileTab activeTab;
-  final ValueChanged<SeoMobileTab> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: const Color(0xFFDDE8F1)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x090F2746),
-            blurRadius: 24,
-            offset: Offset(0, 10),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'SEO sections',
-            style: AppTypography.card(
-              fontSize: 16.4,
-              color: AppColors.brandBlue,
+            'Business location',
+            style: AppTypography.label(
+              fontSize: 11.2,
+              color: const Color(0xFF6C7A90),
               fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
             ),
           ),
-          const SizedBox(height: 10),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: SeoMobileTab.values.map((tab) {
-                final selected = activeTab == tab;
-                final title = switch (tab) {
-                  SeoMobileTab.keywords => 'Keyword Ranking',
-                  SeoMobileTab.competitors => 'Competitor Analysis',
-                  SeoMobileTab.heatmap => 'Heatmap',
-                };
-                final icon = switch (tab) {
-                  SeoMobileTab.keywords => Icons.query_stats_rounded,
-                  SeoMobileTab.competitors => Icons.groups_2_rounded,
-                  SeoMobileTab.heatmap => Icons.grid_view_rounded,
-                };
-                final accent = switch (tab) {
-                  SeoMobileTab.keywords => const Color(0xFFEAF2FF),
-                  SeoMobileTab.competitors => const Color(0xFFFFF6E8),
-                  SeoMobileTab.heatmap => const Color(0xFFEAF8F8),
-                };
-
-                return Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: InkWell(
-                    onTap: () => onChanged(tab),
-                    borderRadius: BorderRadius.circular(16),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: selected ? accent : const Color(0xFFF8FBFD),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: selected
-                              ? const Color(0xFF2DB6C4)
-                              : const Color(0xFFDDE8F0),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: selected
-                                    ? const Color(0xFFBFEDEF)
-                                    : const Color(0xFFDDE8F0),
-                              ),
-                            ),
-                            child: Icon(
-                              icon,
-                              size: 18,
-                              color: AppColors.brandBlue,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title,
-                                style: AppTypography.label(
-                                  fontSize: 12.8,
-                                  color: AppColors.brandBlue,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                selected ? 'Open now' : 'Switch',
-                                style: AppTypography.body(
-                                  fontSize: 11.4,
-                                  color: const Color(0xFF6B7A90),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            isDense: true,
+            initialValue: selectedLocationId.isEmpty ? null : selectedLocationId,
+            style: AppTypography.body(
+              fontSize: 13.2,
+              color: AppColors.brandBlue,
+              fontWeight: FontWeight.w700,
+            ),
+            icon: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: AppColors.brandBlue,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Choose a business location',
+              hintStyle: AppTypography.body(
+                fontSize: 12.8,
+                color: const Color(0xFF8B97AA),
+              ),
+              filled: true,
+              fillColor: const Color(0xFFF8FBFD),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: Color(0xFFD9E5EF)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: Color(0xFFD9E5EF)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: Color(0xFF2DB6C4)),
+              ),
+            ),
+            selectedItemBuilder: (context) {
+              return locations.map((location) {
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    locationLabel(location),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.body(
+                      fontSize: 13.2,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.brandBlue,
                     ),
                   ),
                 );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickSectionNav extends StatelessWidget {
-  const _QuickSectionNav({
-    required this.activeTab,
-    required this.onAddKeywordTap,
-    required this.onRunCompetitorTap,
-    required this.onGenerateHeatmapTap,
-  });
-
-  final SeoMobileTab activeTab;
-  final VoidCallback onAddKeywordTap;
-  final VoidCallback onRunCompetitorTap;
-  final VoidCallback onGenerateHeatmapTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final actions = switch (activeTab) {
-      SeoMobileTab.keywords => [
-        ('Add keyword', Icons.add_chart_rounded, onAddKeywordTap),
-        ('Track proof', Icons.insights_rounded, onAddKeywordTap),
-        ('Plan next move', Icons.auto_awesome_rounded, onAddKeywordTap),
-      ],
-      SeoMobileTab.competitors => [
-        ('Choose keyword', Icons.search_rounded, onRunCompetitorTap),
-        ('Discover', Icons.radar_rounded, onRunCompetitorTap),
-        ('Review threats', Icons.flag_outlined, onRunCompetitorTap),
-      ],
-      SeoMobileTab.heatmap => [
-        ('Choose keyword', Icons.place_outlined, onGenerateHeatmapTap),
-        ('Generate map', Icons.grid_on_rounded, onGenerateHeatmapTap),
-        ('Read zones', Icons.route_rounded, onGenerateHeatmapTap),
-      ],
-    };
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFDDE8F1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'What to do here',
-            style: AppTypography.card(
-              fontSize: 18,
-              color: AppColors.brandBlue,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'A simple 3-step flow so owners always know what to do next.',
-            style: AppTypography.body(
-              fontSize: 13.2,
-              color: const Color(0xFF64748B),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Column(
-            children: [
-              for (var i = 0; i < actions.length; i++) ...[
-                _StepCard(
-                  index: i + 1,
-                  title: actions[i].$1,
-                  icon: actions[i].$2,
-                  onTap: actions[i].$3,
-                ),
-                if (i != actions.length - 1)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Icon(
-                      Icons.arrow_downward_rounded,
-                      size: 18,
-                      color: Color(0xFF94A3B8),
-                    ),
+              }).toList();
+            },
+            items: locations.map((location) {
+              return DropdownMenuItem<String>(
+                value: location.id,
+                child: Text(
+                  locationLabel(location),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.body(
+                    fontSize: 13,
+                    color: AppColors.brandBlue,
+                    fontWeight: FontWeight.w600,
                   ),
-              ],
-            ],
+                ),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                onChanged(value);
+              }
+            },
           ),
         ],
       ),
@@ -2330,81 +2565,6 @@ class _PageNavigationCard extends StatelessWidget {
     );
   }
 }
-
-class _TrackedKeywordToolbar extends StatelessWidget {
-  const _TrackedKeywordToolbar({required this.controller});
-
-  final SeoToolsController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        TextField(
-          onChanged: controller.updateTrackedKeywordSearch,
-          decoration: InputDecoration(
-            hintText: 'Search tracked keywords or intent',
-            prefixIcon: const Icon(Icons.search_rounded),
-            filled: true,
-            fillColor: const Color(0xFFF8FBFD),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFFD9E5EF)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFFD9E5EF)),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _GraphDropdown<SeoTrackedKeywordTrustFilter>(
-                label: '',
-                value: controller.trackedKeywordTrustFilter.value,
-                items: SeoTrackedKeywordTrustFilter.values
-                    .map(
-                      (value) => DropdownMenuItem<SeoTrackedKeywordTrustFilter>(
-                        value: value,
-                        child: Text(_trustFilterLabel(value)),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: (value) {
-                  if (value != null) {
-                    controller.setTrackedKeywordTrustFilter(value);
-                  }
-                },
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _GraphDropdown<SeoTrackedKeywordSort>(
-                label: '',
-                value: controller.trackedKeywordSort.value,
-                items: SeoTrackedKeywordSort.values
-                    .map(
-                      (value) => DropdownMenuItem<SeoTrackedKeywordSort>(
-                        value: value,
-                        child: Text(_sortLabel(value)),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: (value) {
-                  if (value != null) {
-                    controller.setTrackedKeywordSort(value);
-                  }
-                },
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}    
 
 class _CompetitorToolbar extends StatelessWidget {
   const _CompetitorToolbar({required this.controller});
@@ -2637,890 +2797,6 @@ class _RadiusSelector extends StatelessWidget {
   }
 }
 
-class _KeywordLane extends StatelessWidget {
-  const _KeywordLane({
-    required this.title,
-    required this.subtitle,
-    required this.tone,
-    required this.items,
-    required this.selectedId,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final Color tone;
-  final List<TrackedKeyword> items;
-  final String? selectedId;
-  final ValueChanged<String> onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: tone,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: AppTypography.card(
-              fontSize: 16.2,
-              color: AppColors.brandBlue,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: AppTypography.body(
-              fontSize: 12.6,
-              color: const Color(0xFF68778F),
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (items.isEmpty)
-            const Text(
-              'Nothing in this lane yet.',
-              style: TextStyle(
-                fontSize: 12.4,
-                color: Color(0xFF748298),
-                fontWeight: FontWeight.w600,
-              ),
-            )
-          else
-            ...items.take(3).map((keyword) {
-              final isSelected = selectedId == keyword.id;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onTap: () => onTap(keyword.id),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: isSelected
-                            ? const Color(0xFF2DB6C4)
-                            : const Color(0xFFDDE8F0),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          keyword.keyword,
-                          style: AppTypography.label(
-                            fontSize: 13.4,
-                            color: AppColors.brandBlue,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            _Chip(
-                              label: _rankLabel(keyword),
-                              color: _qualitySurface(keyword.rankingQuality),
-                            ),
-                            _Chip(
-                              label:
-                                  'Coverage ${keyword.geoGridCoveragePercent}%',
-                              color: const Color(0xFFEAF8F8),
-                            ),
-                            _Chip(
-                              label: keyword.intentType.label,
-                              color: const Color(0xFFEAF2FF),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-}
-
-class _KeywordProofStrip extends StatelessWidget {
-  const _KeywordProofStrip({required this.keyword});
-
-  final TrackedKeyword keyword;
-
-  @override
-  Widget build(BuildContext context) {
-    final rank = keyword.latestMapsRank;
-    final coverage = keyword.geoGridCoveragePercent;
-    final markerAlign = rank == null
-        ? 0.98
-        : ((rank.clamp(1, 50) - 1) / 49).clamp(0.0, 1.0);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FBFD),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFDDE8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Proof summary',
-            style: AppTypography.card(
-              fontSize: 16,
-              color: AppColors.brandBlue,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'See where this keyword sits now, how much nearby map coverage you own, and whether the proof is verified or still estimated.',
-            style: AppTypography.body(
-              fontSize: 12.8,
-              color: const Color(0xFF68778F),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFDDE8F0)),
-            ),
-            child: Column(
-              children: [
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final markerLeft =
-                        (constraints.maxWidth - 54) * markerAlign;
-                    return Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Container(
-                          height: 18,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(999),
-                            gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFF53D18B),
-                                Color(0xFF63D6E7),
-                                Color(0xFFF7D053),
-                                Color(0xFFF6C38F),
-                                Color(0xFFF28FA9),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: markerLeft,
-                          top: -10,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: const Color(0xFFDDE8F0),
-                              ),
-                            ),
-                            child: Text(
-                              rank == null ? '50+' : '#$rank',
-                              style: AppTypography.label(
-                                fontSize: 11.4,
-                                color: AppColors.brandBlue,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: const [
-                    Expanded(
-                      child: _ProofBand(
-                        label: '1-3',
-                        caption: 'map pack',
-                        color: Color(0xFFDDF8E8),
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: _ProofBand(
-                        label: '4-10',
-                        caption: 'visible',
-                        color: Color(0xFFDDF6FB),
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: _ProofBand(
-                        label: '11-20',
-                        caption: 'weak',
-                        color: Color(0xFFFFF0DA),
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: _ProofBand(
-                        label: '21-50',
-                        caption: 'discoverable',
-                        color: Color(0xFFF9E9D8),
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: _ProofBand(
-                        label: '50+',
-                        caption: 'not found',
-                        color: Color(0xFFFFE9EE),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _Chip(
-                      label: 'Coverage $coverage%',
-                      color: const Color(0xFFEAF8F8),
-                    ),
-                    _Chip(
-                      label:
-                          keyword.rankingQuality == SeoRankingQuality.verified
-                          ? 'Verified proof'
-                          : 'Estimate only',
-                      color: _qualitySurface(keyword.rankingQuality),
-                    ),
-                    _Chip(
-                      label: keyword.top3CoveragePercent > 0
-                          ? 'Top 3 ${keyword.top3CoveragePercent}%'
-                          : 'Build top-3 proof',
-                      color: const Color(0xFFEAF9F1),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HistoryStrip extends StatelessWidget {
-  const _HistoryStrip({
-    required this.history,
-    required this.days,
-    required this.onDaysChanged,
-    required this.keyword,
-    required this.radiusKm,
-    required this.keywords,
-    required this.onKeywordChanged,
-    required this.onRadiusChanged,
-  });
-
-  final List<KeywordRankingPoint> history;
-  final int days;
-  final ValueChanged<int> onDaysChanged;
-  final TrackedKeyword keyword;
-  final int radiusKm;
-  final List<TrackedKeyword> keywords;
-  final ValueChanged<String> onKeywordChanged;
-  final ValueChanged<int> onRadiusChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final visibleHistory = history
-        .take(8)
-        .toList()
-        .reversed
-        .toList(growable: false);
-    final latestRank = keyword.latestMapsRank;
-    final bestRank = history
-        .map((point) => point.mapsRank)
-        .whereType<int>()
-        .fold<int?>(
-          null,
-          (best, rank) => best == null ? rank : math.min(best, rank),
-        );
-    final trendLabel = (keyword.mapsTrend).isEmpty
-        ? 'Stable'
-        : '${keyword.mapsTrend[0].toUpperCase()}${keyword.mapsTrend.substring(1)}';
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FBFD),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFDDE8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Track movement from 50+ to the map pack.',
-                  style: AppTypography.card(
-                    fontSize: 15.6,
-                    color: AppColors.brandBlue,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              Wrap(
-                spacing: 6,
-                children: [7, 30, 90].map((value) {
-                  final active = value == days;
-                  return GestureDetector(
-                    onTap: () => onDaysChanged(value),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: active ? AppColors.brandBlue : Colors.white,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: active
-                              ? AppColors.brandBlue
-                              : const Color(0xFFDDE8F0),
-                        ),
-                      ),
-                      child: Text(
-                        '${value}D',
-                        style: AppTypography.label(
-                          fontSize: 11.8,
-                          color: active ? Colors.white : AppColors.brandBlue,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Lower is better. Every scan becomes one checkpoint so owners can see rank 45 moving to 22, then top 10, then top 3.',
-            style: AppTypography.body(
-              fontSize: 12.6,
-              color: const Color(0xFF68778F),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                flex: 6,
-                child: _GraphDropdown<String>(
-                  label: 'Keyword',
-                  value: keyword.id,
-                  items: keywords
-                      .map(
-                        (item) => DropdownMenuItem<String>(
-                          value: item.id,
-                          child: Text(
-                            item.keyword,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (value) {
-                    if (value != null) {
-                      onKeywordChanged(value);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 3,
-                child: _GraphDropdown<int>(
-                  label: 'Radius',
-                  value: radiusKm,
-                  items: const [1, 3, 5, 10]
-                      .map(
-                        (value) => DropdownMenuItem<int>(
-                          value: value,
-                          child: Text('${value}km'),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (value) {
-                    if (value != null) {
-                      onRadiusChanged(value);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 3,
-                child: _GraphDropdown<int>(
-                  label: 'Interval',
-                  value: days,
-                  items: const [7, 30, 90]
-                      .map(
-                        (value) => DropdownMenuItem<int>(
-                          value: value,
-                          child: Text(_intervalLabel(value)),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (value) {
-                    if (value != null) {
-                      onDaysChanged(value);
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _Chip(
-                label: latestRank == null ? 'Now 50+' : 'Now #$latestRank',
-                color: const Color(0xFFEAF2FF),
-              ),
-              _Chip(
-                label: bestRank == null ? 'Best --' : 'Best #$bestRank',
-                color: const Color(0xFFEAF9F1),
-              ),
-              _Chip(label: trendLabel, color: const Color(0xFFF1F5F9)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (history.isEmpty)
-            const Text(
-              'Run a scan to start building proof history.',
-              style: TextStyle(
-                fontSize: 12.8,
-                color: Color(0xFF748298),
-                fontWeight: FontWeight.w600,
-              ),
-            )
-          else
-            Column(
-              children: [
-                SizedBox(
-                  height: 220,
-                  child: _RankingLineChart(history: visibleHistory),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: const [
-                    Expanded(
-                      child: _LegendChip(
-                        label: '1-3 map pack',
-                        color: Color(0xFFDDF8E8),
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: _LegendChip(
-                        label: '4-10 visible',
-                        color: Color(0xFFDDF6FB),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: const [
-                    Expanded(
-                      child: _LegendChip(
-                        label: '11-20 weak',
-                        color: Color(0xFFFFF0DA),
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: _LegendChip(
-                        label: '50+ not found',
-                        color: Color(0xFFFFE9EE),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecommendationList extends StatelessWidget {
-  const _RecommendationList({required this.title, required this.items});
-
-  final String title;
-  final List<String> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFFBFB),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFD7F0F2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: AppTypography.card(
-              fontSize: 16,
-              color: AppColors.brandBlue,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...items.take(3).toList().asMap().entries.map((entry) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 24,
-                    height: 24,
-                    alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      '${entry.key + 1}',
-                      style: const TextStyle(
-                        fontSize: 11.8,
-                        color: Color(0xFF1AA3AF),
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      entry.value,
-                      style: AppTypography.body(
-                        fontSize: 13.4,
-                        color: const Color(0xFF375172),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
-
-class _KeywordTrackedCard extends StatelessWidget {
-  const _KeywordTrackedCard({
-    required this.keyword,
-    required this.selected,
-    required this.checking,
-    required this.deleting,
-    required this.selectedRadiusKm,
-    required this.onTap,
-    required this.onScan,
-    required this.onDelete,
-  });
-
-  final TrackedKeyword keyword;
-  final bool selected;
-  final bool checking;
-  final bool deleting;
-  final int selectedRadiusKm;
-  final VoidCallback onTap;
-  final Future<void> Function({int? radiusKm}) onScan;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(22),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFF0FBFC) : Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-            color: selected ? const Color(0xFF2DB6C4) : const Color(0xFFDDE8F0),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    keyword.keyword,
-                    style: AppTypography.card(
-                      fontSize: 15.2,
-                      color: AppColors.brandBlue,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _Chip(
-                  label: keyword.actionBucket.label,
-                  color: _bucketSurface(keyword.actionBucket),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _Chip(
-                  label: keyword.rankingQuality == SeoRankingQuality.verified
-                      ? 'Verified ${keyword.rankingConfidence}%'
-                      : _rankLabel(keyword),
-                  color: _qualitySurface(keyword.rankingQuality),
-                ),
-                _Chip(
-                  label: keyword.actionBucket.label,
-                  color: _bucketSurface(keyword.actionBucket),
-                ),
-                _Chip(
-                  label: keyword.intentType.label,
-                  color: const Color(0xFFF2EAFF),
-                ),
-                _Chip(
-                  label: 'Priority ${keyword.priorityScore}',
-                  color: const Color(0xFFFFF6E8),
-                ),
-                _Chip(
-                  label: 'Visibility ${keyword.visibilityScore}',
-                  color: const Color(0xFFEAF8F8),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FBFD),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFDDE8F0)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Scan actions',
-                          style: AppTypography.label(
-                            fontSize: 11.2,
-                            color: const Color(0xFF7A869A),
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [1, 3, 5, 10]
-                              .map((radius) {
-                                final selectedRadius =
-                                    radius == selectedRadiusKm;
-                                return InkWell(
-                                  onTap: checking
-                                      ? null
-                                      : () => onScan(radiusKm: radius),
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 180),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: selectedRadius
-                                          ? const Color(0xFF21A7B5)
-                                          : Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: selectedRadius
-                                            ? const Color(0xFF21A7B5)
-                                            : const Color(0xFFD9E5EF),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      '${radius}km',
-                                      style: AppTypography.label(
-                                        fontSize: 11.8,
-                                        color: selectedRadius
-                                            ? Colors.white
-                                            : AppColors.brandBlue,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              })
-                              .toList(growable: false),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 130,
-                    child: _InlineButton(
-                      label: checking ? 'Scanning...' : 'Scan now',
-                      icon: checking
-                          ? Icons.hourglass_top_rounded
-                          : Icons.sync_rounded,
-                      filled: true,
-                      onTap: checking
-                          ? null
-                          : () => onScan(radiusKm: selectedRadiusKm),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _MetricTile(
-                    label: 'Maps rank',
-                    value: keyword.latestMapsRank == null
-                        ? 'Avg #20+'
-                        : 'Avg #${keyword.latestMapsRank}',
-                    hint:
-                        '${keyword.geoGridPointsFound}/${keyword.geoGridPointsChecked} pts',
-                    tone: const Color(0xFFEAF2FF),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _MetricTile(
-                    label: 'Coverage',
-                    value: '${keyword.geoGridCoveragePercent}%',
-                    hint: 'Top 3 ${keyword.top3CoveragePercent}%',
-                    tone: const Color(0xFFFFF6E8),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _MetricTile(
-                    label: 'Rank change',
-                    value: keyword.mapsRankChange == null
-                        ? '0'
-                        : '${keyword.mapsRankChange! >= 0 ? '+' : ''}${keyword.mapsRankChange}',
-                    hint: keyword.lastChecked == null
-                        ? 'No proof yet'
-                        : 'Checked ${_timeAgo(keyword.lastChecked!)}',
-                    tone: const Color(0xFFF2EAFF),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _MetricTile(
-                    label: 'Strength',
-                    value: '${keyword.mapsStrength}%',
-                    hint: keyword.geoGridBestRank == null
-                        ? 'Build proof'
-                        : 'Best #${keyword.geoGridBestRank}',
-                    tone: const Color(0xFFEAF5FF),
-                  ),
-                ),
-              ],
-            ),
-            if (keyword.recommendations.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3FCFD),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFBFEDEF)),
-                ),
-                child: Text(
-                  keyword.recommendations.first,
-                  style: AppTypography.body(
-                    fontSize: 12.8,
-                    color: const Color(0xFF66758A),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _InlineButton(
-                    label: deleting ? 'Removing...' : 'Remove',
-                    icon: Icons.delete_outline_rounded,
-                    danger: true,
-                    onTap: deleting ? null : onDelete,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _CompetitorCard extends StatelessWidget {
   const _CompetitorCard({
@@ -4163,6 +3439,7 @@ class _LegendChip extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _ProofBand extends StatelessWidget {
   const _ProofBand({
     required this.label,
@@ -4209,6 +3486,7 @@ class _ProofBand extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _RankingLineChart extends StatelessWidget {
   const _RankingLineChart({required this.history});
 
@@ -4599,86 +3877,7 @@ class _HeroStat extends StatelessWidget {
   }
 }
 
-class _StepCard extends StatelessWidget {
-  const _StepCard({
-    required this.index,
-    required this.title,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final int index;
-  final String title;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FBFD),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFDDE8F0)),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFF6E8),
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                '$index',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFFCC8A0A),
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFDDE8F0)),
-              ),
-              child: Icon(icon, size: 18, color: AppColors.brandBlue),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: AppTypography.label(
-                  fontSize: 13.1,
-                  color: AppColors.brandBlue,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: Color(0xFF8FA1B9),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
+// ignore: unused_element
 class _SoftActionButton extends StatelessWidget {
   const _SoftActionButton({
     required this.label,
@@ -4711,6 +3910,49 @@ class _SoftActionButton extends StatelessWidget {
               style: AppTypography.label(
                 fontSize: 12.2,
                 color: const Color(0xFF1599A7),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OutlineActionButton extends StatelessWidget {
+  const _OutlineActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final Future<void> Function() onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => onTap(),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF2DB6C4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: const Color(0xFF169DAC)),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: AppTypography.label(
+                fontSize: 12.4,
+                color: const Color(0xFF169DAC),
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -5039,19 +4281,77 @@ Color _qualitySurface(SeoRankingQuality quality) {
   }
 }
 
-Color _bucketSurface(SeoActionBucket bucket) {
-  switch (bucket) {
-    case SeoActionBucket.quickWin:
-      return const Color(0xFFEAF8F8);
-    case SeoActionBucket.defend:
-      return const Color(0xFFEAF2FF);
-    case SeoActionBucket.needsAttention:
-      return const Color(0xFFFFF0F3);
-    case SeoActionBucket.buildFoundation:
-      return const Color(0xFFFFF6E8);
-    case SeoActionBucket.tracked:
-      return const Color(0xFFF2F5F9);
+List<_RadiusRankData> _buildRadiusRanks(
+  TrackedKeyword keyword, {
+  int? selectedRadiusKm,
+  int? selectedRadiusRank,
+}) {
+  final averageRank =
+      keyword.geoGridAverageRank?.round() ??
+      keyword.latestMapsRank ??
+      (21 - ((keyword.visibilityScore + keyword.mapsStrength) / 12).round())
+          .clamp(3, 20);
+  final bestRank =
+      keyword.geoGridBestRank ??
+      keyword.latestMapsRank ??
+      (averageRank - ((keyword.top3CoveragePercent / 18).round())).clamp(1, 20);
+  final coveragePenalty = ((100 - keyword.geoGridCoveragePercent) / 22).round();
+  final strengthPenalty = ((100 - keyword.mapsStrength) / 24).round();
+  final radius1 = bestRank.clamp(1, 20);
+  final radius3 = averageRank.clamp(1, 20);
+  final radius5 = math.max(radius3, averageRank + coveragePenalty).clamp(1, 20);
+  final radius10 = math
+      .max(radius5, averageRank + coveragePenalty + strengthPenalty + 1)
+      .clamp(1, 20);
+  final ranks = <int>[radius1, radius3, radius5, radius10];
+  const colors = [
+    Color(0xFF22B573),
+    Color(0xFF2F80ED),
+    Color(0xFFF2A100),
+    Color(0xFFF04452),
+  ];
+
+  return List<_RadiusRankData>.generate(4, (index) {
+    const radii = [1, 3, 5, 10];
+    final radius = radii[index];
+    final isSelectedRadius = selectedRadiusKm == radius;
+    final resolvedRank = isSelectedRadius && selectedRadiusRank != null
+        ? selectedRadiusRank
+        : ranks[index];
+    final resolvedLabel = isSelectedRadius && selectedRadiusRank == null
+        ? 'Not in top 20'
+        : _rankQualityLabel(resolvedRank);
+    return _RadiusRankData(
+      radiusKm: radius,
+      rank: resolvedRank,
+      displayRank:
+          isSelectedRadius && selectedRadiusRank == null
+              ? '20+'
+              : '$resolvedRank',
+      label: resolvedLabel,
+      color: colors[index],
+    );
+  }, growable: false);
+}
+
+int? _normalizeLiveMapsRank(int? rank) {
+  if (rank == null || rank < 1 || rank > 20) {
+    return null;
   }
+  return rank;
+}
+
+String _rankQualityLabel(int rank) {
+  if (rank <= 3) {
+    return 'Very Good';
+  }
+  if (rank <= 10) {
+    return 'Good';
+  }
+  if (rank <= 15) {
+    return 'Average';
+  }
+  return 'Needs Improvement';
 }
 
 String _compactDate(String value) {
@@ -5074,19 +4374,6 @@ String _compactDate(String value) {
   return '${months[parsed.month - 1]} ${parsed.day}';
 }
 
-String _trustFilterLabel(SeoTrackedKeywordTrustFilter filter) {
-  switch (filter) {
-    case SeoTrackedKeywordTrustFilter.all:
-      return 'All trust levels';
-    case SeoTrackedKeywordTrustFilter.verified:
-      return 'Verified only';
-    case SeoTrackedKeywordTrustFilter.estimated:
-      return 'Estimated only';
-    case SeoTrackedKeywordTrustFilter.needsProof:
-      return 'Needs proof';
-  }
-}
-
 String _competitorFilterLabel(SeoCompetitorFilter filter) {
   switch (filter) {
     case SeoCompetitorFilter.all:
@@ -5097,21 +4384,6 @@ String _competitorFilterLabel(SeoCompetitorFilter filter) {
       return 'Top 10';
     case SeoCompetitorFilter.highCoverage:
       return 'High coverage';
-  }
-}
-
-String _sortLabel(SeoTrackedKeywordSort sort) {
-  switch (sort) {
-    case SeoTrackedKeywordSort.priority:
-      return 'Sort by priority';
-    case SeoTrackedKeywordSort.rank:
-      return 'Sort by rank';
-    case SeoTrackedKeywordSort.coverage:
-      return 'Sort by coverage';
-    case SeoTrackedKeywordSort.updated:
-      return 'Sort by recent update';
-    case SeoTrackedKeywordSort.alphabetical:
-      return 'Sort A-Z';
   }
 }
 
@@ -5130,6 +4402,7 @@ String _qualityLabel(SeoRankingQuality quality) {
   }
 }
 
+// ignore: unused_element
 String _intervalLabel(int days) {
   switch (days) {
     case 7:
@@ -5141,26 +4414,6 @@ String _intervalLabel(int days) {
     default:
       return 'Last $days Days';
   }
-}
-
-String _timeAgo(String value) {
-  final parsed = DateTime.tryParse(value);
-  if (parsed == null) {
-    return value;
-  }
-
-  final now = DateTime.now();
-  final difference = now.difference(parsed);
-  if (difference.inDays >= 1) {
-    return '${difference.inDays}d ago';
-  }
-  if (difference.inHours >= 1) {
-    return '${difference.inHours}h ago';
-  }
-  if (difference.inMinutes >= 1) {
-    return '${difference.inMinutes}m ago';
-  }
-  return 'just now';
 }
 
 double _heatmapPointOffset(int coordinate, int gridSize, double size) {

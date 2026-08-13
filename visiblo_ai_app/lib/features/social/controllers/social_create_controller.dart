@@ -56,6 +56,7 @@ class SocialCreateController extends GetxController {
   final regeneratingTextPostId = RxnString();
   final regeneratingImagePostId = RxnString();
   String _loadedBusinessId = '';
+  CancelToken? _generationCancelToken;
   CancelToken? _textRegenerationCancelToken;
 
   String get businessId =>
@@ -95,6 +96,9 @@ class SocialCreateController extends GetxController {
       return;
     }
 
+    _generationCancelToken?.cancel();
+    final cancelToken = CancelToken();
+    _generationCancelToken = cancelToken;
     isGenerating.value = true;
     errorMessage.value = null;
     successMessage.value = null;
@@ -124,6 +128,7 @@ class SocialCreateController extends GetxController {
           language: language,
           textLength: textLength,
           imageQuality: _qualityValue(quality),
+          cancelToken: cancelToken,
         );
         results.add(
           GeneratedSocialPost(
@@ -153,10 +158,25 @@ class SocialCreateController extends GetxController {
       _mergeGeneratedPosts(results);
       successMessage.value = 'Generated ${results.length} posts.';
     } catch (error) {
+      if (_isGenerationStopped(error)) {
+        successMessage.value = 'Generation stopped.';
+        return;
+      }
       errorMessage.value = _humanizeError(error);
     } finally {
+      if (identical(_generationCancelToken, cancelToken)) {
+        _generationCancelToken = null;
+      }
       isGenerating.value = false;
     }
+  }
+
+  void stopGeneration() {
+    _generationCancelToken?.cancel('Generation stopped.');
+    _generationCancelToken = null;
+    isGenerating.value = false;
+    errorMessage.value = null;
+    successMessage.value = 'Generation stopped.';
   }
 
   Future<void> publishPost(GeneratedSocialPost post) async {
@@ -196,7 +216,10 @@ class SocialCreateController extends GetxController {
       return;
     }
     try {
-      await _socialApiService.deleteDraft(businessId: businessId, postId: post.id);
+      await _socialApiService.deleteDraft(
+        businessId: businessId,
+        postId: post.id,
+      );
       generatedPosts.removeWhere((item) => item.id == post.id);
       successMessage.value = '${post.platform} draft deleted.';
     } catch (error) {
@@ -216,7 +239,9 @@ class SocialCreateController extends GetxController {
       _loadedBusinessId = '';
       return;
     }
-    if (!force && _loadedBusinessId == businessId && generatedPosts.isNotEmpty) {
+    if (!force &&
+        _loadedBusinessId == businessId &&
+        generatedPosts.isNotEmpty) {
       return;
     }
 
