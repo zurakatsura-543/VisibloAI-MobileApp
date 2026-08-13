@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../../../core/api_client.dart';
+import '../../../core/notification_service.dart';
 import '../../onboarding/models/google_business_location.dart';
 import '../models/auth_me_response.dart';
 import '../models/alert_center_models.dart';
@@ -23,6 +24,23 @@ import '../models/settings_models.dart';
 import '../models/subscription_payment_record.dart';
 import '../models/website_manager_models.dart';
 
+class BusinessSubscriptionRequiredException implements Exception {
+  const BusinessSubscriptionRequiredException({
+    required this.message,
+    required this.businessId,
+    required this.businessName,
+    required this.subscriptionStatus,
+  });
+
+  final String message;
+  final String businessId;
+  final String businessName;
+  final String subscriptionStatus;
+
+  @override
+  String toString() => message;
+}
+
 class AuthApiService extends GetxService {
   final Dio _api = ApiClient().dio;
   bool _hasActiveSession = false;
@@ -31,6 +49,9 @@ class AuthApiService extends GetxService {
 
   Future<AuthApiService> init() async {
     _hasActiveSession = await hasStoredAuthSession();
+    if (_hasActiveSession) {
+      Get.find<NotificationService>().registerDeviceToken();
+    }
     return this;
   }
 
@@ -95,6 +116,7 @@ class AuthApiService extends GetxService {
       );
 
       await _persistAccessToken(response.data);
+      Get.find<NotificationService>().registerDeviceToken();
       return fetchMyData();
     } on DioException catch (error) {
       await clearSession();
@@ -151,6 +173,7 @@ class AuthApiService extends GetxService {
       );
 
       await _persistAccessToken(response.data);
+      Get.find<NotificationService>().registerDeviceToken();
       return fetchMyData();
     } on DioException catch (error) {
       await clearSession();
@@ -174,6 +197,7 @@ class AuthApiService extends GetxService {
       );
 
       await _persistAccessToken(response.data);
+      Get.find<NotificationService>().registerDeviceToken();
       return fetchMyData();
     } on DioException catch (error) {
       await clearSession();
@@ -389,6 +413,26 @@ class AuthApiService extends GetxService {
       await _persistAccessTokenIfPresent(response.data);
       return fetchMyData();
     } on DioException catch (error) {
+      final data = error.response?.data;
+      if (data is Map) {
+        final map = Map<String, dynamic>.from(data);
+        final messageData = map['message'];
+        final details = messageData is Map
+            ? Map<String, dynamic>.from(messageData)
+            : map;
+        if ((details['error'] ?? '').toString().trim().toUpperCase() ==
+            'SUBSCRIPTION_REQUIRED') {
+          throw BusinessSubscriptionRequiredException(
+            message: _readErrorMessage(error),
+            businessId: (details['businessId'] ?? businessId).toString().trim(),
+            businessName: (details['businessName'] ?? '').toString().trim(),
+            subscriptionStatus: (details['subscriptionStatus'] ?? '')
+                .toString()
+                .trim()
+                .toUpperCase(),
+          );
+        }
+      }
       throw Exception(_readErrorMessage(error));
     } catch (error) {
       throw Exception(
@@ -485,6 +529,7 @@ class AuthApiService extends GetxService {
 
   Future<void> logoutBackend() async {
     try {
+      await Get.find<NotificationService>().unregisterDeviceToken();
       await _api.get('/auth/logout');
     } catch (_) {
       // Ignore backend logout failures and still clear the local token.
@@ -559,7 +604,13 @@ class AuthApiService extends GetxService {
     final responseData = error.response?.data;
     if (responseData is Map) {
       final map = Map<String, dynamic>.from(responseData);
-      final directMessage = (map['message'] ?? map['error'] ?? '').toString();
+      final rawMessage = map['message'];
+      final nestedMessage = rawMessage is Map
+          ? (rawMessage['message'] ?? rawMessage['error'] ?? '').toString()
+          : rawMessage?.toString() ?? '';
+      final directMessage =
+          (nestedMessage.isNotEmpty ? nestedMessage : map['error'] ?? '')
+              .toString();
       if (directMessage.trim().isNotEmpty) {
         return directMessage.trim();
       }
@@ -1476,6 +1527,7 @@ class AuthApiService extends GetxService {
     required String code,
     required String plan,
     required String billingCycle,
+    String? businessId,
   }) async {
     try {
       final response = await _api.post(
@@ -1484,6 +1536,8 @@ class AuthApiService extends GetxService {
           'code': code.trim().toUpperCase(),
           'plan': plan.trim().toUpperCase(),
           'billingCycle': normalizeBillingCycle(billingCycle),
+          if (businessId != null && businessId.trim().isNotEmpty)
+            'businessId': businessId.trim(),
         },
       );
       return BillingCouponValidationResult.fromMap(_asMap(response.data));
@@ -1503,6 +1557,7 @@ class AuthApiService extends GetxService {
     required String code,
     required String plan,
     required String billingCycle,
+    String? businessId,
   }) async {
     try {
       await _api.post(
@@ -1511,6 +1566,8 @@ class AuthApiService extends GetxService {
           'code': code.trim().toUpperCase(),
           'plan': plan.trim().toUpperCase(),
           'billingCycle': normalizeBillingCycle(billingCycle),
+          if (businessId != null && businessId.trim().isNotEmpty)
+            'businessId': businessId.trim(),
         },
       );
     } on DioException catch (error) {
@@ -1616,11 +1673,10 @@ class AuthApiService extends GetxService {
         },
       );
       final data = _asMap(response.data);
-      final invoices =
-          (data['invoices'] as List<dynamic>? ?? const <dynamic>[])
-              .whereType<Map<String, dynamic>>()
-              .map(SubscriptionPaymentRecord.fromInvoiceMap)
-              .toList(growable: false);
+      final invoices = (data['invoices'] as List<dynamic>? ?? const <dynamic>[])
+          .whereType<Map<String, dynamic>>()
+          .map(SubscriptionPaymentRecord.fromInvoiceMap)
+          .toList(growable: false);
       return invoices;
     } on DioException catch (error) {
       throw Exception(_readErrorMessage(error));
@@ -2456,11 +2512,15 @@ class AuthApiService extends GetxService {
   Future<List<KeywordRankingPoint>> fetchRankingHistory(
     String keywordId, {
     int days = 30,
+    int? radiusKm,
   }) async {
     try {
       final response = await _api.get(
         '/seo/keywords/$keywordId/rankings',
-        queryParameters: <String, dynamic>{'days': days},
+        queryParameters: <String, dynamic>{
+          'days': days,
+          'radiusKm': radiusKm,
+        }..removeWhere((key, value) => value == null),
       );
       final raw = response.data as List?;
       if (raw == null) return const <KeywordRankingPoint>[];
