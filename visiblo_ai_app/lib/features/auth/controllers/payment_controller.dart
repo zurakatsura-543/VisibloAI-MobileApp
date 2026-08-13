@@ -52,6 +52,7 @@ class PaymentController extends GetxController {
   final checkoutContext = Rxn<BillingCheckoutContext>();
   final subscriptionStatus = Rxn<BillingSubscriptionStatus>();
   final billingUsage = Rxn<BillingUsageInfo>();
+  final billingTargetBusiness = Rxn<Map<String, dynamic>>();
   final remoteInvoices = <SubscriptionPaymentRecord>[].obs;
   final downloadingInvoiceIds = <String>{}.obs;
   final isDownloadingAllInvoices = false.obs;
@@ -70,6 +71,7 @@ class PaymentController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    syncBillingTargetFromRouteArguments();
     couponCodeController.addListener(_handleCouponChanged);
     _setupRazorpay();
     unawaited(loadInitialData());
@@ -87,6 +89,45 @@ class PaymentController extends GetxController {
   TestAccount? get currentUser => _localAuthService.currentUser.value;
   GoogleBusinessLocation? get activatedGoogleLocation =>
       _onboardingController.activatedGoogleLocation.value;
+  bool get hasExternalBillingTarget =>
+      (billingTargetBusiness.value?['id']?.toString().trim() ?? '').isNotEmpty;
+  String get billingTargetBusinessId =>
+      billingTargetBusiness.value?['id']?.toString().trim() ??
+      checkoutContext.value?.business.id ??
+      '';
+  String get billingTargetLocationId =>
+      billingTargetBusiness.value?['locationId']?.toString().trim() ?? '';
+
+  void syncBillingTargetFromRouteArguments() {
+    final args = Get.arguments;
+    if (args is! Map) {
+      return;
+    }
+    final rawTarget = args['billingTargetBusiness'];
+    if (rawTarget is Map) {
+      setBillingTargetBusiness(Map<String, dynamic>.from(rawTarget));
+    }
+  }
+
+  void setBillingTargetBusiness(Map<String, dynamic> business) {
+    final businessId = business['id']?.toString().trim() ?? '';
+    if (businessId.isEmpty) {
+      return;
+    }
+    final existingBusinessId =
+        billingTargetBusiness.value?['id']?.toString().trim() ?? '';
+    if (existingBusinessId == businessId) {
+      return;
+    }
+    billingTargetBusiness.value = Map<String, dynamic>.from(business);
+    final plan = business['plan']?.toString().trim().toUpperCase() ?? '';
+    if (plan.isNotEmpty) {
+      selectedPlanCode.value = plan;
+    }
+    if (!_hasUserOverriddenBillingMode) {
+      selectedBillingMode.value = 'MANUAL';
+    }
+  }
 
   List<BillingPlanDefinition> get plans {
     final catalogs =
@@ -94,13 +135,26 @@ class PaymentController extends GetxController {
     if (catalogs.isEmpty) {
       return BillingPlanDefinition.plans;
     }
-    return catalogs
-        .map(BillingPlanDefinition.fromCatalog)
-        .toList(growable: false);
+    final displayPlans = <BillingPlanDefinition>[];
+    for (final catalog in catalogs) {
+      final fallback = BillingPlanDefinition.forCode(catalog.code);
+      if (fallback.code == catalog.code.toUpperCase()) {
+        displayPlans.add(fallback);
+      } else {
+        displayPlans.add(BillingPlanDefinition.fromCatalog(catalog));
+      }
+    }
+    return displayPlans;
   }
 
   BillingPlanDefinition get selectedPlan {
-    return BillingPlanDefinition.forCode(selectedPlanCode.value);
+    final selectedCode = selectedPlanCode.value.trim().toUpperCase();
+    for (final plan in plans) {
+      if (plan.code == selectedCode || plan.key == selectedCode) {
+        return plan;
+      }
+    }
+    return BillingPlanDefinition.forCode(selectedCode);
   }
 
   String get activePlanCode {
@@ -143,7 +197,10 @@ class PaymentController extends GetxController {
 
   String get selectedBusinessName {
     final primaryBusiness = remoteProfile.value?.primaryBusiness;
+    final targetBusiness = billingTargetBusiness.value;
     final values = <String>[
+      targetBusiness?['name']?.toString() ?? '',
+      targetBusiness?['businessName']?.toString() ?? '',
       activatedGoogleLocation?.title ?? '',
       currentUser?.businessName ?? '',
       checkoutContext.value?.business.name ?? '',
@@ -157,7 +214,10 @@ class PaymentController extends GetxController {
   }
 
   String get selectedBusinessLocationLabel {
+    final targetBusiness = billingTargetBusiness.value;
     final values = <String>[
+      targetBusiness?['address']?.toString() ?? '',
+      targetBusiness?['locationName']?.toString() ?? '',
       activatedGoogleLocation?.conciseAddress ?? '',
       currentUser?.city ?? '',
       currentUser?.country ?? '',
@@ -181,11 +241,15 @@ class PaymentController extends GetxController {
 
   String get selectedBusinessLogoUrl {
     final primaryBusiness = remoteProfile.value?.primaryBusiness;
+    final targetBusiness = billingTargetBusiness.value;
     final photoPath = currentUser?.businessPhotoPath.trim() ?? '';
     final photoPathIsUrl =
         photoPath.isNotEmpty &&
         (photoPath.startsWith('http://') || photoPath.startsWith('https://'));
     return _firstNonEmpty(<String>[
+      targetBusiness?['logoUrl']?.toString() ?? '',
+      targetBusiness?['photoUrl']?.toString() ?? '',
+      targetBusiness?['imageUrl']?.toString() ?? '',
       activatedGoogleLocation?.logoUrl ?? '',
       primaryBusiness?['logoUrl']?.toString() ?? '',
       primaryBusiness?['photoUrl']?.toString() ?? '',
@@ -239,6 +303,9 @@ class PaymentController extends GetxController {
   }
 
   bool get hasActiveSubscription {
+    if (hasExternalBillingTarget) {
+      return false;
+    }
     const inactiveStates = <String>{
       'NOT_ACTIVATED',
       'PAYMENT_REQUIRED',
@@ -541,7 +608,7 @@ class PaymentController extends GetxController {
         _settle(_authApiService.fetchBillingUsage()),
         _settle(
           _authApiService.fetchBillingInvoices(
-            businessId: checkoutContext.value?.business.id,
+            businessId: billingTargetBusinessId,
           ),
         ),
       ]);
@@ -798,6 +865,7 @@ class PaymentController extends GetxController {
         code: code,
         plan: selectedPlan.code,
         billingCycle: selectedBillingCycle.value,
+        businessId: billingTargetBusinessId,
       );
 
       if (!result.valid) {
@@ -865,7 +933,7 @@ class PaymentController extends GetxController {
         plan: plan.code,
         billingCycle: selectedBillingCycle.value,
         couponCode: hasAppliedCoupon ? couponCode.value : null,
-        businessId: checkoutContext.value?.business.id,
+        businessId: billingTargetBusinessId,
       );
 
       if (order.orderId.trim().isEmpty ||
@@ -906,6 +974,11 @@ class PaymentController extends GetxController {
         'theme': <String, dynamic>{'color': '#17A2B8'},
         'retry': <String, dynamic>{'enabled': true, 'max_count': 4},
         'send_sms_hash': true,
+        'notes': <String, dynamic>{
+          'subtotalAmount': order.subtotalAmount,
+          'payableAmount': order.payableAmount,
+          'razorpayOrderAmount': order.amount,
+        },
       };
 
       _razorpay?.open(options);
@@ -999,10 +1072,15 @@ class PaymentController extends GetxController {
         code: code,
         plan: selectedPlan.code,
         billingCycle: selectedBillingCycle.value,
+        businessId: billingTargetBusinessId,
       );
       _clearCouponState(clearInput: true);
       infoMessage.value =
           'Plan activated successfully with coupon $code. Refreshing your account now...';
+      if (hasExternalBillingTarget) {
+        await _activateBillingTargetAfterSuccessfulPayment();
+        return;
+      }
       await loadInitialData(
         manualRefresh: true,
         preserveInfoMessage: true,
@@ -1044,13 +1122,13 @@ class PaymentController extends GetxController {
     try {
       final response = canResumeAutopay
           ? await _authApiService.resumeBillingSubscription(
-              businessId: checkoutContext.value?.business.id,
+              businessId: billingTargetBusinessId,
             )
           : await _authApiService.createBillingSubscription(
               plan: plan.code,
               billingCycle: selectedBillingCycle.value,
               couponCode: hasAppliedCoupon ? couponCode.value : null,
-              businessId: checkoutContext.value?.business.id,
+              businessId: billingTargetBusinessId,
             );
 
       if (response.alreadyActive && response.subscription != null) {
@@ -1139,7 +1217,7 @@ class PaymentController extends GetxController {
           razorpaySignature: response.signature?.trim() ?? '',
           plan: plan.code,
           billingCycle: billingCycle,
-          businessId: checkoutContext.value?.business.id,
+          businessId: billingTargetBusinessId,
         );
       } else {
         await _authApiService.verifyBillingPayment(
@@ -1150,19 +1228,26 @@ class PaymentController extends GetxController {
           razorpaySignature: response.signature?.trim() ?? '',
           plan: plan.code,
           billingCycle: billingCycle,
-          businessId: checkoutContext.value?.business.id,
+          businessId: billingTargetBusinessId,
         );
       }
+
+      final localPaymentAmountPaise = (order?.payableAmount ?? 0) > 0
+          ? order!.payableAmount
+          : (order?.amount ?? selectedPlan.subtotalFor(billingCycle) * 100);
 
       await _recordSuccessfulLocalPayment(
         plan: plan,
         billingCycle: billingCycle,
-        amountPaise:
-            order?.amount ?? selectedPlan.subtotalFor(billingCycle) * 100,
+        amountPaise: localPaymentAmountPaise,
       );
       _clearCouponState(clearInput: true);
       infoMessage.value =
           'Payment confirmed. Refreshing your subscription details...';
+      if (hasExternalBillingTarget) {
+        await _activateBillingTargetAfterSuccessfulPayment();
+        return;
+      }
       await loadInitialData(
         manualRefresh: true,
         preserveInfoMessage: true,
@@ -1187,13 +1272,24 @@ class PaymentController extends GetxController {
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
-    final message = _stringValue(response.message);
-    if (message.toLowerCase().contains('cancel')) {
+    final message = _stringValue(response.message).trim();
+    final normalizedMessage = message.toLowerCase();
+    final code = response.code;
+    final isUserClosedCheckout =
+        code == Razorpay.PAYMENT_CANCELLED ||
+        normalizedMessage.isEmpty ||
+        normalizedMessage == 'undefined' ||
+        normalizedMessage.contains('cancel') ||
+        normalizedMessage.contains('dismiss') ||
+        normalizedMessage.contains('closed');
+
+    errorMessage.value = null;
+    if (isUserClosedCheckout) {
       infoMessage.value = 'Payment cancelled. You can try again when ready.';
     } else {
       errorMessage.value = message.isNotEmpty
           ? message
-          : 'Razorpay could not complete the payment.';
+          : 'Razorpay could not complete the payment. Please try again.';
     }
     _clearPendingCheckout();
   }
@@ -1310,6 +1406,30 @@ class PaymentController extends GetxController {
     await _localAuthService.updateCurrentUser(updatedUser);
   }
 
+  Future<void> _activateBillingTargetAfterSuccessfulPayment() async {
+    final businessId = billingTargetBusinessId;
+    final locationId = billingTargetLocationId;
+    if (businessId.isEmpty || locationId.isEmpty) {
+      await loadInitialData(
+        manualRefresh: true,
+        preserveInfoMessage: true,
+        syncSelectionToActivePlan: true,
+      );
+      infoMessage.value =
+          'Payment confirmed. Please switch to the restored business from settings.';
+      return;
+    }
+
+    final profile = await _authApiService.setActiveLocation(
+      businessId: businessId,
+      locationId: locationId,
+    );
+    billingTargetBusiness.value = null;
+    await _syncLocalUser(profile);
+    infoMessage.value = 'Access restored. Opening your business dashboard...';
+    Get.offAllNamed(AppRoutes.unifiedDashboard);
+  }
+
   Future<File> _writeInvoiceFile(
     List<int> bytes, {
     required String suggestedFileName,
@@ -1408,9 +1528,8 @@ class PaymentController extends GetxController {
       case 'SINGLE':
         return 'starter';
       case 'PREMIUM':
-        return 'premium';
       case 'ENTERPRISE':
-        return 'enterprise';
+        return 'premium';
       case 'PRO':
       default:
         return 'growth';
@@ -1422,10 +1541,16 @@ class PaymentController extends GetxController {
     if (message.isEmpty) {
       return fallback;
     }
-    if (message.startsWith('Exception: ')) {
-      return message.replaceFirst('Exception: ', '');
+    final cleanMessage = message.startsWith('Exception: ')
+        ? message.replaceFirst('Exception: ', '')
+        : message;
+    if (cleanMessage.toLowerCase().contains(
+          'razorpay autopay plan is not configured',
+        ) ||
+        cleanMessage.contains('RAZORPAY_PLAN_')) {
+      return 'AutoPay is not configured for this plan and billing cycle yet. Please use manual checkout, or ask the admin to add the Razorpay plan id in Cloud Run.';
     }
-    return message;
+    return cleanMessage;
   }
 
   String _firstNonEmpty(List<String> values) {
