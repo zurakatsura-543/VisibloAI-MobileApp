@@ -3182,11 +3182,18 @@ class _CycleOption extends StatelessWidget {
   }
 }
 
-class _MiniPlanCard extends StatelessWidget {
-  const _MiniPlanCard({required this.controller, required this.plan});
+class _PlanOfferCard extends StatelessWidget {
+  const _PlanOfferCard({
+    required this.controller,
+    required this.plan,
+    required this.expanded,
+    required this.onToggleExpanded,
+  });
 
   final PaymentController controller;
   final BillingPlanDefinition plan;
+  final bool expanded;
+  final VoidCallback onToggleExpanded;
 
   @override
   Widget build(BuildContext context) {
@@ -3199,186 +3206,281 @@ class _MiniPlanCard extends StatelessWidget {
       _ => 'PLAN',
     };
     final accentColor = _planAccentColor(plan.code);
-    final buttonColor = isSelected
-        ? AppColors.primary
-        : const Color(0xFF42BCCC);
+    final isYearly = controller.selectedBillingCycle.value == 'yearly';
+    final price = plan.priceFor(controller.selectedBillingCycle.value);
 
-    return SizedBox(
-      width: 180,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => controller.selectPlan(plan.code),
-          borderRadius: BorderRadius.circular(16),
-          child: AnimatedScale(
-            duration: const Duration(milliseconds: 180),
-            scale: isSelected ? 1 : 0.985,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: isSelected ? accentColor : const Color(0xFFDDE6EF),
-                  width: isSelected ? 1.6 : 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: isSelected
-                        ? accentColor.withValues(alpha: 0.22)
-                        : const Color(0x0C003F70),
-                    blurRadius: isSelected ? 20 : 14,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isSelected ? accentColor : const Color(0xFFDDE6EF),
+          width: isSelected ? 1.7 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isSelected
+                ? accentColor.withValues(alpha: 0.18)
+                : const Color(0x0C003F70),
+            blurRadius: isSelected ? 22 : 14,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(
+              color: Color.lerp(accentColor, Colors.white, 0.84),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(21),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          accentColor.withValues(alpha: 0.95),
-                          Color.lerp(
-                                accentColor,
-                                const Color(0xFF0F4E8A),
-                                0.18,
-                              ) ??
-                              accentColor,
-                        ],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ),
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(17),
-                      ),
-                    ),
-                    child: Text(
-                      isActive ? 'CURRENT' : tag,
-                      textAlign: TextAlign.center,
-                      style: AppTypography.label(
-                        fontSize: 9.5,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _shortPlanTitle(plan),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.card(
-                              fontSize: 18,
-                              color: AppColors.brandBlue,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          RichText(
-                            text: TextSpan(
-                              style: AppTypography.body(
-                                fontSize: 13,
-                                color: AppColors.brandBlue,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              children: [
-                                TextSpan(
-                                  text: _formatInr(
-                                    plan.priceFor(
-                                      controller.selectedBillingCycle.value,
-                                    ),
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: '/mo',
-                                  style: AppTypography.body(
-                                    fontSize: 11.5,
-                                    color: AppColors.mutedText,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            controller.selectedBillingCycle.value == 'yearly'
-                                ? 'Billed yearly'
-                                : plan.eyebrow,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.body(
-                              fontSize: 11.5,
-                              color:
-                                  controller.selectedBillingCycle.value ==
-                                      'yearly'
-                                  ? const Color(0xFF1E8D58)
-                                  : AppColors.mutedText,
-                              fontWeight:
-                                  controller.selectedBillingCycle.value ==
-                                      'yearly'
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                for (final feature in plan.features.take(
-                                  3,
-                                )) ...[
-                                  _MiniFeatureRow(
-                                    label: _shortFeature(feature),
-                                  ),
-                                  const SizedBox(height: 7),
-                                ],
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton(
-                              onPressed: () => controller.selectPlan(plan.code),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: buttonColor,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 11,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: Text(
-                                isActive ? 'Current Plan' : 'Select Plan',
-                                style: AppTypography.button(
-                                  fontSize: 12.5,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+            ),
+            child: Text(
+              isActive ? 'CURRENT' : tag,
+              textAlign: TextAlign.center,
+              style: AppTypography.label(
+                fontSize: 10.2,
+                color: accentColor,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
               ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 380;
+                    final detailsAction = TextButton.icon(
+                      onPressed: onToggleExpanded,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.brandBlue,
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      icon: Icon(
+                        expanded
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        size: 18,
+                      ),
+                      label: Text(expanded ? 'Hide details' : 'Show details'),
+                    );
+
+                    final header = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _shortPlanTitle(plan),
+                          style: AppTypography.card(
+                            fontSize: 22,
+                            color: AppColors.brandBlue,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          plan.description.replaceFirst('Best For: ', ''),
+                          style: AppTypography.body(
+                            fontSize: 13,
+                            color: AppColors.mutedText,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    );
+
+                    if (compact) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          header,
+                          const SizedBox(height: 10),
+                          detailsAction,
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: header),
+                        const SizedBox(width: 12),
+                        detailsAction,
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    RichText(
+                      text: TextSpan(
+                        style: AppTypography.card(
+                          fontSize: 16,
+                          color: AppColors.brandBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: _formatInr(price),
+                            style: AppTypography.card(
+                              fontSize: 24,
+                              color: AppColors.brandBlue,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          TextSpan(
+                            text: '/mo',
+                            style: AppTypography.body(
+                              fontSize: 13,
+                              color: AppColors.mutedText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (isYearly)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEAFBF2),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          'Save ${_formatInr(plan.annualSavingsInr())} yearly',
+                          style: AppTypography.label(
+                            fontSize: 10.8,
+                            color: const Color(0xFF168554),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isYearly
+                      ? '${_formatInr(plan.yearlyTotalInr ?? price * 12)} billed yearly'
+                      : _cycleLabel(controller.selectedBillingCycle.value),
+                  style: AppTypography.body(
+                    fontSize: 12.4,
+                    color: isYearly
+                        ? const Color(0xFF168554)
+                        : AppColors.mutedText,
+                    fontWeight: isYearly ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _PlanInfoChip(
+                      label: plan.capacityLabel,
+                      background: const Color(0xFFF1F8FF),
+                      foreground: AppColors.brandBlue,
+                    ),
+                    _PlanInfoChip(
+                      label: plan.eyebrow,
+                      background: Color.lerp(accentColor, Colors.white, 0.86)!,
+                      foreground: accentColor,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                for (final feature in expanded ? plan.features : plan.features.take(4)) ...[
+                  _FeatureBullet(label: feature),
+                  const SizedBox(height: 9),
+                ],
+                if (!expanded && plan.features.length > 4)
+                  Text(
+                    '+${plan.features.length - 4} more features',
+                    style: AppTypography.label(
+                      fontSize: 11.5,
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => controller.selectPlan(plan.code),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: isActive
+                          ? Colors.white
+                          : (isSelected ? AppColors.brandBlue : accentColor),
+                      foregroundColor: isActive
+                          ? AppColors.brandBlue
+                          : Colors.white,
+                      side: isActive
+                          ? const BorderSide(color: Color(0xFFD7E2EC))
+                          : BorderSide.none,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text(
+                      isActive ? 'Current Plan' : 'Select Plan',
+                      style: AppTypography.button(
+                        fontSize: 13.4,
+                        color: isActive ? AppColors.brandBlue : Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanInfoChip extends StatelessWidget {
+  const _PlanInfoChip({
+    required this.label,
+    required this.background,
+    required this.foreground,
+  });
+
+  final String label;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: AppTypography.label(
+          fontSize: 11.1,
+          color: foreground,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -3396,7 +3498,7 @@ class _SecurePaymentCard extends StatelessWidget {
     final couponResult = controller.couponResult.value;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       decoration: _cardDecoration(),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -3406,22 +3508,43 @@ class _SecurePaymentCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF31C36E),
-                      shape: BoxShape.circle,
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF8F0),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.lock_rounded,
+                      color: Color(0xFF1C8B57),
+                      size: 20,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Secure payment',
-                    style: AppTypography.button(
-                      fontSize: 14,
-                      color: AppColors.text,
-                      fontWeight: FontWeight.w600,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Secure payment',
+                          style: AppTypography.button(
+                            fontSize: 15.2,
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Choose manual checkout or AutoPay, then complete billing with Razorpay.',
+                          style: AppTypography.body(
+                            fontSize: 12.4,
+                            color: AppColors.mutedText,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -4275,38 +4398,6 @@ class _FeatureBullet extends StatelessWidget {
           child: Text(
             _shortFeature(label),
             style: AppTypography.body(fontSize: 13.1, color: AppColors.text),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MiniFeatureRow extends StatelessWidget {
-  const _MiniFeatureRow({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 5),
-          child: Icon(Icons.circle, size: 5, color: AppColors.text),
-        ),
-        const SizedBox(width: 7),
-        Expanded(
-          child: Text(
-            label,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.body(
-              fontSize: 11.4,
-              color: AppColors.text,
-              fontWeight: FontWeight.w500,
-            ),
           ),
         ),
       ],
