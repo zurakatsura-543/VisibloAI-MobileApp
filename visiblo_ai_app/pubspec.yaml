@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.11.5
@@ -48,12 +48,16 @@ dependencies:
   path_provider: ^2.1.5
   firebase_core: ^4.9.0
   firebase_messaging: ^16.2.2
+  connectivity_plus: ^7.0.0
   open_filex: ^4.7.0
   razorpay_flutter: ^1.4.5
+  firebase_crashlytics: ^5.2.7
+  firebase_app_check: ^0.4.6
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.4
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -61,6 +65,12 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icons/AppLogo.png
+  remove_alpha_ios: true
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -75,7 +85,38 @@ flutter:
 
   assets:
     - assets/icons/
-    - assets/images/
+    - assets/images/AI_Image_Generator.png
+    - assets/images/Festival_Post.png
+    - assets/images/Offer_banner1.png
+    - assets/images/Product_Showcase.png
+    - assets/images/Quote.png
+    - assets/images/Review_card.png
+    - assets/images/app-banner2.png
+    - assets/images/app-banner3.png
+    - assets/images/app-banner5a.png
+    - assets/images/app-banner5b.png
+    - assets/images/app-banner6.png
+    - assets/images/app-banner7.png
+    - assets/images/bakery.png
+    - assets/images/banner1.png
+    - assets/images/category_clinic.svg
+    - assets/images/coffee.png
+    - assets/images/doctor.png
+    - assets/images/eye.png
+    - assets/images/facebook.png
+    - assets/images/fitness.png
+    - assets/images/flowers.png
+    - assets/images/gmb.png
+    - assets/images/google-my-business-icon.png
+    - assets/images/instagram.png
+    - assets/images/link.png
+    - assets/images/location_map_preview.svg
+    - assets/images/makeup.png
+    - assets/images/mall.png
+    - assets/images/office.png
+    - assets/images/parlour.png
+    - assets/images/site.png
+    - assets/images/star.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

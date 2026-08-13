@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
-        android:label="visiblo_ai_app"
+        android:label="VisibloAI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
