@@ -244,19 +244,16 @@ class SeoToolsController extends GetxController {
     }
     errorMessage.value = null;
     try {
-      // Fetch locations and primary SEO data in parallel for faster startup.
+      // Load only the essentials needed for the first paint.
       final loadedLocations = await _authApiService.fetchBusinessLocations();
       locations.assignAll(loadedLocations);
       if (loadedLocations.isNotEmpty && selectedLocationId.value.isEmpty) {
         selectedLocationId.value = loadedLocations.first.id;
       }
-      // Load core keyword workspace — this makes the Keywords tab renderable.
-      await _refreshKeywordWorkspace();
-      // Release the loading spinner immediately so the user sees keywords.
+      await _refreshPrimaryKeywordWorkspace();
       isLoading.value = false;
       isRefreshing.value = false;
-      // Then load secondary data (history, recommendations) in the background.
-      // Competitors and heatmap are loaded lazily when the user taps those tabs.
+      // Then hydrate richer keyword sections and recommendations in the background.
       unawaited(_backgroundLoadSecondaryData());
     } catch (error) {
       errorMessage.value = _humanizeError(
@@ -307,27 +304,47 @@ class SeoToolsController extends GetxController {
   }
 
   Future<void> setRadiusKm(int radius) async {
+    if (selectedRadiusKm.value == radius) return;
     selectedRadiusKm.value = radius;
-    await Future.wait<void>([
-      loadCompetitorData(refresh: false),
-      loadHeatmapData(generate: false),
-    ]);
+    if (activeTab.value == SeoMobileTab.keywords) {
+      await loadRankingHistory();
+    } else if (activeTab.value == SeoMobileTab.competitors) {
+      await loadCompetitorData(refresh: false);
+    } else if (activeTab.value == SeoMobileTab.heatmap) {
+      await loadHeatmapData(generate: false);
+    }
   }
 
   Future<void> addKeyword(String keyword) async {
     final location = selectedLocationId.value;
-    if (location.isEmpty || keyword.trim().isEmpty) return;
+    final cleaned = keyword.trim();
+    if (location.isEmpty) return;
+    if (cleaned.isEmpty) {
+      errorMessage.value = 'Enter a keyword before adding it.';
+      return;
+    }
+    if (isSavingKeyword.value) {
+      return;
+    }
+    final normalized = _normalizeKeyword(cleaned);
+    final exists = keywords.any(
+      (item) => _normalizeKeyword(item.keyword) == normalized,
+    );
+    if (exists) {
+      errorMessage.value = 'This keyword is already in your tracker.';
+      return;
+    }
     isSavingKeyword.value = true;
     errorMessage.value = null;
     try {
       final created = await _authApiService.addTrackedKeyword(
         location,
-        keyword,
+        cleaned,
       );
       keywords.insert(0, created);
       selectedKeywordId.value = created.id;
       infoMessage.value = 'Keyword added. Running the full SEO refresh now.';
-      await _refreshKeywordWorkspace();
+      await _refreshPrimaryKeywordWorkspace();
       await _reloadDependentSeoData();
     } catch (error) {
       errorMessage.value = _humanizeError(
@@ -388,7 +405,7 @@ class SeoToolsController extends GetxController {
               'Scan is taking longer than expected. Please try again in a few seconds.',
             ),
           );
-      await _refreshKeywordWorkspace();
+      await _refreshPrimaryKeywordWorkspace();
       final proofUpdated = await _waitForFreshScanProof(
         keywordId,
         previousHistoryId: previousHistoryId,
@@ -566,29 +583,22 @@ class SeoToolsController extends GetxController {
       return;
     }
 
-    // Step 1: Load core keyword data. The caller releases isLoading after this.
-    await _refreshKeywordWorkspace();
-    // Step 2: Background-load ranking history + recommendations.
-    // Competitors and heatmap are loaded lazily on tab switch.
+    await _refreshPrimaryKeywordWorkspace();
     unawaited(_backgroundLoadSecondaryData());
   }
 
-  Future<void> _refreshKeywordWorkspace() async {
+  Future<void> _refreshPrimaryKeywordWorkspace() async {
     final location = selectedLocationId.value;
     if (location.isEmpty) return;
 
     final results = await Future.wait<dynamic>([
       _authApiService.fetchSeoOverview(location),
       _authApiService.fetchTrackedKeywords(location),
-      _authApiService.fetchKeywordSections(location),
-      _authApiService.fetchKeywordSuggestions(location),
     ]);
 
     overview.value = results[0] as SeoOverviewResponse;
     final loadedKeywords = results[1] as List<TrackedKeyword>;
     keywords.assignAll(loadedKeywords);
-    keywordSections.value = results[2] as KeywordSectionsResponse;
-    suggestions.assignAll(results[3] as List<KeywordSuggestion>);
 
     if (selectedKeywordId.value == null ||
         !loadedKeywords.any((item) => item.id == selectedKeywordId.value)) {
@@ -604,7 +614,29 @@ class SeoToolsController extends GetxController {
     await Future.wait<void>([
       loadRankingHistory(),
       loadRecommendations(),
+      _loadKeywordDiscoveryData(),
     ]);
+  }
+
+  Future<void> _loadKeywordDiscoveryData() async {
+    final location = selectedLocationId.value;
+    if (location.isEmpty) {
+      keywordSections.value = null;
+      suggestions.clear();
+      return;
+    }
+
+    try {
+      final results = await Future.wait<dynamic>([
+        _authApiService.fetchKeywordSections(location),
+        _authApiService.fetchKeywordSuggestions(location),
+      ]);
+      keywordSections.value = results[0] as KeywordSectionsResponse;
+      suggestions.assignAll(results[1] as List<KeywordSuggestion>);
+    } catch (_) {
+      keywordSections.value = null;
+      suggestions.clear();
+    }
   }
 
   /// Legacy full reload — kept for addKeyword / removeKeyword flows where
@@ -630,6 +662,7 @@ class SeoToolsController extends GetxController {
       final history = await _authApiService.fetchRankingHistory(
         keywordId,
         days: rankHistoryDays.value,
+        radiusKm: selectedRadiusKm.value,
       );
       rankingHistory.assignAll(history);
     } catch (error) {
@@ -673,7 +706,7 @@ class SeoToolsController extends GetxController {
       }
       if (attempt < 3) {
         await Future<void>.delayed(const Duration(seconds: 2));
-        await _refreshKeywordWorkspace();
+        await _refreshPrimaryKeywordWorkspace();
       }
     }
     return false;
