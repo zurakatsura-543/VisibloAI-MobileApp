@@ -5,6 +5,7 @@ class BillingPlanDefinition {
     required this.name,
     required this.monthlyPriceInr,
     required this.yearlyMonthlyPriceInr,
+    this.yearlyTotalInr,
     required this.setupFeeLabel,
     required this.eyebrow,
     required this.description,
@@ -19,6 +20,7 @@ class BillingPlanDefinition {
   final String name;
   final int monthlyPriceInr;
   final int yearlyMonthlyPriceInr;
+  final int? yearlyTotalInr;
   final String setupFeeLabel;
   final String eyebrow;
   final String description;
@@ -36,14 +38,14 @@ class BillingPlanDefinition {
   int subtotalFor(String billingCycle) {
     final normalizedCycle = normalizeBillingCycle(billingCycle);
     if (normalizedCycle == 'yearly') {
-      return yearlyMonthlyPriceInr * 12;
+      return yearlyTotalInr ?? yearlyMonthlyPriceInr * 12;
     }
     return monthlyPriceInr;
   }
 
   int annualSavingsInr() {
     final fullYear = monthlyPriceInr * 12;
-    final discountedYear = yearlyMonthlyPriceInr * 12;
+    final discountedYear = subtotalFor('yearly');
     return fullYear - discountedYear;
   }
 
@@ -51,96 +53,66 @@ class BillingPlanDefinition {
     BillingPlanDefinition(
       code: 'SINGLE',
       key: 'STARTER',
-      name: 'Starter Package',
-      monthlyPriceInr: 3999,
-      yearlyMonthlyPriceInr: 3333,
-      setupFeeLabel: 'Rs 4,999 one time',
+      name: 'Starter',
+      monthlyPriceInr: 1999,
+      yearlyMonthlyPriceInr: 1599,
+      yearlyTotalInr: 19190,
+      setupFeeLabel: 'Razorpay verified',
       eyebrow: 'Single business',
       description:
-          'A practical starting package for business owners who want managed visibility, content support, and review replies.',
-      capacityLabel: '1 business location/account',
+          'Best For: Small businesses starting their online growth journey.',
+      capacityLabel: '1 Business Location',
       suitableFor: 'Small businesses, single-location shops, and startups',
-      recommended: true,
       features: <String>[
-        'Basic business profile setup support',
-        '8 social media or post creatives per month',
-        '4 AI-generated business posts per month',
-        'Basic review reply support',
-        'Monthly performance summary',
-        'WhatsApp or chat support',
+        '1 Business Location',
+        'Google Business Profile management',
+        'Facebook and Instagram',
+        '20 AI posts/month',
+        'AI review reply suggestions',
       ],
     ),
     BillingPlanDefinition(
       code: 'PRO',
       key: 'GROWTH',
-      name: 'Growth Package',
-      monthlyPriceInr: 7999,
-      yearlyMonthlyPriceInr: 6666,
-      setupFeeLabel: 'Rs 7,999 one time',
+      name: 'Growth',
+      monthlyPriceInr: 2999,
+      yearlyMonthlyPriceInr: 2399,
+      yearlyTotalInr: 28790,
+      setupFeeLabel: 'Razorpay verified',
       eyebrow: 'Most popular',
       description:
-          'Best for businesses ready for stronger content frequency, review management, local SEO support, and lead response automation.',
-      capacityLabel: '1 to 3 business locations/accounts',
+          'Best For: Businesses looking for continuous inquiries and stronger local branding.',
+      capacityLabel: '1 to 3 Business Locations',
       suitableFor: 'Growing businesses that want more leads and visibility',
+      recommended: true,
       features: <String>[
-        'Everything in Starter',
-        '16 social media or post creatives per month',
-        '8 AI-generated business posts per month',
-        'Review monitoring and AI replies',
-        'Competitor tracking basics',
-        'Local SEO improvement support',
-        'Lead inquiry response automation',
-        'Monthly strategy suggestions',
+        '1 to 3 Business Locations',
+        'Everything in Starter PLUS',
+        '60 AI posts/month',
+        'AI review auto-reply',
+        'Competitor analysis',
       ],
     ),
     BillingPlanDefinition(
       code: 'PREMIUM',
       key: 'PREMIUM',
-      name: 'Premium Package',
-      monthlyPriceInr: 14999,
-      yearlyMonthlyPriceInr: 12499,
-      setupFeeLabel: 'Rs 12,999 one time',
+      name: 'Business Pro',
+      monthlyPriceInr: 4999,
+      yearlyMonthlyPriceInr: 3999,
+      yearlyTotalInr: 47990,
+      setupFeeLabel: 'Razorpay verified',
       eyebrow: 'Full automation',
       description:
-          'For brands that need deeper automation, stronger reputation management, competitor insights, and priority support.',
-      capacityLabel: 'Up to 5 business locations/accounts',
+          'Best For: Businesses serious about dominating local search and generating continuous leads.',
+      capacityLabel: 'Up to 5 Business Locations',
       suitableFor:
           'Serious businesses that want full automation and better growth',
       features: <String>[
-        'Everything in Growth',
-        '30 creatives or posts per month',
-        'Advanced AI content generation',
-        'Review and reputation management',
-        'Competitor tracking with insights',
-        'Lead capture and response automation',
-        'Priority support',
-        'Monthly growth report',
-        'SEO and profile optimization suggestions',
-      ],
-    ),
-    BillingPlanDefinition(
-      code: 'ENTERPRISE',
-      key: 'ENTERPRISE',
-      name: 'Enterprise Package',
-      monthlyPriceInr: 24999,
-      yearlyMonthlyPriceInr: 20833,
-      setupFeeLabel: 'Custom setup',
-      eyebrow: 'Custom scale',
-      description:
-          'A custom package for advanced workflows, integrations, white-label needs, and high-volume profile operations.',
-      capacityLabel: 'Custom business locations/accounts',
-      suitableFor:
-          'Agencies, franchises, multi-location brands, and high-volume businesses',
-      features: <String>[
-        'Custom automation workflows',
-        'Multi-location management',
-        'White-label options',
-        'Dedicated account handling',
-        'API or integration support',
-        'Advanced reporting dashboard',
-        'Custom content volume',
-        'Custom lead handling flow',
-        'Priority SLA support',
+        'Up to 5 Business Locations',
+        'Everything in Growth PLUS',
+        '150 AI posts/month',
+        'AI auto post',
+        'Advanced analytics dashboard',
       ],
     ),
   ];
@@ -165,7 +137,7 @@ class BillingPlanDefinition {
     if (profiles <= 5) {
       return 'PREMIUM';
     }
-    return 'ENTERPRISE';
+    return 'PREMIUM';
   }
 
   factory BillingPlanDefinition.fromCatalog(BillingPlanCatalog catalog) {
@@ -181,6 +153,7 @@ class BillingPlanDefinition {
       name: catalog.displayName,
       monthlyPriceInr: monthlyInr,
       yearlyMonthlyPriceInr: yearlyMonthlyInr,
+      yearlyTotalInr: yearlyTotalInr > 0 ? yearlyTotalInr : null,
       setupFeeLabel: 'Razorpay verified',
       eyebrow: catalog.locationQuota <= 1
           ? 'Single business'
@@ -216,6 +189,8 @@ class BillingOrderResponse {
     required this.amount,
     required this.currency,
     required this.razorpayKeyId,
+    this.subtotalAmount = 0,
+    this.payableAmount = 0,
     this.plan = '',
     this.billingCycle = 'monthly',
     this.checkoutType = 'MANUAL',
@@ -227,6 +202,8 @@ class BillingOrderResponse {
   final int amount;
   final String currency;
   final String razorpayKeyId;
+  final int subtotalAmount;
+  final int payableAmount;
   final String plan;
   final String billingCycle;
   final String checkoutType;
@@ -241,6 +218,8 @@ class BillingOrderResponse {
           ? 'INR'
           : _stringValue(map['currency']).toUpperCase(),
       razorpayKeyId: _stringValue(map['razorpayKeyId']),
+      subtotalAmount: _intValue(map['subtotalAmount']),
+      payableAmount: _intValue(map['payableAmount']),
       plan: _stringValue(map['plan']).toUpperCase(),
       billingCycle: normalizeBillingCycle(_stringValue(map['billingCycle'])),
       checkoutType: _stringValue(map['checkoutType']).toUpperCase(),
@@ -368,9 +347,7 @@ class BillingPlanUsageLimits {
 
   factory BillingPlanUsageLimits.fromMap(Map<String, dynamic> map) {
     return BillingPlanUsageLimits(
-      aiContentCreationsPerMonth: _intValue(
-        map['aiContentCreationsPerMonth'],
-      ),
+      aiContentCreationsPerMonth: _intValue(map['aiContentCreationsPerMonth']),
       keywordsLimit: _intValue(map['keywordsLimit']),
       keywordChecksPerMonth: _intValue(map['keywordChecksPerMonth']),
       heatmapScansPerMonth: _intValue(map['heatmapScansPerMonth']),
@@ -399,7 +376,9 @@ class BillingPlanCatalog {
       displayName: _stringValue(map['displayName']),
       pricing: BillingPlanPricing.fromMap(_mapValue(map['pricing'])),
       locationQuota: _intValue(map['locationQuota']),
-      usageLimits: BillingPlanUsageLimits.fromMap(_mapValue(map['usageLimits'])),
+      usageLimits: BillingPlanUsageLimits.fromMap(
+        _mapValue(map['usageLimits']),
+      ),
     );
   }
 }
@@ -828,7 +807,9 @@ class BillingUsageInfo {
       plan: _stringValue(map['plan']).toUpperCase(),
       planDisplayName: _stringValue(map['planDisplayName']),
       period: BillingPeriodInfo.fromMap(_mapValue(map['period'])),
-      locationQuota: quotaMap.isEmpty ? null : BillingLocationQuota.fromMap(quotaMap),
+      locationQuota: quotaMap.isEmpty
+          ? null
+          : BillingLocationQuota.fromMap(quotaMap),
       featureEntitlements: parsedEntitlements,
       aiPosts: BillingUsageFeature.fromMap(_mapValue(featuresMap['aiPosts'])),
       keywords: BillingUsageFeature.fromMap(_mapValue(featuresMap['keywords'])),
@@ -890,9 +871,9 @@ class BillingSubscriptionCheckoutResponse {
   factory BillingSubscriptionCheckoutResponse.fromMap(
     Map<String, dynamic> map,
   ) {
-    final notesMap = _mapValue(map['notes']).map(
-      (key, value) => MapEntry(key, _stringValue(value)),
-    );
+    final notesMap = _mapValue(
+      map['notes'],
+    ).map((key, value) => MapEntry(key, _stringValue(value)));
     final subscriptionMap = _mapValue(map['subscription']);
     final uiStateMap = _mapValue(map['uiState']);
 
@@ -907,9 +888,7 @@ class BillingSubscriptionCheckoutResponse {
       customerId: _stringValue(map['customerId']),
       subscriptionId: _stringValue(map['subscriptionId']),
       razorpayPlanId: _stringValue(map['razorpayPlanId']),
-      razorpaySubscriptionId: _stringValue(
-        map['razorpaySubscriptionId'],
-      ),
+      razorpaySubscriptionId: _stringValue(map['razorpaySubscriptionId']),
       status: _stringValue(map['status']).toUpperCase(),
       mandateStatus: _stringValue(map['mandateStatus']).toUpperCase(),
       shortUrl: _nullableStringValue(map['shortUrl']),
