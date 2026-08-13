@@ -149,41 +149,41 @@ class WorkspacePlanConfig {
   static const starter = WorkspacePlanConfig(
     code: 'SINGLE',
     name: 'Starter',
-    price: 3999,
+    price: 1999,
     maxLocations: 1,
-    maxPostsPerMonth: 4,
-    maxCreativesPerMonth: 8,
-    maxKeywords: 0,
+    maxPostsPerMonth: 20,
+    maxCreativesPerMonth: 20,
+    maxKeywords: 10,
   );
 
   static const growth = WorkspacePlanConfig(
     code: 'PRO',
     name: 'Growth',
-    price: 7999,
+    price: 2999,
     maxLocations: 3,
-    maxPostsPerMonth: 8,
-    maxCreativesPerMonth: 16,
-    maxKeywords: 10,
+    maxPostsPerMonth: 60,
+    maxCreativesPerMonth: 60,
+    maxKeywords: 25,
   );
 
   static const premium = WorkspacePlanConfig(
     code: 'PREMIUM',
-    name: 'Premium',
-    price: 14999,
+    name: 'Business Pro',
+    price: 4999,
     maxLocations: 5,
-    maxPostsPerMonth: 30,
-    maxCreativesPerMonth: 30,
+    maxPostsPerMonth: 150,
+    maxCreativesPerMonth: 150,
     maxKeywords: 50,
   );
 
   static const enterprise = WorkspacePlanConfig(
     code: 'ENTERPRISE',
-    name: 'Enterprise',
-    price: 24999,
-    maxLocations: 999,
-    maxPostsPerMonth: 999,
-    maxCreativesPerMonth: 999,
-    maxKeywords: 999,
+    name: 'Business Pro',
+    price: 4999,
+    maxLocations: 5,
+    maxPostsPerMonth: 150,
+    maxCreativesPerMonth: 150,
+    maxKeywords: 50,
   );
 
   static WorkspacePlanConfig forCode(String? rawCode) {
@@ -193,7 +193,7 @@ class WorkspacePlanConfig {
       case 'PREMIUM':
         return premium;
       case 'ENTERPRISE':
-        return enterprise;
+        return premium;
       case 'SINGLE':
       default:
         return starter;
