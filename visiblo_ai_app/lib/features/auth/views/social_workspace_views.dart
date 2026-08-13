@@ -31,6 +31,7 @@ import '../../social/models/social_account.dart';
 import '../../social/models/social_engine_models.dart';
 import '../../social/services/social_api_service.dart';
 import '../controllers/product_mode_controller.dart';
+import '../controllers/account_settings_controller.dart';
 import '../models/test_account.dart';
 import '../widgets/auth_navigation_shell.dart';
 import '../widgets/auth_sidebar.dart';
@@ -14183,24 +14184,951 @@ class _DonutPainter extends CustomPainter {
   }
 }
 
-class SocialProfileView extends StatelessWidget {
+class SocialProfileView extends StatefulWidget {
   const SocialProfileView({super.key});
 
   @override
+  State<SocialProfileView> createState() => _SocialProfileViewState();
+}
+
+class _SocialProfileViewState extends State<SocialProfileView> {
+  late final SocialAccountsController _accountsController =
+      Get.isRegistered<SocialAccountsController>()
+      ? Get.find<SocialAccountsController>()
+      : Get.put(SocialAccountsController());
+  late final AccountSettingsController _accountController =
+      Get.isRegistered<AccountSettingsController>()
+      ? Get.find<AccountSettingsController>()
+      : Get.put(AccountSettingsController());
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _accountsController.loadAccounts();
+      if (_accountController.settings.value == null &&
+          !_accountController.isLoading.value) {
+        _accountController.loadInitialData();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const _SocialWorkspacePlaceholderView(
+    return AuthNavigationShell(
       currentTab: AuthTab.socialProfile,
-      title: 'Social Profile',
-      subtitle:
-          'Review workspace preferences, automation setup, and profile-level social settings.',
-      icon: Icons.person_outline_rounded,
-      bullets: [
-        'Check workspace details',
-        'Review automation preferences',
-        'Prepare settings for notifications and publishing',
-      ],
+      backgroundColor: const Color(0xFFF5F8FC),
+      child: Obx(() {
+        final businessName = _accountController.businessNameValue;
+        final owner = _accountController.ownerNameValue;
+        final email = _accountController.email;
+        final connectedPlatforms = _accountsController.connectedPlatforms;
+        final healthyCount = _accountsController.healthyCount;
+        final disconnectedCount = _accountsController.disconnectedCount;
+        final aiLimit = _accountController.postLimit;
+        final aiUsed = _accountController.postsUsedThisMonth;
+        final aiRemaining = _accountController.remainingPosts;
+        final creativesLimit = _accountController.creativeLimit;
+        final creativesUsed = _accountController.creativeUsedThisMonth;
+        final creativesRemaining = _accountController.remainingCreatives;
+
+        return RefreshIndicator(
+          color: AppColors.brandBlue,
+          onRefresh: () async {
+            await Future.wait([
+              _accountsController.loadAccounts(refresh: true),
+              _accountController.refreshData(),
+            ]);
+          },
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+            children: [
+              const Row(children: [AuthShellBackButton()]),
+              const SizedBox(height: 2),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: EdgeInsets.only(left: 18),
+                  child: AppLogo(iconSize: 48),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFE3EAF3)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x0D11345F),
+                      blurRadius: 18,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _SocialProfilePlatformCluster(
+                          connectedPlatforms: connectedPlatforms,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Social Profile',
+                                style: GoogleFonts.inter(
+                                  color: const Color(0xFF111827),
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'manage your connected social workspace',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  color: AppColors.brandBlue,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      businessName,
+                      style: GoogleFonts.inter(
+                        color: AppColors.brandBlue,
+                        fontSize: 28,
+                        height: 1.02,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Social publishing, account sync, and AI content usage for this workspace.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF61758D),
+                        fontSize: 13.2,
+                        height: 1.45,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _SocialProfileIdentityPill(
+                          icon: Icons.person_outline_rounded,
+                          label: owner,
+                        ),
+                        _SocialProfileIdentityPill(
+                          icon: Icons.mail_outline_rounded,
+                          label: email,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _SocialProfileSummaryChip(
+                            label: 'Connected',
+                            value: '${_accountsController.connectedCount}/3',
+                            tone: const Color(0xFF0A66C2),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _SocialProfileSummaryChip(
+                            label: 'Active',
+                            value: '$healthyCount running',
+                            tone: const Color(0xFF16A34A),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _SocialProfileSummaryChip(
+                            label: 'Need connect',
+                            value: '$disconnectedCount left',
+                            tone: const Color(0xFFF59E0B),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF0A3F85), Color(0xFF1256B4)],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x220A3F85),
+                              blurRadius: 18,
+                              offset: Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: TextButton.icon(
+                          onPressed: () =>
+                              Get.offNamed(AppRoutes.socialDashboard),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          icon: const Icon(Icons.tune_rounded, size: 18),
+                          label: Text(
+                            'Open social workspace',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: 0.79,
+                children: [
+                  _SocialProfileMetricCard(
+                    icon: Icons.groups_rounded,
+                    iconColor: const Color(0xFF0A66C2),
+                    iconBackground: const Color(0xFFEFF6FF),
+                    title: 'Connected accounts',
+                    subtitle: 'Live publishing channels',
+                    value: '${_accountsController.connectedCount}/3',
+                    statusLabel: disconnectedCount == 0 ? 'READY' : 'SETUP',
+                    statusColor: disconnectedCount == 0
+                        ? const Color(0xFF16A34A)
+                        : const Color(0xFFF59E0B),
+                    progress: (_accountsController.connectedCount / 3).clamp(
+                      0.0,
+                      1.0,
+                    ),
+                    progressColor: const Color(0xFF2373FF),
+                    footerValue: connectedPlatforms.isEmpty
+                        ? 'No platforms linked'
+                        : '${_accountsController.connectedCount} platforms linked',
+                  ),
+                  _SocialProfileMetricCard(
+                    icon: Icons.auto_awesome_rounded,
+                    iconColor: const Color(0xFF7C3AED),
+                    iconBackground: const Color(0xFFF4EEFF),
+                    title: 'AI posts left',
+                    subtitle:
+                        '$aiUsed/${_socialUsageLimitLabel(aiLimit)} used this month',
+                    value: aiRemaining == 999 ? '∞' : '$aiRemaining',
+                    statusLabel: aiRemaining == 0 ? 'LOW' : 'HEALTHY',
+                    statusColor: aiRemaining == 0
+                        ? const Color(0xFFE84E4E)
+                        : const Color(0xFF1FA971),
+                    progress: aiLimit <= 0
+                        ? 0
+                        : (aiUsed / aiLimit).clamp(0.0, 1.0),
+                    progressColor: aiRemaining == 0
+                        ? const Color(0xFFFF5353)
+                        : const Color(0xFF2CC384),
+                    footerValue: aiRemaining == 999
+                        ? 'Unlimited remaining'
+                        : '$aiRemaining remaining',
+                  ),
+                  _SocialProfileMetricCard(
+                    icon: Icons.palette_outlined,
+                    iconColor: const Color(0xFFE4408F),
+                    iconBackground: const Color(0xFFFFEEF7),
+                    title: 'Creative usage',
+                    subtitle:
+                        '$creativesUsed/${_socialUsageLimitLabel(creativesLimit)} generated this month',
+                    value: creativesUsed == 999
+                        ? '∞'
+                        : '$creativesUsed/${_socialUsageLimitLabel(creativesLimit)}',
+                    statusLabel: creativesRemaining == 0 ? 'LOW' : 'HEALTHY',
+                    statusColor: creativesRemaining == 0
+                        ? const Color(0xFFE84E4E)
+                        : const Color(0xFF1FA971),
+                    progress: creativesLimit <= 0
+                        ? 0
+                        : (creativesUsed / creativesLimit).clamp(0.0, 1.0),
+                    progressColor: creativesRemaining == 0
+                        ? const Color(0xFFFF5353)
+                        : const Color(0xFF2CC384),
+                    footerValue: creativesRemaining == 999
+                        ? 'Unlimited capacity'
+                        : '$creativesRemaining capacity left',
+                  ),
+                  _SocialProfileMetricCard(
+                    icon: Icons.schedule_send_rounded,
+                    iconColor: const Color(0xFF0F766E),
+                    iconBackground: const Color(0xFFE8FFFB),
+                    title: 'Automation health',
+                    subtitle: 'Connected platforms ready to publish',
+                    value:
+                        '$healthyCount/${_accountsController.connectedCount}',
+                    statusLabel: healthyCount > 0 ? 'RUNNING' : 'PENDING',
+                    statusColor: healthyCount > 0
+                        ? const Color(0xFF1FA971)
+                        : const Color(0xFFF59E0B),
+                    progress: _accountsController.connectedCount == 0
+                        ? 0
+                        : (healthyCount / _accountsController.connectedCount)
+                              .clamp(0.0, 1.0),
+                    progressColor: const Color(0xFF22C7BC),
+                    footerValue: healthyCount > 0
+                        ? '$healthyCount active sync${healthyCount == 1 ? '' : 's'}'
+                        : 'Connect a channel to start',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: const Color(0xFFE4EAF3)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x0D11345F),
+                      blurRadius: 16,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Connected platforms',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF111827),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Review live account connections, sync state, and where your posts can publish.',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF61758D),
+                        fontSize: 13.3,
+                        height: 1.45,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (_accountsController.isLoading.value &&
+                        _accountsController.accounts.isEmpty)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 20),
+                          child: CircularProgressIndicator(
+                            color: AppColors.brandBlue,
+                          ),
+                        ),
+                      )
+                    else if (_accountsController.accounts.isEmpty)
+                      _SocialProfileEmptyPlatformsCard(
+                        onTap: () => Get.offNamed(AppRoutes.socialAccounts),
+                      )
+                    else
+                      ..._accountsController.accounts.map(
+                        (account) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _SocialProfilePlatformTile(account: account),
+                        ),
+                      ),
+                    if (_accountsController.errorMessage.value != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _accountsController.errorMessage.value!,
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFFE84E4E),
+                          fontSize: 12.6,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
     );
   }
+}
+
+class _SocialProfilePlatformCluster extends StatelessWidget {
+  const _SocialProfilePlatformCluster({required this.connectedPlatforms});
+
+  final List<String> connectedPlatforms;
+
+  @override
+  Widget build(BuildContext context) {
+    final platforms = connectedPlatforms.take(3).toList(growable: false);
+    final resolved = platforms.isEmpty
+        ? const ['FACEBOOK', 'INSTAGRAM', 'LINKEDIN']
+        : platforms;
+
+    return SizedBox(
+      width: 98,
+      height: 42,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (var i = 0; i < resolved.length; i++)
+            Positioned(
+              left: i * 28,
+              top: 0,
+              child: Image.asset(
+                _socialProfilePlatformAsset(resolved[i]),
+                width: 34,
+                height: 34,
+                fit: BoxFit.contain,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialProfileIdentityPill extends StatelessWidget {
+  const _SocialProfileIdentityPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FBFD),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFB7CDEA)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppColors.brandBlue),
+          const SizedBox(width: 7),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 180),
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                color: const Color(0xFF111827),
+                fontSize: 12.6,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialProfileSummaryChip extends StatelessWidget {
+  const _SocialProfileSummaryChip({
+    required this.label,
+    required this.value,
+    required this.tone,
+  });
+
+  final String label;
+  final String value;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: tone.withValues(alpha: 0.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: tone,
+              fontSize: 11.2,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              color: const Color(0xFF111827),
+              fontSize: 13.4,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialProfileMetricCard extends StatelessWidget {
+  const _SocialProfileMetricCard({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBackground,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.statusLabel,
+    required this.statusColor,
+    required this.progress,
+    required this.progressColor,
+    required this.footerValue,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBackground;
+  final String title;
+  final String subtitle;
+  final String value;
+  final String statusLabel;
+  final Color statusColor;
+  final double progress;
+  final Color progressColor;
+  final String footerValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE4EAF3)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0911345F),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: iconBackground,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 18, color: iconColor),
+              ),
+              const Spacer(),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    value,
+                    style: GoogleFonts.inter(
+                      color: AppColors.brandBlue,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    statusLabel,
+                    style: GoogleFonts.inter(
+                      color: statusColor,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              color: AppColors.brandBlue,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              color: const Color(0xFF8290A5),
+              fontSize: 11.2,
+              height: 1.25,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FBFF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE7EEF7)),
+            ),
+            child: Text(
+              footerValue,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                color: const Color(0xFF1F3368),
+                fontSize: 11.2,
+                height: 1.18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: _SocialProfileAnimatedBar(
+              progress: progress,
+              color: progressColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialProfileAnimatedBar extends StatefulWidget {
+  const _SocialProfileAnimatedBar({
+    required this.progress,
+    required this.color,
+  });
+
+  final double progress;
+  final Color color;
+
+  @override
+  State<_SocialProfileAnimatedBar> createState() =>
+      _SocialProfileAnimatedBarState();
+}
+
+class _SocialProfileAnimatedBarState extends State<_SocialProfileAnimatedBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = widget.progress.clamp(0.0, 1.0);
+    return SizedBox(
+      height: 6,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: progress),
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeOutCubic,
+        builder: (context, animatedProgress, _) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final fillWidth = constraints.maxWidth * animatedProgress;
+              return Stack(
+                children: [
+                  const Positioned.fill(
+                    child: ColoredBox(color: Color(0xFFF1F4F8)),
+                  ),
+                  if (fillWidth > 0)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: SizedBox(
+                        width: fillWidth,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: ColoredBox(color: widget.color),
+                            ),
+                            AnimatedBuilder(
+                              animation: _controller,
+                              builder: (context, child) {
+                                return Transform.translate(
+                                  offset: Offset(
+                                    (fillWidth + 30) * _controller.value - 30,
+                                    0,
+                                  ),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Container(
+                                      width: 30,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Colors.white.withValues(alpha: 0),
+                                            Colors.white.withValues(
+                                              alpha: 0.42,
+                                            ),
+                                            Colors.white.withValues(alpha: 0),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SocialProfilePlatformTile extends StatelessWidget {
+  const _SocialProfilePlatformTile({required this.account});
+
+  final SocialAccount account;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = account.isActive;
+    final updatedAt = account.updatedAt ?? account.createdAt;
+    final subtitle = updatedAt == null
+        ? 'Connected and ready to publish'
+        : 'Last synced ${_formatSchedulerShortDate(updatedAt)}';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBFDFF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE3EAF3)),
+      ),
+      child: Row(
+        children: [
+          Image.asset(
+            _socialProfilePlatformAsset(account.platform),
+            width: 38,
+            height: 38,
+            fit: BoxFit.contain,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _socialProfilePlatformLabel(account.platform),
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF111827),
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  account.platformAccountName.trim().isEmpty
+                      ? subtitle
+                      : '${account.platformAccountName} • $subtitle',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF66778D),
+                    fontSize: 12.4,
+                    height: 1.4,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: active ? const Color(0xFFE8FFF2) : const Color(0xFFFFF4E4),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color:
+                    (active ? const Color(0xFF1FA971) : const Color(0xFFD1821F))
+                        .withValues(alpha: 0.22),
+              ),
+            ),
+            child: Text(
+              active ? 'Active' : 'Pending',
+              style: GoogleFonts.inter(
+                color: active
+                    ? const Color(0xFF1FA971)
+                    : const Color(0xFFD1821F),
+                fontSize: 11.4,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialProfileEmptyPlatformsCard extends StatelessWidget {
+  const _SocialProfileEmptyPlatformsCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBFDFF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE3EAF3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'No social platforms connected yet',
+            style: GoogleFonts.inter(
+              color: const Color(0xFF111827),
+              fontSize: 14.6,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Connect Facebook, Instagram, and LinkedIn so posts, scheduling, and analytics can work from one place.',
+            style: GoogleFonts.inter(
+              color: const Color(0xFF61758D),
+              fontSize: 12.8,
+              height: 1.45,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            onPressed: onTap,
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Color(0xFFCFDBEA)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: Text(
+              'Open social accounts',
+              style: GoogleFonts.inter(
+                color: const Color(0xFF0A3F85),
+                fontSize: 13.8,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _socialProfilePlatformAsset(String platform) {
+  switch (platform.trim().toUpperCase()) {
+    case 'INSTAGRAM':
+      return 'assets/images/instagram.png';
+    case 'LINKEDIN':
+      return 'assets/images/link.png';
+    case 'FACEBOOK':
+    default:
+      return 'assets/images/facebook.png';
+  }
+}
+
+String _socialProfilePlatformLabel(String platform) {
+  switch (platform.trim().toUpperCase()) {
+    case 'INSTAGRAM':
+      return 'Instagram';
+    case 'LINKEDIN':
+      return 'LinkedIn';
+    case 'FACEBOOK':
+    default:
+      return 'Facebook';
+  }
+}
+
+String _socialUsageLimitLabel(int limit) {
+  if (limit >= 999) {
+    return '∞';
+  }
+  return '$limit';
 }
 
 String _formatSchedulerTime(DateTime date) {
