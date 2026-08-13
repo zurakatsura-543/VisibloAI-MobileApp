@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -263,8 +261,8 @@ class AccountView extends GetView<AccountSettingsController> {
                               localError = null;
                             });
                             try {
-                              final deleted =
-                                  await controller.confirmBusinessDelete(otp);
+                              final deleted = await controller
+                                  .confirmBusinessDelete(otp);
                               if (deleted && dialogContext.mounted) {
                                 Navigator.of(dialogContext).pop();
                               }
@@ -494,10 +492,15 @@ class _WorkspaceSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logoPath = controller.logoPath.trim();
+    final statusForeground = controller.isGoogleConnected
+        ? const Color(0xFF1FA971)
+        : const Color(0xFFD1821F);
+    final statusBackground = controller.isGoogleConnected
+        ? const Color(0xFFE8FFF2)
+        : const Color(0xFFFFF4E4);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -529,50 +532,76 @@ class _WorkspaceSummaryCard extends StatelessWidget {
                 label: controller.isGoogleConnected
                     ? 'GBP connected'
                     : 'GBP pending',
-                foreground: controller.isGoogleConnected
-                    ? const Color(0xFF1FA971)
-                    : const Color(0xFFD1821F),
-                background: controller.isGoogleConnected
-                    ? const Color(0xFFE8FFF2)
-                    : const Color(0xFFFFF4E4),
+                foreground: statusForeground,
+                background: statusBackground,
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _WorkspaceAvatar(
-                initials: controller.workspaceInitials,
-                logoPath: logoPath,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFCFEFF),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFDCEAF6)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      controller.businessNameValue,
-                      style: AppTypography.card(
-                        fontSize: 23,
-                        color: AppColors.brandBlue,
-                        fontWeight: FontWeight.w700,
+                    _WorkspaceAvatar(
+                      initials: controller.workspaceInitials,
+                      logoPath: controller.logoPath.trim(),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            controller.businessNameValue,
+                            style: AppTypography.card(
+                              fontSize: 24,
+                              color: AppColors.brandBlue,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Manage all of your GMB profiles',
+                            style: AppTypography.body(
+                              fontSize: 13,
+                              color: AppColors.brandBlue,
+                              fontWeight: FontWeight.w700,
+                              height: 1.1,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 10),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
                     _WorkspacePill(
                       icon: Icons.person_outline_rounded,
                       label: controller.ownerNameValue,
                     ),
-                    const SizedBox(height: 8),
                     _WorkspacePill(
                       icon: Icons.mail_outline_rounded,
                       label: controller.email,
                     ),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 14),
           SizedBox(
@@ -580,7 +609,7 @@ class _WorkspaceSummaryCard extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: () => Get.toNamed(AppRoutes.accountBusinessProfile),
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: AppColors.brandBlue,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -613,25 +642,21 @@ class _WorkspaceAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasLogo = logoPath.isNotEmpty;
-
     return Container(
-      width: 42,
-      height: 42,
+      width: 56,
+      height: 56,
       decoration: BoxDecoration(
-        color: const Color(0xFFF2FBFC),
+        color: const Color(0xFFF7FBFF),
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFD7EEF2)),
+        border: Border.all(color: const Color(0xFFD8E6F4)),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: hasLogo
-          ? Image.file(
-              File(logoPath),
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) =>
-                  _AvatarInitials(initials: initials),
-            )
-          : _AvatarInitials(initials: initials),
+      padding: const EdgeInsets.all(10),
+      child: Image.asset(
+        'assets/images/gmb.png',
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) =>
+            _AvatarInitials(initials: initials),
+      ),
     );
   }
 }
@@ -647,7 +672,7 @@ class _AvatarInitials extends StatelessWidget {
       child: Text(
         initials,
         style: AppTypography.button(
-          fontSize: 14,
+          fontSize: 17,
           color: const Color(0xFF2C98A6),
           fontWeight: FontWeight.w700,
         ),
@@ -698,29 +723,32 @@ class _WorkspacePill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      constraints: const BoxConstraints(minHeight: 36),
       decoration: BoxDecoration(
         color: const Color(0xFFF9FBFD),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFD6DEE9)),
+        border: Border.all(color: const Color(0xFFB7CDEA)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: const Color(0xFF6E8098)),
-          const SizedBox(width: 7),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.body(
-                fontSize: 12.5,
-                color: const Color(0xFF516174),
-                fontWeight: FontWeight.w500,
+      child: IntrinsicWidth(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: AppColors.brandBlue),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.body(
+                  fontSize: 12.5,
+                  color: const Color(0xFF111827),
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -741,12 +769,18 @@ class _WorkspaceMetricsGrid extends StatelessWidget {
     final postsProgress = controller.remainingPosts == 999
         ? 1.0
         : (controller.remainingPosts / postLimit).clamp(0.0, 1.0);
-    final creativesProgress = (controller.planConfig.maxCreativesPerMonth / 30)
-        .clamp(0.0, 1.0);
-    final keywordsProgress = (controller.planConfig.maxKeywords / 50).clamp(
-      0.0,
-      1.0,
-    );
+    final creativeLimit = controller.creativeLimit <= 0
+        ? 1
+        : controller.creativeLimit;
+    final creativesProgress = controller.creativeUsedThisMonth == 999
+        ? 1.0
+        : (controller.creativeUsedThisMonth / creativeLimit).clamp(0.0, 1.0);
+    final keywordLimit = controller.keywordLimit <= 0
+        ? 1
+        : controller.keywordLimit;
+    final keywordsProgress = controller.trackedKeywordsUsed == 999
+        ? 1.0
+        : (controller.trackedKeywordsUsed / keywordLimit).clamp(0.0, 1.0);
 
     final metrics = [
       _MetricCardData(
@@ -789,17 +823,17 @@ class _WorkspaceMetricsGrid extends StatelessWidget {
         icon: Icons.edit_square,
         iconColor: const Color(0xFFAF63FF),
         iconBackground: const Color(0xFFF6EEFF),
-        value: _limitLabel(controller.planConfig.maxCreativesPerMonth),
-        statusLabel: controller.planConfig.maxCreativesPerMonth < 10
-            ? 'LOW'
-            : 'HEALTHY',
-        statusColor: controller.planConfig.maxCreativesPerMonth < 10
+        value: controller.creativeUsedThisMonth == 999
+            ? '∞'
+            : '${controller.creativeUsedThisMonth}/${_limitLabel(controller.creativeLimit)}',
+        statusLabel: controller.remainingCreatives == 0 ? 'LOW' : 'HEALTHY',
+        statusColor: controller.remainingCreatives == 0
             ? const Color(0xFFE84E4E)
             : const Color(0xFF1FA971),
         title: 'Creative capacity',
-        subtitle: 'Profiles allowed',
+        subtitle: controller.creativeUsageHint,
         progress: creativesProgress,
-        progressColor: controller.planConfig.maxCreativesPerMonth < 10
+        progressColor: controller.remainingCreatives == 0
             ? const Color(0xFFFF5353)
             : const Color(0xFF2CC384),
       ),
@@ -807,15 +841,17 @@ class _WorkspaceMetricsGrid extends StatelessWidget {
         icon: Icons.wallet_giftcard_rounded,
         iconColor: const Color(0xFFE15ED7),
         iconBackground: const Color(0xFFFFF0FD),
-        value: _limitLabel(controller.planConfig.maxKeywords),
-        statusLabel: controller.planConfig.maxKeywords > 0 ? 'HEALTHY' : 'LOW',
-        statusColor: controller.planConfig.maxKeywords > 0
+        value: controller.trackedKeywordsUsed == 999
+            ? '∞'
+            : '${controller.trackedKeywordsUsed}/${_limitLabel(controller.keywordLimit)}',
+        statusLabel: controller.remainingKeywords > 0 ? 'HEALTHY' : 'LOW',
+        statusColor: controller.remainingKeywords > 0
             ? const Color(0xFF1FA971)
             : const Color(0xFFE84E4E),
         title: 'SEO keywords',
-        subtitle: 'SEO tracking limit',
+        subtitle: controller.keywordUsageHint,
         progress: keywordsProgress,
-        progressColor: controller.planConfig.maxKeywords > 0
+        progressColor: controller.remainingKeywords > 0
             ? const Color(0xFF2CC384)
             : const Color(0xFFFF5353),
       ),
@@ -829,7 +865,7 @@ class _WorkspaceMetricsGrid extends StatelessWidget {
         crossAxisCount: 2,
         mainAxisSpacing: 10,
         crossAxisSpacing: 10,
-        childAspectRatio: 0.98,
+        childAspectRatio: 0.9,
       ),
       itemBuilder: (context, index) {
         return _AccountMetricCard(data: metrics[index]);
@@ -879,10 +915,10 @@ class _AccountMetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      padding: const EdgeInsets.fromLTRB(13, 13, 13, 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE4EAF3)),
         boxShadow: const [
           BoxShadow(
@@ -899,13 +935,13 @@ class _AccountMetricCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: 30,
+                height: 30,
                 decoration: BoxDecoration(
                   color: data.iconBackground,
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(data.icon, size: 16, color: data.iconColor),
+                child: Icon(data.icon, size: 17, color: data.iconColor),
               ),
               const Spacer(),
               Column(
@@ -914,7 +950,7 @@ class _AccountMetricCard extends StatelessWidget {
                   Text(
                     data.value,
                     style: AppTypography.card(
-                      fontSize: 18,
+                      fontSize: 20,
                       color: AppColors.brandBlue,
                       fontWeight: FontWeight.w800,
                     ),
@@ -931,38 +967,174 @@ class _AccountMetricCard extends StatelessWidget {
               ),
             ],
           ),
-          const Spacer(),
+          const SizedBox(height: 14),
           Text(
             data.title,
             style: AppTypography.button(
-              fontSize: 13.5,
+              fontSize: 14,
               color: AppColors.brandBlue,
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Text(
             data.subtitle,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: AppTypography.body(
-              fontSize: 11.6,
+              fontSize: 11.8,
               color: const Color(0xFF8290A5),
               fontWeight: FontWeight.w500,
               height: 1.35,
             ),
           ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FBFF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE7EEF7)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    data.value,
+                    style: AppTypography.card(
+                      fontSize: 16.5,
+                      color: AppColors.brandBlue,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Text(
+                  data.statusLabel,
+                  style: AppTypography.label(
+                    fontSize: 10,
+                    color: data.statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              minHeight: 6,
-              value: data.progress,
+            child: _AnimatedMetricProgressBar(
+              progress: data.progress,
+              color: data.progressColor,
               backgroundColor: const Color(0xFFF1F4F8),
-              valueColor: AlwaysStoppedAnimation<Color>(data.progressColor),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AnimatedMetricProgressBar extends StatefulWidget {
+  const _AnimatedMetricProgressBar({
+    required this.progress,
+    required this.color,
+    required this.backgroundColor,
+  });
+
+  final double progress;
+  final Color color;
+  final Color backgroundColor;
+
+  @override
+  State<_AnimatedMetricProgressBar> createState() =>
+      _AnimatedMetricProgressBarState();
+}
+
+class _AnimatedMetricProgressBarState extends State<_AnimatedMetricProgressBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = widget.progress.clamp(0.0, 1.0);
+
+    return SizedBox(
+      height: 6,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: progress),
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeOutCubic,
+        builder: (context, animatedProgress, _) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final fillWidth = constraints.maxWidth * animatedProgress;
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    child: ColoredBox(color: widget.backgroundColor),
+                  ),
+                  if (fillWidth > 0)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: SizedBox(
+                        width: fillWidth,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: ColoredBox(color: widget.color),
+                            ),
+                            AnimatedBuilder(
+                              animation: _controller,
+                              builder: (context, child) {
+                                return Transform.translate(
+                                  offset: Offset(
+                                    (fillWidth + 30) * _controller.value - 30,
+                                    0,
+                                  ),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Container(
+                                      width: 30,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Colors.white.withValues(alpha: 0),
+                                            Colors.white.withValues(
+                                              alpha: 0.45,
+                                            ),
+                                            Colors.white.withValues(alpha: 0),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -1000,16 +1172,6 @@ class _AccountNavigationCard extends StatelessWidget {
         iconBackground: const Color(0xFFF1F6FF),
         trailingBadge: 'G',
         trailingBadgeColor: const Color(0xFF4285F4),
-        onTap: () => Get.toNamed(AppRoutes.accountGoogleBusinessProfile),
-      ),
-      _AccountMenuData(
-        title: 'Connected Accounts',
-        subtitle: controller.isGoogleConnected
-            ? 'Google Business Profile, WhatsApp'
-            : 'Connect Google Business Profile',
-        icon: Icons.link_rounded,
-        iconColor: const Color(0xFF47B987),
-        iconBackground: const Color(0xFFEAF9F1),
         onTap: () => Get.toNamed(AppRoutes.accountGoogleBusinessProfile),
       ),
       _AccountMenuData(

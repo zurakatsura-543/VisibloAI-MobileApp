@@ -2569,7 +2569,7 @@ class _SubscriptionTopBar extends StatelessWidget {
                     backButton,
                     Expanded(
                       child: Text(
-                        'Activation & Billing',
+                        'Payments & Billing',
                         textAlign: TextAlign.center,
                         style: AppTypography.button(
                           fontSize: 20,
@@ -2592,7 +2592,7 @@ class _SubscriptionTopBar extends StatelessWidget {
               backButton,
               Expanded(
                 child: Text(
-                  'Activation & Billing',
+                  'Payments & Billing',
                   textAlign: TextAlign.center,
                   style: AppTypography.button(
                     fontSize: 20,
@@ -2999,10 +2999,23 @@ class _ActiveSubscriptionCard extends StatelessWidget {
   }
 }
 
-class _UpgradePlansCard extends StatelessWidget {
+class _UpgradePlansCard extends StatefulWidget {
   const _UpgradePlansCard({required this.controller});
 
   final PaymentController controller;
+
+  @override
+  State<_UpgradePlansCard> createState() => _UpgradePlansCardState();
+}
+
+class _UpgradePlansCardState extends State<_UpgradePlansCard> {
+  final Set<String> _expandedPlanCodes = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _expandedPlanCodes.add(widget.controller.selectedPlan.code);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -3013,7 +3026,7 @@ class _UpgradePlansCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            controller.hasActiveSubscription
+            widget.controller.hasActiveSubscription
                 ? 'Change Your Plan'
                 : 'Activate Your Plan',
             style: AppTypography.card(
@@ -3022,21 +3035,41 @@ class _UpgradePlansCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 14),
-          _BillingCycleToggle(controller: controller),
-          const SizedBox(height: 14),
-          SizedBox(
-            height: 390,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: controller.plans.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (context, index) {
-                final plan = controller.plans[index];
-                return _MiniPlanCard(controller: controller, plan: plan);
-              },
+          const SizedBox(height: 6),
+          Text(
+            'Review all three plans, expand the full feature list, and complete payment securely with Razorpay.',
+            style: AppTypography.body(
+              fontSize: 12.8,
+              color: AppColors.mutedText,
             ),
+          ),
+          const SizedBox(height: 14),
+          _BillingCycleToggle(controller: widget.controller),
+          const SizedBox(height: 14),
+          Column(
+            children: [
+              for (int index = 0; index < widget.controller.plans.length; index++) ...[
+                _PlanOfferCard(
+                  controller: widget.controller,
+                  plan: widget.controller.plans[index],
+                  expanded: _expandedPlanCodes.contains(
+                    widget.controller.plans[index].code,
+                  ),
+                  onToggleExpanded: () {
+                    final code = widget.controller.plans[index].code;
+                    setState(() {
+                      if (_expandedPlanCodes.contains(code)) {
+                        _expandedPlanCodes.remove(code);
+                      } else {
+                        _expandedPlanCodes.add(code);
+                      }
+                    });
+                  },
+                ),
+                if (index != widget.controller.plans.length - 1)
+                  const SizedBox(height: 12),
+              ],
+            ],
           ),
         ],
       ),
@@ -3071,7 +3104,7 @@ class _BillingCycleToggle extends StatelessWidget {
             child: _CycleOption(
               title: 'Yearly',
               selected: controller.selectedBillingCycle.value == 'yearly',
-              badge: 'Save 30%',
+              badge: 'Save 20%',
               onTap: () => controller.setBillingCycle('yearly'),
             ),
           ),

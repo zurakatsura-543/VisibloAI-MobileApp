@@ -8,6 +8,7 @@ import '../../../app/routes/app_routes.dart';
 import '../../../app/services/local_auth_service.dart';
 import '../../onboarding/controllers/onboarding_controller.dart';
 import '../models/auth_me_response.dart';
+import '../models/payment_models.dart';
 import '../models/settings_models.dart';
 import '../models/test_account.dart';
 import '../services/auth_api_service.dart';
@@ -36,7 +37,7 @@ class AccountSettingsController extends GetxController {
   final infoMessage = RxnString();
 
   final settings = Rxn<WorkspaceSettingsResponse>();
-  final usage = Rxn<UsageInfoModel>();
+  final usage = Rxn<BillingUsageInfo>();
   final remoteProfile = Rxn<AuthMeResponse>();
 
   final userNameController = TextEditingController();
@@ -133,22 +134,59 @@ class AccountSettingsController extends GetxController {
     if (currentUsage == null) {
       return planConfig.maxPostsPerMonth;
     }
-    if (currentUsage.remaining == 999) {
+    if (currentUsage.aiPosts.remaining == 999) {
       return 999;
     }
-    return currentUsage.remaining;
+    return currentUsage.aiPosts.remaining;
   }
 
   int get postLimit {
     final currentUsage = usage.value;
-    if (currentUsage == null || currentUsage.limit <= 0) {
+    if (currentUsage == null || currentUsage.aiPosts.limit <= 0) {
       return planConfig.maxPostsPerMonth;
     }
-    return currentUsage.limit;
+    return currentUsage.aiPosts.limit;
   }
 
   int get postsUsedThisMonth {
-    return usage.value?.postsThisMonth ?? 0;
+    return usage.value?.aiPosts.used ?? 0;
+  }
+
+  int get creativeLimit => postLimit;
+
+  int get creativeUsedThisMonth => postsUsedThisMonth;
+
+  int get remainingCreatives => remainingPosts;
+
+  String get creativeUsageHint {
+    return '$creativeUsedThisMonth/${_formatLimit(creativeLimit)} used this month';
+  }
+
+  int get keywordLimit {
+    final currentUsage = usage.value;
+    if (currentUsage == null || currentUsage.keywords.limit <= 0) {
+      return planConfig.maxKeywords;
+    }
+    return currentUsage.keywords.limit;
+  }
+
+  int get trackedKeywordsUsed {
+    return usage.value?.keywords.used ?? 0;
+  }
+
+  int get remainingKeywords {
+    final currentUsage = usage.value;
+    if (currentUsage == null) {
+      return keywordLimit;
+    }
+    if (currentUsage.keywords.remaining == 999) {
+      return 999;
+    }
+    return currentUsage.keywords.remaining;
+  }
+
+  String get keywordUsageHint {
+    return '$trackedKeywordsUsed/${_formatLimit(keywordLimit)} tracked now';
   }
 
   String get planStatusLabel {
@@ -251,13 +289,13 @@ class AccountSettingsController extends GetxController {
     try {
       final results = await Future.wait<dynamic>([
         _settle(_authApiService.fetchWorkspaceSettings()),
-        _settle(_authApiService.fetchUsageInfo()),
+        _settle(_authApiService.fetchBillingUsage()),
         _settle(_authApiService.fetchMyData()),
       ]);
 
       final settingsResult =
           results[0] as _SettledResult<WorkspaceSettingsResponse>;
-      final usageResult = results[1] as _SettledResult<UsageInfoModel>;
+      final usageResult = results[1] as _SettledResult<BillingUsageInfo>;
       final profileResult = results[2] as _SettledResult<AuthMeResponse>;
 
       final liveSettings = settingsResult.value;
