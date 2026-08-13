@@ -540,6 +540,9 @@ class AuthApiService extends GetxService {
 
   Future<void> clearSession() async {
     _hasActiveSession = false;
+    if (Get.isRegistered<NotificationService>()) {
+      Get.find<NotificationService>().forgetRegisteredToken();
+    }
     await ApiClient().storage.delete(key: ApiClient.accessTokenKey);
     await ApiClient().storage.delete(key: ApiClient.sessionCookieKey);
   }

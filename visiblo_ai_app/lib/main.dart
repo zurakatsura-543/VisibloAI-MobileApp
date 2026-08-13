@@ -18,13 +18,21 @@ Future<void> main() async {
   AppConfig.validate();
   final firebaseAvailable = await _initializeFirebase();
   await ProductionMonitoring.initialize(firebaseAvailable: firebaseAvailable);
-  await Get.putAsync<ConnectivityService>(
-    () => ConnectivityService().init(),
-    permanent: true,
-  );
-  await Get.putAsync<NotificationService>(() => NotificationService().init());
+  await Future.wait<Object>([
+    Get.putAsync<ConnectivityService>(
+      () => ConnectivityService().init(),
+      permanent: true,
+    ),
+    Get.putAsync<NotificationService>(
+      () => NotificationService().init(),
+      permanent: true,
+    ),
+    Get.putAsync<LocalAuthService>(
+      () => LocalAuthService().init(),
+      permanent: true,
+    ),
+  ]);
   await Get.putAsync<AuthApiService>(() => AuthApiService().init());
-  await Get.putAsync<LocalAuthService>(() => LocalAuthService().init());
   runApp(const VisibloAiApp());
 }
 
@@ -40,8 +48,18 @@ Future<bool> _initializeFirebase() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     return true;
-  } on UnsupportedError {
-    debugPrint('Firebase is not configured for this platform yet.');
+  } on UnsupportedError catch (error) {
+    debugPrint('Firebase is not configured for this platform: $error');
+    return false;
+  } on FirebaseException catch (error, stack) {
+    debugPrint('Firebase initialization failed: ${error.message}');
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+        library: 'Firebase initialization',
+      ),
+    );
     return false;
   }
 }
