@@ -62,6 +62,24 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
     _socialAnalyticsController.loadIfBusinessOrRangeChanged('Last 28 days');
   }
 
+  Future<void> _showRecentActivity(
+    BuildContext context,
+    List<_ActivityItem> items,
+  ) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (pageContext) => _ActivityNotificationsPage(
+          items: items,
+          onViewAllTap: () {
+            Navigator.of(pageContext).pop();
+            _productModeController.selectMode(ProductMode.googleBusiness);
+            Get.toNamed(AppRoutes.reports);
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -143,13 +161,8 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
                 children: [
                   _DashboardHeader(
                     user: user,
-                    onNotificationTap: () {
-                      Get.snackbar(
-                        'Notifications',
-                        'New dashboard alerts will appear here.',
-                        snackPosition: SnackPosition.BOTTOM,
-                      );
-                    },
+                    onNotificationTap: () =>
+                        _showRecentActivity(context, activityItems),
                   ),
                   const SizedBox(height: 14),
                   Row(
@@ -824,67 +837,166 @@ class _RecentActivityCard extends StatelessWidget {
               ),
             )
           else
-            ...items.map(
-              (item) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFE),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: item.accent.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Icon(item.icon, color: item.accent, size: 18),
+            ...items.map((item) => _ActivityTile(item: item)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivityNotificationsPage extends StatelessWidget {
+  const _ActivityNotificationsPage({
+    required this.items,
+    required this.onViewAllTap,
+  });
+
+  final List<_ActivityItem> items;
+  final VoidCallback onViewAllTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F8FC),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(
+            Icons.arrow_back_rounded,
+            color: AppColors.brandBlue,
+          ),
+        ),
+        title: const Text(
+          'Notifications',
+          style: TextStyle(
+            color: Color(0xFF061A35),
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+      body: items.isEmpty
+          ? const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.notifications_none_rounded,
+                    size: 54,
+                    color: Color(0xFF9AA8BA),
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    'No notifications yet',
+                    style: TextStyle(
+                      color: Color(0xFF162845),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.title,
-                            style: const TextStyle(
-                              fontSize: 13.1,
-                              color: Color(0xFF162845),
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            item.subtitle,
-                            style: const TextStyle(
-                              fontSize: 11.9,
-                              color: Color(0xFF6B7890),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
+                  ),
+                  SizedBox(height: 5),
+                  Text(
+                    'Your recent business activity will appear here.',
+                    style: TextStyle(
+                      color: Color(0xFF6B7890),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
                     ),
-                    if (item.trailingAsset != null)
-                      Image.asset(
-                        item.trailingAsset!,
-                        width: 24,
-                        height: 24,
-                        fit: BoxFit.contain,
-                      )
-                    else if (item.trailingIcon != null)
-                      Icon(
-                        item.trailingIcon,
-                        color: const Color(0xFF7D8AA0),
-                        size: 18,
-                      ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+            )
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(14, 16, 14, 28),
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(2, 0, 2, 10),
+                  child: Text(
+                    'Recent Activity',
+                    style: TextStyle(
+                      color: Color(0xFF65748B),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                ...items.map((item) => _ActivityTile(item: item)),
+                const SizedBox(height: 4),
+                TextButton(
+                  onPressed: onViewAllTap,
+                  child: const Text(
+                    'See All Activity',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
             ),
+    );
+  }
+}
+
+class _ActivityTile extends StatelessWidget {
+  const _ActivityTile({required this.item});
+
+  final _ActivityItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFE),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: item.accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Icon(item.icon, color: item.accent, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  style: const TextStyle(
+                    fontSize: 13.1,
+                    color: Color(0xFF162845),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  item.subtitle,
+                  style: const TextStyle(
+                    fontSize: 11.9,
+                    color: Color(0xFF6B7890),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (item.trailingAsset != null)
+            Image.asset(
+              item.trailingAsset!,
+              width: 24,
+              height: 24,
+              fit: BoxFit.contain,
+            )
+          else if (item.trailingIcon != null)
+            Icon(item.trailingIcon, color: const Color(0xFF7D8AA0), size: 18),
         ],
       ),
     );
