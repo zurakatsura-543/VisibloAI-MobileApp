@@ -930,7 +930,7 @@ class CitationManagerController extends GetxController {
       return left.name.toLowerCase().compareTo(right.name.toLowerCase());
     });
 
-    return filtered.take(60).toList(growable: false);
+    return filtered.take(24).toList(growable: false);
   }
 
   int _fallbackSuggestionScore(
