@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -7,9 +8,10 @@ import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../onboarding/controllers/onboarding_controller.dart';
+import '../services/auth_api_service.dart';
 import '../models/audit_models.dart';
-
 import '../models/business_review.dart';
+import '../models/citation_manager_models.dart';
 import '../models/test_account.dart';
 import '../widgets/auth_navigation_shell.dart';
 
@@ -93,11 +95,8 @@ class AuditHoursModuleView extends GetView<OnboardingController> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: AuditHoursModuleContent(
+                user: user,
                 section: section,
-                onSyncTap: () => _showModuleSnack(
-                  'Hours synced',
-                  'Business hours sync can be connected here next.',
-                ),
               ),
             ),
           ),
@@ -340,18 +339,206 @@ class AuditCategoryModuleContent extends StatelessWidget {
   }
 }
 
-class AuditHoursModuleContent extends StatelessWidget {
+class AuditHoursModuleContent extends StatefulWidget {
   const AuditHoursModuleContent({
     super.key,
+    required this.user,
     required this.section,
-    required this.onSyncTap,
   });
 
+  final TestAccount user;
   final AuditSection? section;
-  final VoidCallback onSyncTap;
+
+  @override
+  State<AuditHoursModuleContent> createState() => _AuditHoursModuleContentState();
+}
+
+class _AuditHoursModuleContentState extends State<AuditHoursModuleContent> {
+  final OnboardingController _onboardingController = Get.find<OnboardingController>();
+  final AuthApiService _authApiService = Get.find<AuthApiService>();
+  late List<_BusinessHoursEntry> _entries;
+  CitationNapInfo? _napInfo;
+  bool _isLoadingNap = true;
+  bool _isSavingHours = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _entries = _entriesFromRegularHours(null);
+    _loadNapInfo();
+  }
+
+  Future<void> _loadNapInfo() async {
+    try {
+      final locationId = await _resolveLocationId();
+      if (locationId.isEmpty) {
+        if (!mounted) {
+          return;
+        }
+        setState(() => _isLoadingNap = false);
+        return;
+      }
+
+      final napInfo = await _authApiService.fetchLocationNap(locationId);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _napInfo = napInfo;
+        _entries = _entriesFromRegularHours(napInfo?.regularHours);
+        _isLoadingNap = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _isLoadingNap = false);
+    }
+  }
+
+  Future<String> _resolveLocationId() async {
+    try {
+      final me = await _authApiService.fetchMyData();
+      if (me.locationId.trim().isNotEmpty) {
+        return me.locationId.trim();
+      }
+    } catch (_) {}
+
+    if (widget.user.backendAvailableBusinesses.isNotEmpty) {
+      return widget.user.backendAvailableBusinesses.first['locationId']
+              ?.toString() ??
+          '';
+    }
+    return '';
+  }
+
+  Future<void> _syncHoursToGoogle() async {
+    if (_isSavingHours) {
+      return;
+    }
+
+    final locationId = await _resolveLocationId();
+    if (locationId.isEmpty) {
+      _showModuleSnack(
+        'Location unavailable',
+        'Select a valid business location before syncing hours.',
+      );
+      return;
+    }
+
+    setState(() => _isSavingHours = true);
+    try {
+      final updatedNap = await _authApiService.updateCitationNap(
+        locationId,
+        businessName: _effectiveBusinessName(widget.user, _napInfo),
+        completeAddress: _effectiveAddress(widget.user, _napInfo),
+        phone: _effectivePhone(widget.user, _napInfo),
+        website: _effectiveWebsite(widget.user, _napInfo),
+        regularHours: _buildAuditRegularHoursPayload(_entries),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _napInfo = updatedNap;
+        _entries = _entriesFromRegularHours(updatedNap.regularHours);
+      });
+
+      await _onboardingController.fetchDashboardLiveStream();
+
+      final needsManualConfirmation =
+          updatedNap.gmbSyncFields?.any(
+            (field) =>
+                field.status == CitationGmbSyncStatus.manualConfirmation ||
+                field.status == CitationGmbSyncStatus.failed,
+          ) ??
+          false;
+
+      _showModuleSnack(
+        'Hours updated',
+        needsManualConfirmation
+            ? 'Hours were saved in VisibloAI. Some Google Business Profile fields need manual confirmation.'
+            : updatedNap.gmbLinked
+            ? 'Hours were saved and synced to Google Business Profile.'
+            : 'Hours were saved for this business workspace.',
+      );
+    } catch (error) {
+      _showModuleSnack(
+        'Sync failed',
+        error.toString().replaceFirst('Exception: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingHours = false);
+      }
+    }
+  }
+
+  Future<void> _pickTime(int index, {required bool isOpenTime}) async {
+    final currentEntry = _entries[index];
+    final initialTime = _parseTimeOfDay24(
+      isOpenTime ? currentEntry.opensAt : currentEntry.closesAt,
+    );
+
+    final pickedTime = await showDialog<TimeOfDay>(
+      context: context,
+      barrierColor: const Color(0xB3000000),
+      builder: (dialogContext) {
+        return _AuditHoursTimePickerDialog(
+          initialTime: initialTime,
+          title: isOpenTime ? 'Select Opening Time' : 'Select Closing Time',
+          subtitle: isOpenTime
+              ? 'Choose when this business day starts.'
+              : 'Choose when this business day ends.',
+          accent: AppColors.primaryDark,
+          leadingIcon: isOpenTime
+              ? Icons.wb_sunny_outlined
+              : Icons.nights_stay_outlined,
+        );
+      },
+    );
+
+    if (pickedTime == null || !mounted) {
+      return;
+    }
+
+    final formattedTime = _formatTimeOfDay24(pickedTime);
+    setState(() {
+      _entries[index] = currentEntry.copyWith(
+        opensAt: isOpenTime ? formattedTime : currentEntry.opensAt,
+        closesAt: isOpenTime ? currentEntry.closesAt : formattedTime,
+      );
+    });
+  }
+
+  void _toggleOpen(int index, bool isOpen) {
+    setState(() {
+      _entries[index] = _entries[index].copyWith(isClosed: !isOpen);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final daysOpen = _entries.where((entry) => !entry.isClosed).length;
+    final areHoursConsistent = _entries
+        .where((entry) => !entry.isClosed)
+        .map((entry) => '${entry.opensAt}-${entry.closesAt}')
+        .toSet()
+        .length <= 1;
+    final syncLabel = _napInfo == null
+        ? 'Draft'
+        : _napInfo!.gmbLinked
+        ? 'Synced'
+        : 'Saved';
+    final syncSubLabel = _napInfo == null
+        ? 'local state'
+        : _napInfo!.gmbLinked
+        ? 'Google ready'
+        : 'awaiting sync';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -364,7 +551,7 @@ class AuditHoursModuleContent extends StatelessWidget {
                 children: [
                   const Expanded(child: _SectionLabel(label: 'AVAILABILITY')),
                   _ScoreBadge(
-                    label: '${section?.score ?? 100}/100',
+                    label: '${widget.section?.score ?? 100}/100',
                     background: const Color(0xFFEAFBFF),
                     color: AppColors.primaryDark,
                   ),
@@ -393,22 +580,25 @@ class AuditHoursModuleContent extends StatelessWidget {
               const SizedBox(height: 12),
               const _SectionLabel(label: 'AUDIT CHECKS'),
               const SizedBox(height: 10),
-              const Column(
+              Column(
                 children: [
                   _InlineCheckItem(
                     label: 'Coverage',
-                    text: 'All 7 days have hours set',
+                    text: daysOpen == 7
+                        ? 'All 7 days have hours set'
+                        : '$daysOpen of 7 days are marked open',
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   _InlineCheckItem(
                     label: 'Days active',
-                    text: '7 of 7 days configured',
+                    text: '$daysOpen of 7 days configured',
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   _InlineCheckItem(
                     label: 'Consistent',
-                    text:
-                        'Same hours across all open days — easy for customers',
+                    text: areHoursConsistent
+                        ? 'Open days use a consistent schedule'
+                        : 'Opening times vary across the week',
                   ),
                 ],
               ),
@@ -431,7 +621,7 @@ class AuditHoursModuleContent extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    ...(section?.findings ?? []).map((f) => _HoursAuditLine(
+                    ...(widget.section?.findings ?? []).map((f) => _HoursAuditLine(
                       title: f.label,
                       subtitle: f.detail,
                     )),
@@ -444,18 +634,21 @@ class AuditHoursModuleContent extends StatelessWidget {
         const SizedBox(height: 12),
         const _SectionLabel(label: 'HOURS HEALTH'),
         const SizedBox(height: 10),
-        const Row(
+        Row(
           children: [
             Expanded(
-              child: _HoursMetricCard(value: '7/7', label: 'days open'),
+              child: _HoursMetricCard(
+                value: '$daysOpen/7',
+                label: 'days open',
+              ),
             ),
-            SizedBox(width: 10),
+            const SizedBox(width: 10),
             Expanded(
               child: _HoursMetricCard(
                 icon: Icons.cloud_done_rounded,
-                iconColor: Color(0xFFE05AC8),
-                value: 'Synced',
-                label: 'current state',
+                iconColor: const Color(0xFFE05AC8),
+                value: syncLabel,
+                label: syncSubLabel,
               ),
             ),
           ],
@@ -464,7 +657,9 @@ class AuditHoursModuleContent extends StatelessWidget {
         const _SectionLabel(label: 'WEEKLY SCHEDULE'),
         const SizedBox(height: 2),
         Text(
-          'Review each day before syncing to Google.',
+          _isLoadingNap
+              ? 'Loading current hours from your business workspace.'
+              : 'Review each day before syncing to Google.',
           style: AppTypography.body(
             fontSize: 12.4,
             color: const Color(0xFF596372),
@@ -472,12 +667,25 @@ class AuditHoursModuleContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        const _BusinessWeekSchedule(initialEntries: _defaultBusinessHours),
+        if (_isLoadingNap)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
+          )
+        else
+          _BusinessWeekSchedule(
+            entries: _entries,
+            onOpenChanged: _toggleOpen,
+            onEditOpenTime: (index) => _pickTime(index, isOpenTime: true),
+            onEditCloseTime: (index) => _pickTime(index, isOpenTime: false),
+          ),
         const SizedBox(height: 14),
         _FilledAuditButton(
-          label: 'Sync Hours to Google',
+          label: _isSavingHours ? 'Syncing hours...' : 'Sync Hours to Google',
           icon: Icons.cloud_upload_outlined,
-          onTap: onSyncTap,
+          onTap: _syncHoursToGoogle,
         ),
       ],
     );
@@ -2518,94 +2726,34 @@ class _HoursMetricCard extends StatelessWidget {
   }
 }
 
-class _BusinessWeekSchedule extends StatefulWidget {
-  const _BusinessWeekSchedule({required this.initialEntries});
+class _BusinessWeekSchedule extends StatelessWidget {
+  const _BusinessWeekSchedule({
+    required this.entries,
+    required this.onOpenChanged,
+    required this.onEditOpenTime,
+    required this.onEditCloseTime,
+  });
 
-  final List<_BusinessHoursEntry> initialEntries;
-
-  @override
-  State<_BusinessWeekSchedule> createState() => _BusinessWeekScheduleState();
-}
-
-class _BusinessWeekScheduleState extends State<_BusinessWeekSchedule> {
-  late List<_BusinessHoursEntry> _entries;
-
-  @override
-  void initState() {
-    super.initState();
-    _entries = widget.initialEntries
-        .map(
-          (entry) => entry.copyWith(
-            day: entry.day,
-            opensAt: entry.opensAt,
-            closesAt: entry.closesAt,
-            isClosed: entry.isClosed,
-          ),
-        )
-        .toList();
-  }
-
-  Future<void> _pickTime(int index, {required bool isOpenTime}) async {
-    final currentEntry = _entries[index];
-    final initialTime = _parseTimeOfDay(
-      isOpenTime ? currentEntry.opensAt : currentEntry.closesAt,
-    );
-
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: initialTime,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: AppColors.primaryDark,
-              secondary: AppColors.primary,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (pickedTime == null || !mounted) {
-      return;
-    }
-
-    final localizations = MaterialLocalizations.of(context);
-    final formattedTime = localizations.formatTimeOfDay(
-      pickedTime,
-      alwaysUse24HourFormat: false,
-    );
-
-    setState(() {
-      _entries[index] = currentEntry.copyWith(
-        opensAt: isOpenTime ? formattedTime : currentEntry.opensAt,
-        closesAt: isOpenTime ? currentEntry.closesAt : formattedTime,
-      );
-    });
-  }
-
-  void _toggleClosed(int index, bool isClosed) {
-    setState(() {
-      _entries[index] = _entries[index].copyWith(isClosed: isClosed);
-    });
-  }
+  final List<_BusinessHoursEntry> entries;
+  final void Function(int index, bool isOpen) onOpenChanged;
+  final ValueChanged<int> onEditOpenTime;
+  final ValueChanged<int> onEditCloseTime;
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: _entries.asMap().entries.map((entry) {
+      children: entries.asMap().entries.map((entry) {
         final index = entry.key;
         final item = entry.value;
         return Padding(
           padding: EdgeInsets.only(
-            bottom: index == _entries.length - 1 ? 0 : 10,
+            bottom: index == entries.length - 1 ? 0 : 10,
           ),
           child: _BusinessDayHoursCard(
             entry: item,
-            onClosedChanged: (value) => _toggleClosed(index, value),
-            onEditOpenTime: () => _pickTime(index, isOpenTime: true),
-            onEditCloseTime: () => _pickTime(index, isOpenTime: false),
+            onOpenChanged: (value) => onOpenChanged(index, value),
+            onEditOpenTime: () => onEditOpenTime(index),
+            onEditCloseTime: () => onEditCloseTime(index),
           ),
         );
       }).toList(),
@@ -2616,13 +2764,13 @@ class _BusinessWeekScheduleState extends State<_BusinessWeekSchedule> {
 class _BusinessDayHoursCard extends StatelessWidget {
   const _BusinessDayHoursCard({
     required this.entry,
-    required this.onClosedChanged,
+    required this.onOpenChanged,
     required this.onEditOpenTime,
     required this.onEditCloseTime,
   });
 
   final _BusinessHoursEntry entry;
-  final ValueChanged<bool> onClosedChanged;
+  final ValueChanged<bool> onOpenChanged;
   final VoidCallback onEditOpenTime;
   final VoidCallback onEditCloseTime;
 
@@ -2657,13 +2805,13 @@ class _BusinessDayHoursCard extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Switch.adaptive(
-                value: entry.isClosed,
+                value: !entry.isClosed,
                 activeThumbColor: AppColors.white,
                 activeTrackColor: AppColors.primaryDark,
                 inactiveThumbColor: AppColors.white,
                 inactiveTrackColor: const Color(0xFFDCE4EE),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                onChanged: onClosedChanged,
+                onChanged: onOpenChanged,
               ),
             ],
           ),
@@ -2673,7 +2821,7 @@ class _BusinessDayHoursCard extends StatelessWidget {
               Expanded(
                 child: _HoursValueField(
                   label: 'OPENS',
-                  value: entry.opensAt,
+                  value: _displayAuditHour(entry.opensAt),
                   enabled: !entry.isClosed,
                   onTap: onEditOpenTime,
                 ),
@@ -2682,7 +2830,7 @@ class _BusinessDayHoursCard extends StatelessWidget {
               Expanded(
                 child: _HoursValueField(
                   label: 'CLOSES',
-                  value: entry.closesAt,
+                  value: _displayAuditHour(entry.closesAt),
                   enabled: !entry.isClosed,
                   onTap: onEditCloseTime,
                 ),
@@ -2750,6 +2898,457 @@ class _HoursValueField extends StatelessWidget {
               color: enabled ? AppColors.brandBlue : const Color(0xFF96A0AE),
               fontWeight: FontWeight.w600,
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AuditHoursTimePickerDialog extends StatefulWidget {
+  const _AuditHoursTimePickerDialog({
+    required this.initialTime,
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+    required this.leadingIcon,
+  });
+
+  final TimeOfDay initialTime;
+  final String title;
+  final String subtitle;
+  final Color accent;
+  final IconData leadingIcon;
+
+  @override
+  State<_AuditHoursTimePickerDialog> createState() =>
+      _AuditHoursTimePickerDialogState();
+}
+
+class _AuditHoursTimePickerDialogState
+    extends State<_AuditHoursTimePickerDialog> {
+  late int _selectedHour;
+  late int _selectedMinute;
+  late bool _isAm;
+  late FixedExtentScrollController _hourController;
+  late FixedExtentScrollController _minuteController;
+
+  @override
+  void initState() {
+    super.initState();
+    final hour24 = widget.initialTime.hour;
+    _isAm = hour24 < 12;
+    _selectedHour = hour24 % 12 == 0 ? 12 : hour24 % 12;
+    _selectedMinute = widget.initialTime.minute;
+    _hourController = FixedExtentScrollController(
+      initialItem: _selectedHour - 1,
+    );
+    _minuteController = FixedExtentScrollController(
+      initialItem: _selectedMinute,
+    );
+  }
+
+  @override
+  void dispose() {
+    _hourController.dispose();
+    _minuteController.dispose();
+    super.dispose();
+  }
+
+  TimeOfDay _buildResult() {
+    var hour = _selectedHour % 12;
+    if (!_isAm) {
+      hour += 12;
+    }
+    return TimeOfDay(hour: hour, minute: _selectedMinute);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+      backgroundColor: Colors.transparent,
+      child: _AuditTimeModalCard(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _AuditTimeModalHeader(
+              title: 'Select Time',
+              onClose: () => Navigator.of(context).pop(),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              widget.subtitle,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF556987),
+                fontSize: 14,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 78,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFD),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE7EDF6)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(widget.leadingIcon, color: widget.accent, size: 24),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Row(
+                              children: [
+                                Text(
+                                  '${_selectedHour.toString().padLeft(2, '0')}:${_selectedMinute.toString().padLeft(2, '0')}',
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF08112F),
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _isAm ? 'AM' : 'PM',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: widget.accent,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  width: 102,
+                  height: 52,
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFDDE6F1)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _isAm = true),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: _isAm ? widget.accent : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              'AM',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: _isAm
+                                    ? Colors.white
+                                    : const Color(0xFF556987),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _isAm = false),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: !_isAm ? widget.accent : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              'PM',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: !_isAm
+                                    ? Colors.white
+                                    : const Color(0xFF556987),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _AuditTimeWheelField(
+                    title: 'HOUR',
+                    controller: _hourController,
+                    values: List<String>.generate(
+                      12,
+                      (index) => (index + 1).toString().padLeft(2, '0'),
+                    ),
+                    onSelected: (index) {
+                      setState(() => _selectedHour = index + 1);
+                    },
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(10, 78, 10, 0),
+                  child: Text(
+                    ':',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF08112F),
+                      fontSize: 34,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _AuditTimeWheelField(
+                    title: 'MINUTE',
+                    controller: _minuteController,
+                    values: List<String>.generate(
+                      60,
+                      (index) => index.toString().padLeft(2, '0'),
+                    ),
+                    onSelected: (index) {
+                      setState(() => _selectedMinute = index);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: Color(0xFFDDE6F1)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      backgroundColor: Colors.white,
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Color(0xFF08112F),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(_buildResult()),
+                    style: ElevatedButton.styleFrom(
+                      elevation: 0,
+                      backgroundColor: widget.accent,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AuditTimeModalCard extends StatelessWidget {
+  const _AuditTimeModalCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x240A1A36),
+            blurRadius: 32,
+            offset: Offset(0, 18),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _AuditTimeModalHeader extends StatelessWidget {
+  const _AuditTimeModalHeader({
+    required this.title,
+    required this.onClose,
+  });
+
+  final String title;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 96,
+          height: 8,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE4E8EF),
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            const SizedBox(width: 52),
+            Expanded(
+              child: Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFF08112F),
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            GestureDetector(
+              onTap: onClose,
+              child: Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF6F8FC),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFE7EDF6)),
+                ),
+                child: const Icon(
+                  Icons.close_rounded,
+                  color: Color(0xFF08112F),
+                  size: 30,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AuditTimeWheelField extends StatelessWidget {
+  const _AuditTimeWheelField({
+    required this.title,
+    required this.controller,
+    required this.values,
+    required this.onSelected,
+  });
+
+  final String title;
+  final FixedExtentScrollController controller;
+  final List<String> values;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            color: Color(0xFF556987),
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          height: 214,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFFDDE6F1)),
+          ),
+          child: CupertinoPicker(
+            scrollController: controller,
+            itemExtent: 40,
+            squeeze: 1.1,
+            selectionOverlay: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: const Color(0x664F79C8),
+                border: Border.all(color: const Color(0xFFBFD0EA)),
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            onSelectedItemChanged: onSelected,
+            children: values
+                .map(
+                  (value) => Center(
+                    child: Text(
+                      value,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        color: Color(0xFF08112F),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(growable: false),
           ),
         ),
       ],
@@ -3300,31 +3899,153 @@ class _BusinessHoursEntry {
   }
 }
 
-const List<_BusinessHoursEntry> _defaultBusinessHours = [
-  _BusinessHoursEntry(day: 'Monday', opensAt: '10:30 AM', closesAt: '07:30 PM'),
-  _BusinessHoursEntry(
-    day: 'Tuesday',
-    opensAt: '10:30 AM',
-    closesAt: '07:30 PM',
-  ),
-  _BusinessHoursEntry(
-    day: 'Wednesday',
-    opensAt: '10:30 AM',
-    closesAt: '07:30 PM',
-  ),
-  _BusinessHoursEntry(
-    day: 'Thursday',
-    opensAt: '10:30 AM',
-    closesAt: '07:30 PM',
-  ),
-  _BusinessHoursEntry(day: 'Friday', opensAt: '10:30 AM', closesAt: '07:30 PM'),
-  _BusinessHoursEntry(
-    day: 'Saturday',
-    opensAt: '10:30 AM',
-    closesAt: '07:30 PM',
-  ),
-  _BusinessHoursEntry(day: 'Sunday', opensAt: '10:30 AM', closesAt: '07:30 PM'),
+const List<String> _auditHoursDayOrder = <String>[
+  'MONDAY',
+  'TUESDAY',
+  'WEDNESDAY',
+  'THURSDAY',
+  'FRIDAY',
+  'SATURDAY',
+  'SUNDAY',
 ];
+
+const Map<String, String> _auditHoursDayLabels = <String, String>{
+  'MONDAY': 'Monday',
+  'TUESDAY': 'Tuesday',
+  'WEDNESDAY': 'Wednesday',
+  'THURSDAY': 'Thursday',
+  'FRIDAY': 'Friday',
+  'SATURDAY': 'Saturday',
+  'SUNDAY': 'Sunday',
+};
+
+List<_BusinessHoursEntry> _entriesFromRegularHours(CitationRegularHours? hours) {
+  final schedule = <String, ({bool closed, String open, String close})>{
+    for (final day in _auditHoursDayOrder)
+      day: (closed: true, open: '09:00', close: '18:00'),
+  };
+
+  for (final period in hours?.periods ?? const <CitationRegularHourPeriod>[]) {
+    final day = period.openDay.trim().toUpperCase();
+    if (!schedule.containsKey(day)) {
+      continue;
+    }
+    schedule[day] = (
+      closed: false,
+      open: _formatHourTime24(period.openTime?.hours, period.openTime?.minutes),
+      close: _formatHourTime24(
+        period.closeTime?.hours,
+        period.closeTime?.minutes,
+      ),
+    );
+  }
+
+  return _auditHoursDayOrder
+      .map(
+        (day) => _BusinessHoursEntry(
+          day: _auditHoursDayLabels[day] ?? day,
+          opensAt: schedule[day]!.open,
+          closesAt: schedule[day]!.close,
+          isClosed: schedule[day]!.closed,
+        ),
+      )
+      .toList(growable: false);
+}
+
+Map<String, dynamic> _buildAuditRegularHoursPayload(
+  List<_BusinessHoursEntry> entries,
+) {
+  return <String, dynamic>{
+    'periods': entries
+        .where((entry) => !entry.isClosed)
+        .map((entry) {
+          final dayKey = _dayKeyForLabel(entry.day);
+          final open = entry.opensAt.split(':').map(int.parse).toList();
+          final close = entry.closesAt.split(':').map(int.parse).toList();
+          return <String, dynamic>{
+            'openDay': dayKey,
+            'openTime': <String, dynamic>{
+              'hours': open[0],
+              'minutes': open[1],
+            },
+            'closeDay': dayKey,
+            'closeTime': <String, dynamic>{
+              'hours': close[0],
+              'minutes': close[1],
+            },
+          };
+        })
+        .toList(growable: false),
+  };
+}
+
+String _dayKeyForLabel(String label) {
+  return _auditHoursDayLabels.entries
+      .firstWhere(
+        (entry) => entry.value.toLowerCase() == label.toLowerCase(),
+        orElse: () => const MapEntry('MONDAY', 'Monday'),
+      )
+      .key;
+}
+
+String _formatHourTime24(int? hours, int? minutes) {
+  final h = (hours ?? 0).toString().padLeft(2, '0');
+  final m = (minutes ?? 0).toString().padLeft(2, '0');
+  return '$h:$m';
+}
+
+String _displayAuditHour(String value) {
+  final parts = value.split(':');
+  if (parts.length != 2) {
+    return value;
+  }
+  final hour = int.tryParse(parts[0]) ?? 0;
+  final minute = int.tryParse(parts[1]) ?? 0;
+  final period = hour >= 12 ? 'PM' : 'AM';
+  final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+  return '${hour12.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
+}
+
+TimeOfDay _parseTimeOfDay24(String value) {
+  final parts = value.split(':');
+  if (parts.length != 2) {
+    return const TimeOfDay(hour: 10, minute: 30);
+  }
+  return TimeOfDay(
+    hour: int.tryParse(parts[0]) ?? 10,
+    minute: int.tryParse(parts[1]) ?? 30,
+  );
+}
+
+String _formatTimeOfDay24(TimeOfDay value) {
+  final hour = value.hour.toString().padLeft(2, '0');
+  final minute = value.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
+}
+
+String _effectiveBusinessName(TestAccount user, CitationNapInfo? napInfo) {
+  final candidate = napInfo?.businessName.trim() ?? '';
+  return candidate.isNotEmpty ? candidate : _businessName(user);
+}
+
+String _effectiveAddress(TestAccount user, CitationNapInfo? napInfo) {
+  final candidate = napInfo?.address.trim() ?? '';
+  return candidate.isNotEmpty ? candidate : _businessAddress(user);
+}
+
+String _effectivePhone(TestAccount user, CitationNapInfo? napInfo) {
+  final candidate = napInfo?.phone.trim() ?? '';
+  if (candidate.isNotEmpty) {
+    return candidate;
+  }
+  final fallback = user.phoneNumber.trim();
+  return fallback.isNotEmpty ? fallback : '+91 98765 43210';
+}
+
+String _effectiveWebsite(TestAccount user, CitationNapInfo? napInfo) {
+  final candidate = napInfo?.website.trim() ?? '';
+  return candidate.isNotEmpty ? candidate : _businessWebsiteUrl(user);
+}
 
 List<_AuditPhotoPreview> _buildAuditPhotoPreviewItems({
   required List<String> uploadedPhotos,
@@ -3457,27 +4178,6 @@ String _reviewAgeLabel(String reviewDateLabel) {
     return '$totalDays d ago';
   }
   return 'Today';
-}
-
-TimeOfDay _parseTimeOfDay(String value) {
-  final match = RegExp(
-    r'^(\d{1,2}):(\d{2})\s*([AP]M)$',
-  ).firstMatch(value.trim().toUpperCase());
-  if (match == null) {
-    return const TimeOfDay(hour: 10, minute: 30);
-  }
-
-  var hour = int.parse(match.group(1)!);
-  final minute = int.parse(match.group(2)!);
-  final meridiem = match.group(3)!;
-
-  if (meridiem == 'PM' && hour != 12) {
-    hour += 12;
-  } else if (meridiem == 'AM' && hour == 12) {
-    hour = 0;
-  }
-
-  return TimeOfDay(hour: hour, minute: minute);
 }
 
 void _showModuleSnack(String title, String message) {

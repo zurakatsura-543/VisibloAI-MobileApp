@@ -40,6 +40,7 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
       Get.isRegistered<SocialAnalyticsController>()
       ? Get.find<SocialAnalyticsController>()
       : Get.put(SocialAnalyticsController());
+  LocationInsightsResponse? _previousInsights;
 
   @override
   void initState() {
@@ -53,12 +54,22 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
       start: now.subtract(const Duration(days: 29)),
       end: now,
     );
+    final previousRange = DateTimeRange(
+      start: now.subtract(const Duration(days: 59)),
+      end: now.subtract(const Duration(days: 30)),
+    );
     await _controller.fetchDashboardLiveStream();
-    await Future.wait([
+    final results = await Future.wait<Object?>([
       _controller.fetchReportsData(insightsRange),
+      _controller.loadInsightsForRange(previousRange),
       _socialAccountsController.loadAccounts(),
       _socialPostsController.loadPosts(),
     ]);
+    if (mounted) {
+      setState(() {
+        _previousInsights = results[1] as LocationInsightsResponse?;
+      });
+    }
     _socialAnalyticsController.loadIfBusinessOrRangeChanged('Last 28 days');
   }
 
@@ -123,6 +134,7 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
           final socialPosts = _socialPostsController.posts;
           final insights = _controller.liveInsights.value;
           final reach = _googleViews(insights);
+          final previousReach = _googleViews(_previousInsights);
           final unrepliedReviews = liveReviews
               .where((review) => !review.hasOwnerReply)
               .length;
@@ -223,7 +235,7 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
                             subtitle: 'People reached',
                             icon: const _ReachOverviewIcon(),
                             trendText: reach > 0
-                                ? '+ 28%  vs last 7 days'
+                                ? '${_formatReachDeltaText(reach, previousReach)} vs previous 30 days'
                                 : null,
                             onTap: () {
                               _productModeController.selectMode(
@@ -237,7 +249,11 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _ReachChartCard(reach: reach, insights: insights),
+                  _ReachChartCard(
+                    reach: reach,
+                    insights: insights,
+                    previousInsights: _previousInsights,
+                  ),
                   const SizedBox(height: 12),
                   _RecentActivityCard(
                     items: activityItems,
@@ -543,10 +559,15 @@ class _MetricOverviewCard extends StatelessWidget {
 }
 
 class _ReachChartCard extends StatelessWidget {
-  const _ReachChartCard({required this.reach, required this.insights});
+  const _ReachChartCard({
+    required this.reach,
+    required this.insights,
+    required this.previousInsights,
+  });
 
   final int reach;
   final LocationInsightsResponse? insights;
+  final LocationInsightsResponse? previousInsights;
 
   @override
   Widget build(BuildContext context) {
@@ -572,7 +593,7 @@ class _ReachChartCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Reach Overview (Last 7 Days)',
+            'Reach Overview (Last 30 Days)',
             style: TextStyle(
               fontSize: 15,
               color: AppColors.brandBlue,
@@ -657,13 +678,9 @@ class _ReachChartCard extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const Text(
-                          '↑ 28%',
-                          style: TextStyle(
-                            fontSize: 11.2,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        _ReachDeltaText(
+                          current: reach,
+                          previous: _googleViews(previousInsights),
                         ),
                       ],
                     ),
@@ -760,6 +777,41 @@ class _InsightStatPill extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ReachDeltaText extends StatelessWidget {
+  const _ReachDeltaText({required this.current, required this.previous});
+
+  final int current;
+  final int previous;
+
+  @override
+  Widget build(BuildContext context) {
+    final delta = _formatReachDeltaText(current, previous);
+    final isNegative = delta.startsWith('-');
+    final isZero = delta == '0%' || delta == '+0%';
+    final icon = isZero
+        ? Icons.remove_rounded
+        : isNegative
+        ? Icons.south_east_rounded
+        : Icons.north_east_rounded;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 11, color: Colors.white),
+        const SizedBox(width: 2),
+        Text(
+          delta.startsWith('+') ? delta.substring(1) : delta,
+          style: const TextStyle(
+            fontSize: 11.2,
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1243,10 +1295,7 @@ List<double> _buildReachChartPoints(LocationInsightsResponse? insights) {
     return const [0.15, 0.24, 0.36, 0.32, 0.46, 0.39, 0.72];
   }
 
-  final recent = daily.length > 7 ? daily.sublist(daily.length - 7) : daily;
-  final values = recent
-      .map((item) => item.searchImpressions + item.mapsImpressions)
-      .toList(growable: false);
+  final values = _bucketReachDailyValues(daily);
   final maxValue = values.fold<int>(
     0,
     (max, value) => value > max ? value : max,
@@ -1273,8 +1322,8 @@ List<String> _buildReachChartLabels(LocationInsightsResponse? insights) {
     ];
   }
 
-  final recent = daily.length > 7 ? daily.sublist(daily.length - 7) : daily;
-  return recent
+  final labelSource = _bucketReachDailyLabels(daily);
+  return labelSource
       .map((item) {
         final date = DateTime.tryParse(item.date);
         if (date == null) {
@@ -1283,6 +1332,50 @@ List<String> _buildReachChartLabels(LocationInsightsResponse? insights) {
         return '${_monthShort(date.month)} ${date.day}';
       })
       .toList(growable: false);
+}
+
+List<int> _bucketReachDailyValues(List<DailyInsight> daily) {
+  if (daily.length <= 7) {
+    return daily
+        .map((item) => item.searchImpressions + item.mapsImpressions)
+        .toList(growable: false);
+  }
+
+  final values = <int>[];
+  for (var bucketIndex = 0; bucketIndex < 7; bucketIndex++) {
+    final start = (bucketIndex * daily.length / 7).floor();
+    final end = ((bucketIndex + 1) * daily.length / 7).floor();
+    final slice = daily.sublist(start, end <= start ? start + 1 : end);
+    values.add(
+      slice.fold<int>(
+        0,
+        (sum, item) => sum + item.searchImpressions + item.mapsImpressions,
+      ),
+    );
+  }
+  return values;
+}
+
+List<DailyInsight> _bucketReachDailyLabels(List<DailyInsight> daily) {
+  if (daily.length <= 7) {
+    return daily;
+  }
+
+  return List<DailyInsight>.generate(7, (bucketIndex) {
+    final end = (((bucketIndex + 1) * daily.length / 7).floor() - 1).clamp(
+      0,
+      daily.length - 1,
+    );
+    return daily[end];
+  }, growable: false);
+}
+
+String _formatReachDeltaText(int current, int previous) {
+  if (previous <= 0) {
+    return current <= 0 ? '0%' : '+100%';
+  }
+  final rounded = (((current - previous) / previous) * 100).round();
+  return rounded > 0 ? '+$rounded%' : '$rounded%';
 }
 
 String _formatActivityTime(DateTime value) {

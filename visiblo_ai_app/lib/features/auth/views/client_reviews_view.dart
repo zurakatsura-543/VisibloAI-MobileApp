@@ -361,6 +361,16 @@ class _ReviewsTopBar extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Row(
           children: [
+            IconButton(
+              onPressed: () => Get.back(),
+              splashRadius: 22,
+              icon: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: _reviewInk,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 4),
             const AppLogo(iconSize: 33, fontSize: 23),
             const Spacer(),
             IconButton(
@@ -479,6 +489,14 @@ class _ReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final commentStyle = const TextStyle(
+      fontFamily: _reviewFontFamily,
+      fontSize: 13.2,
+      height: 1.24,
+      color: Color(0xFF101827),
+      fontWeight: FontWeight.w500,
+    );
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
@@ -549,33 +567,43 @@ class _ReviewCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 11),
-          Text(
-            review.comment,
-            maxLines: isExpanded ? null : 3,
-            overflow: isExpanded ? null : TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: _reviewFontFamily,
-              fontSize: 13.2,
-              height: 1.24,
-              color: Color(0xFF101827),
-              fontWeight: FontWeight.w500,
-            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final painter = TextPainter(
+                text: TextSpan(text: review.comment, style: commentStyle),
+                maxLines: 3,
+                textDirection: Directionality.of(context),
+              )..layout(maxWidth: constraints.maxWidth);
+              final exceedsThreeLines = painter.didExceedMaxLines;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    review.comment,
+                    maxLines: isExpanded ? null : 3,
+                    overflow: isExpanded ? null : TextOverflow.ellipsis,
+                    style: commentStyle,
+                  ),
+                  if (exceedsThreeLines) ...[
+                    const SizedBox(height: 5),
+                    InkWell(
+                      onTap: onToggleExpanded,
+                      child: Text(
+                        isExpanded ? 'Show less' : 'Read more',
+                        style: const TextStyle(
+                          fontFamily: _reviewFontFamily,
+                          fontSize: 12,
+                          color: Color(0xFF1768E8),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
-          if (review.comment.length > 95) ...[
-            const SizedBox(height: 5),
-            InkWell(
-              onTap: onToggleExpanded,
-              child: Text(
-                isExpanded ? 'Show less' : 'Read more',
-                style: const TextStyle(
-                  fontFamily: _reviewFontFamily,
-                  fontSize: 12,
-                  color: Color(0xFF1768E8),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
           if (!review.hasOwnerReply) ...[
             const SizedBox(height: 13),
             _SuggestedReplyCard(
@@ -585,26 +613,167 @@ class _ReviewCard extends StatelessWidget {
             ),
           ] else ...[
             const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDDF8E7),
-                  borderRadius: BorderRadius.circular(6),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDDF8E7),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'Replied',
+                    style: TextStyle(
+                      fontFamily: _reviewFontFamily,
+                      fontSize: 12,
+                      color: Color(0xFF26A45F),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
-                child: const Text(
-                  'Replied',
+              ],
+            ),
+            const SizedBox(height: 10),
+            _OwnerReplyCard(
+              replyText: review.ownerReply,
+              updatedAtLabel: review.ownerReplyUpdatedLabel,
+              onEditReply: onEditReply,
+              onDeleteReply: onDeleteReply,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _OwnerReplyCard extends StatelessWidget {
+  const _OwnerReplyCard({
+    required this.replyText,
+    required this.updatedAtLabel,
+    required this.onEditReply,
+    required this.onDeleteReply,
+  });
+
+  final String replyText;
+  final String updatedAtLabel;
+  final VoidCallback onEditReply;
+  final VoidCallback onDeleteReply;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FBFF),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFD9E7F6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.reply_rounded,
+                size: 16,
+                color: Color(0xFF1768E8),
+              ),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'Owner reply',
                   style: TextStyle(
                     fontFamily: _reviewFontFamily,
-                    fontSize: 12,
-                    color: Color(0xFF26A45F),
+                    fontSize: 12.6,
+                    color: _reviewInk,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
+              if (updatedAtLabel.trim().isNotEmpty)
+                Flexible(
+                  child: Text(
+                    _ownerReplyTimeLabel(updatedAtLabel),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: _reviewFontFamily,
+                      fontSize: 10.6,
+                      color: _reviewMuted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            replyText,
+            style: const TextStyle(
+              fontFamily: _reviewFontFamily,
+              fontSize: 12.8,
+              height: 1.35,
+              color: Color(0xFF182236),
+              fontWeight: FontWeight.w500,
             ),
-          ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onEditReply,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    side: const BorderSide(color: Color(0xFFD4DFEC)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    foregroundColor: _reviewInk,
+                    backgroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  label: const Text(
+                    'Edit reply',
+                    style: TextStyle(
+                      fontFamily: _reviewFontFamily,
+                      fontSize: 12.4,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onDeleteReply,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    side: const BorderSide(color: Color(0xFFF1CACA)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    foregroundColor: const Color(0xFFE35B52),
+                    backgroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                  label: const Text(
+                    'Delete',
+                    style: TextStyle(
+                      fontFamily: _reviewFontFamily,
+                      fontSize: 12.4,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -944,11 +1113,14 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
         _aiResult = result;
       });
     } catch (e) {
-      Get.snackbar(
-        'AI Generation Failed',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+      final fallback = _buildLocalAiFallback(
+        manualReviewType: manualReviewType,
       );
+      _replyController.text =
+          fallback['reply']?.toString() ?? widget.review.suggestedReply;
+      setState(() {
+        _aiResult = fallback;
+      });
     } finally {
       if (mounted) {
         setState(() {
@@ -1304,6 +1476,44 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
     );
   }
 
+  Map<String, dynamic> _buildLocalAiFallback({String? manualReviewType}) {
+    final reviewType = manualReviewType ?? _inferReviewType(widget.review);
+    final sentiment = switch (reviewType) {
+      'positive' => 'POSITIVE',
+      'neutral' => 'NEUTRAL',
+      'genuine_negative' ||
+      'wrong_business' ||
+      'rating_mismatch_negative' => 'NEGATIVE',
+      _ =>
+        widget.review.starRating >= 4
+            ? 'POSITIVE'
+            : widget.review.starRating == 3
+            ? 'NEUTRAL'
+            : 'NEGATIVE',
+    };
+
+    final riskLevel = sentiment == 'NEGATIVE' ? 'MEDIUM RISK' : 'LOW RISK';
+    return <String, dynamic>{
+      'reply': widget.review.suggestedReply,
+      'sentiment': sentiment,
+      'confidence': 0.74,
+      'riskLevel': riskLevel,
+      'reviewType': reviewType,
+      'reason':
+          'Live AI was temporarily unavailable, so this draft uses VisibloAI fallback guidance based on the star rating and review text.',
+    };
+  }
+
+  String _inferReviewType(GbpReview review) {
+    if (review.starRating >= 4) {
+      return 'positive';
+    }
+    if (review.starRating == 3) {
+      return 'neutral';
+    }
+    return 'genuine_negative';
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
@@ -1507,29 +1717,40 @@ class _ReplyEditorSheetState extends State<_ReplyEditorSheet> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    Row(
                       children: [
-                        _ReplyActionChip(
-                          label: 'Use this reply',
-                          icon: Icons.send_outlined,
-                          foreground: _reviewBlue,
-                          filled: true,
-                          onTap: () =>
-                              widget.onSave(_replyController.text.trim()),
+                        Expanded(
+                          child: _ReplyActionChip(
+                            label: 'Use this reply',
+                            icon: Icons.send_outlined,
+                            foreground: _reviewBlue,
+                            filled: true,
+                            forceSingleLine: true,
+                            onTap: () =>
+                                widget.onSave(_replyController.text.trim()),
+                          ),
                         ),
-                        _ReplyActionChip(
-                          label: 'Edit reply',
-                          icon: Icons.edit_outlined,
-                          foreground: _reviewPurple,
-                          onTap: () => _replyFocusNode.requestFocus(),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: _ReplyActionChip(
+                            label: 'Edit reply',
+                            icon: Icons.edit_outlined,
+                            foreground: _reviewPurple,
+                            forceSingleLine: true,
+                            onTap: () => _replyFocusNode.requestFocus(),
+                          ),
                         ),
-                        _ReplyActionChip(
-                          label: _isGenerating ? 'Generating...' : 'Regenerate',
-                          icon: Icons.refresh_rounded,
-                          foreground: _reviewPurple,
-                          onTap: _isGenerating ? null : _generateAiReply,
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: _ReplyActionChip(
+                            label: _isGenerating
+                                ? 'Generating...'
+                                : 'Regenerate',
+                            icon: Icons.refresh_rounded,
+                            foreground: _reviewPurple,
+                            onTap: _isGenerating ? null : _generateAiReply,
+                            forceSingleLine: true,
+                          ),
                         ),
                       ],
                     ),
@@ -1623,6 +1844,7 @@ class _ReplyActionChip extends StatelessWidget {
     required this.foreground,
     required this.onTap,
     this.filled = false,
+    this.forceSingleLine = false,
   });
 
   final String label;
@@ -1630,6 +1852,7 @@ class _ReplyActionChip extends StatelessWidget {
   final Color foreground;
   final VoidCallback? onTap;
   final bool filled;
+  final bool forceSingleLine;
 
   @override
   Widget build(BuildContext context) {
@@ -1643,14 +1866,19 @@ class _ReplyActionChip extends StatelessWidget {
               : foreground.withValues(alpha: 0.35),
         ),
         backgroundColor: filled ? foreground : Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
+        minimumSize: const Size(0, 40),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
-      icon: Icon(icon, size: 15),
+      icon: Icon(icon, size: 14),
       label: Text(
         label,
+        maxLines: 1,
+        softWrap: !forceSingleLine,
+        overflow: TextOverflow.ellipsis,
         style: AppTypography.label(
-          fontSize: 10.8,
+          fontSize: 9.6,
           color: filled ? Colors.white : foreground,
           fontWeight: FontWeight.w700,
         ),
@@ -1726,4 +1954,17 @@ String _reviewTimeLabel(GbpReview review) {
     return '${diff.inDays} days ago';
   }
   return review.reviewDateLabel;
+}
+
+String _ownerReplyTimeLabel(String rawValue) {
+  final trimmed = rawValue.trim();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  final parsed = DateTime.tryParse(trimmed);
+  if (parsed == null) {
+    return trimmed;
+  }
+  final local = parsed.toLocal();
+  return 'Updated ${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year}';
 }

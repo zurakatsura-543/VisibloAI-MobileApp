@@ -228,8 +228,9 @@ String _hoursSummary(CitationRegularHours? hours) {
   return '${_dayLabels[firstOpenDay]} ${_displayHour(slot.open)} to ${_displayHour(slot.close)}';
 }
 
-({String label, Color foreground, Color background})
-_gmbSyncStyleFor(CitationGmbSyncStatus status) {
+({String label, Color foreground, Color background}) _gmbSyncStyleFor(
+  CitationGmbSyncStatus status,
+) {
   switch (status) {
     case CitationGmbSyncStatus.synced:
       return (
@@ -258,60 +259,43 @@ _gmbSyncStyleFor(CitationGmbSyncStatus status) {
   }
 }
 
-typedef _DiscoverGroupTheme =
-    ({
-      Color surface,
-      Color border,
-      Color accent,
-      Color softAccent,
-      String bannerLabel,
-    });
+typedef _DiscoverGroupTheme = ({
+  Color surface,
+  Color border,
+  Color accent,
+  Color softAccent,
+});
 
 _DiscoverGroupTheme _discoverGroupThemeFor(String key) {
   switch (key) {
     case 'core':
       return (
-        surface: const Color(0xFFF2F8FF),
-        border: const Color(0xFFD7E8FF),
-        accent: const Color(0xFF2368D8),
-        softAccent: const Color(0xFFEAF2FF),
-        bannerLabel: 'Core first',
+        surface: Colors.white,
+        border: const Color(0xFFC7DDF7),
+        accent: const Color(0xFF0B4F93),
+        softAccent: const Color(0xFFEAF4FF),
       );
     case 'social':
       return (
-        surface: const Color(0xFFF8F4FF),
-        border: const Color(0xFFE4D8FF),
-        accent: const Color(0xFF7A58D1),
-        softAccent: const Color(0xFFF2EDFF),
-        bannerLabel: 'Brand presence',
+        surface: Colors.white,
+        border: const Color(0xFFD6C4FF),
+        accent: const Color(0xFF6A39C9),
+        softAccent: const Color(0xFFF2ECFF),
       );
     case 'industry':
       return (
-        surface: const Color(0xFFFFF8EF),
-        border: const Color(0xFFFFE1B3),
-        accent: const Color(0xFFE3832A),
-        softAccent: const Color(0xFFFFF1D9),
-        bannerLabel: 'Category fit',
+        surface: Colors.white,
+        border: const Color(0xFFFFD59B),
+        accent: const Color(0xFFD46D00),
+        softAccent: const Color(0xFFFFF0DA),
       );
     default:
       return (
-        surface: const Color(0xFFF6FAF8),
-        border: const Color(0xFFD9ECE1),
-        accent: const Color(0xFF1B9E5A),
-        softAccent: const Color(0xFFE9F8EF),
-        bannerLabel: 'More reach',
+        surface: Colors.white,
+        border: const Color(0xFFCDEBD9),
+        accent: const Color(0xFF087A42),
+        softAccent: const Color(0xFFEAF8EF),
       );
-  }
-}
-
-String _getAutomationLabel(DirectoryAutomationReadiness readiness) {
-  switch (readiness) {
-    case DirectoryAutomationReadiness.full:
-      return 'Auto-ready';
-    case DirectoryAutomationReadiness.partial:
-      return 'Guided';
-    case DirectoryAutomationReadiness.manualOnly:
-      return 'Manual';
   }
 }
 
@@ -382,10 +366,6 @@ class CitationView extends GetView<CitationManagerController> {
                         _HeaderCard(
                           onRefresh: controller.refreshData,
                           isRefreshing: controller.isRefreshing.value,
-                          onQuickAction: () => _showAddCitationSheet(
-                            context,
-                            paymentController,
-                          ),
                         ),
                         const SizedBox(height: 12),
                         if (controller.errorMessage.value != null) ...[
@@ -414,19 +394,16 @@ class CitationView extends GetView<CitationManagerController> {
                               ? null
                               : () => _showNapIssues(context),
                           onDiscover: controller.discoverDirectories,
-                          onAddCitation: () => _showAddCitationSheet(
-                            context,
-                            paymentController,
-                          ),
+                          onAddCitation: () =>
+                              _showAddCitationSheet(context, paymentController),
                         ),
                         const SizedBox(height: 12),
                         _QuickActionsCard(
                           isScanning: controller.isScanning.value,
+                          trackedCount: controller.stats.value?.all ?? 0,
                           onScan: controller.scanNap,
-                          onAddCitation: () => _showAddCitationSheet(
-                            context,
-                            paymentController,
-                          ),
+                          onAddCitation: () =>
+                              _showAddCitationSheet(context, paymentController),
                         ),
                         const SizedBox(height: 12),
                         _NapCard(
@@ -434,8 +411,6 @@ class CitationView extends GetView<CitationManagerController> {
                           onEdit: () => _showNapEditor(context, napInfo),
                           onOpenExternal: _openExternal,
                         ),
-                        const SizedBox(height: 12),
-                        const _WorkflowCard(),
                         if (showLocationCard) ...[
                           const SizedBox(height: 12),
                           _LocationCard(
@@ -469,10 +444,8 @@ class CitationView extends GetView<CitationManagerController> {
                           todoCount: controller.todoCount,
                           isSubmittingAll: controller.isSubmittingAll.value,
                           onSearchChanged: controller.updateSearchQuery,
-                          onAddCitation: () => _showAddCitationSheet(
-                            context,
-                            paymentController,
-                          ),
+                          onAddCitation: () =>
+                              _showAddCitationSheet(context, paymentController),
                           onSubmitAll: controller.submitAllTodo,
                         ),
                         if (jobStats != null && jobStats.total > 0) ...[
@@ -765,15 +738,10 @@ class CitationView extends GetView<CitationManagerController> {
 }
 
 class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({
-    required this.onRefresh,
-    required this.isRefreshing,
-    required this.onQuickAction,
-  });
+  const _HeaderCard({required this.onRefresh, required this.isRefreshing});
 
   final Future<void> Function() onRefresh;
   final bool isRefreshing;
-  final VoidCallback onQuickAction;
 
   @override
   Widget build(BuildContext context) {
@@ -791,55 +759,20 @@ class _HeaderCard extends StatelessWidget {
                   color: AppColors.brandBlue,
                 ),
                 const SizedBox(width: 8),
-                const VisibloBrandWordmark(
-                  iconSize: 20,
-                  fontSize: 15.5,
-                  showIcon: false,
-                ),
+                const VisibloBrandWordmark(iconSize: 22, fontSize: 16.5),
               ],
-            ),
-            const Spacer(),
-            FilledButton(
-              onPressed: onQuickAction,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.brandBlue,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.add_rounded, size: 15),
-                  const SizedBox(width: 5),
-                  Text(
-                    'Quick Action',
-                    style: AppTypography.label(
-                      fontSize: 10.8,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 3),
-                  const Icon(Icons.keyboard_arrow_down_rounded, size: 16),
-                ],
-              ),
             ),
           ],
         ),
         const SizedBox(height: 16),
         Text(
           'Citation Manager',
-          style: AppTypography.section(
-            fontSize: 28,
+          style: const TextStyle(
+            fontSize: 25.5,
+            height: 1.04,
             color: AppColors.brandBlue,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.1,
           ),
         ),
         const SizedBox(height: 4),
@@ -1003,10 +936,12 @@ class _MetricSection extends StatelessWidget {
               child: _ScoreMetricCard(
                 title: 'Directory Coverage',
                 score: controller.coverageScore,
-                accentColor: const Color(0xFF61B238),
+                accentColor: AppColors.brandBlue,
+                icon: Icons.travel_explore_rounded,
                 description:
-                    'Listed on ${controller.stats.value?.active ?? 0} of ${controller.stats.value?.all ?? 0} tracked directories',
+                    '${controller.stats.value?.active ?? 0}/${controller.stats.value?.all ?? 0} live listings',
                 footerLabel: 'Improve coverage',
+                footerOutlined: false,
                 onFooterTap: onDiscover,
               ),
             ),
@@ -1015,15 +950,17 @@ class _MetricSection extends StatelessWidget {
               child: _ScoreMetricCard(
                 title: 'NAP Consistency',
                 score: controller.napScore,
-                accentColor: const Color(0xFFE3832A),
+                accentColor: AppColors.primary,
+                icon: Icons.verified_user_outlined,
                 description: controller.checkedCitationCount == 0
-                    ? 'Run a scan after adding directories to verify live listings.'
+                    ? 'Scan tracked listings'
                     : controller.inconsistentActiveCitations.isEmpty
-                    ? 'All checked active listings match your master NAP.'
-                    : '${controller.inconsistentActiveCitations.length} active listings need NAP review.',
+                    ? 'Name, address, phone match'
+                    : '${controller.inconsistentActiveCitations.length} listings need review',
                 footerLabel: controller.inconsistentActiveCitations.isEmpty
                     ? 'Add citation'
                     : 'Fix issues',
+                footerOutlined: controller.inconsistentActiveCitations.isEmpty,
                 onFooterTap: controller.inconsistentActiveCitations.isEmpty
                     ? onAddCitation
                     : onFixIssues,
@@ -1039,58 +976,140 @@ class _MetricSection extends StatelessWidget {
 class _QuickActionsCard extends StatelessWidget {
   const _QuickActionsCard({
     required this.isScanning,
+    required this.trackedCount,
     required this.onScan,
     required this.onAddCitation,
   });
 
   final bool isScanning;
+  final int trackedCount;
   final Future<void> Function() onScan;
   final VoidCallback onAddCitation;
 
   @override
   Widget build(BuildContext context) {
     return _PanelCard(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Quick Actions',
-            style: AppTypography.card(fontSize: 17, color: AppColors.brandBlue),
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF9FB),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: const Icon(
+                  Icons.bolt_rounded,
+                  size: 18,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Quick Actions',
+                      style: AppTypography.card(
+                        fontSize: 15.8,
+                        color: AppColors.brandBlue,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      trackedCount == 0
+                          ? 'Add a listing first, then scan NAP.'
+                          : '$trackedCount tracked listings ready to scan.',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body(
+                        fontSize: 11.2,
+                        color: AppColors.mutedText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Keep your citation health moving with one-tap actions.',
-            style: AppTypography.body(
-              fontSize: 12.5,
-              color: AppColors.mutedText,
-            ),
-          ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
                 child: _QuickActionCapsule(
-                  icon: Icons.search_rounded,
-                  label: isScanning ? 'Scanning...' : 'NAP Scan',
+                  icon: Icons.radar_rounded,
+                  label: isScanning ? 'Scanning...' : 'Scan NAP',
                   filled: false,
                   isLoading: isScanning,
                   expand: true,
                   onTap: isScanning ? null : onScan,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: _QuickActionCapsule(
-                  icon: Icons.add_rounded,
-                  label: 'Add Citation',
+                  icon: Icons.add_business_rounded,
+                  label: 'Add listing',
                   expand: true,
                   onTap: onAddCitation,
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _ActionHint(
+                  icon: Icons.fact_check_outlined,
+                  text: 'Scan verifies name, address and phone.',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ActionHint(
+                  icon: Icons.post_add_rounded,
+                  text: 'Add listing tracks one directory.',
+                ),
+              ),
+            ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _ActionHint extends StatelessWidget {
+  const _ActionHint({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 13, color: const Color(0xFF7A8DA5)),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.label(
+              fontSize: 9.6,
+              color: const Color(0xFF7A8DA5),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1251,13 +1270,14 @@ class _NapCard extends StatelessWidget {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          if ((napInfo!.googleSearchUrl ?? '').trim().isNotEmpty)
+                          if ((napInfo!.googleSearchUrl ?? '')
+                              .trim()
+                              .isNotEmpty)
                             _InlineAction(
                               icon: Icons.open_in_new_rounded,
                               label: 'Open In Google',
-                              onPressed: () => onOpenExternal(
-                                napInfo!.googleSearchUrl!,
-                              ),
+                              onPressed: () =>
+                                  onOpenExternal(napInfo!.googleSearchUrl!),
                             ),
                           if ((napInfo!.googleBusinessProfileUrl ?? '')
                               .trim()
@@ -1293,109 +1313,6 @@ class _NapCard extends StatelessWidget {
             ],
           ),
       ],
-    );
-  }
-}
-
-class _WorkflowCard extends StatelessWidget {
-  const _WorkflowCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return _PanelCard(
-      backgroundColor: const Color(0xFFFFFCFC),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 26,
-                height: 26,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFFEEEE),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.gpp_maybe_outlined,
-                  size: 15,
-                  color: Color(0xFFE45757),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'TRUSTWORTHY CITATION WORKFLOW',
-                style: AppTypography.label(
-                  fontSize: 10.2,
-                  color: const Color(0xFF8A4A4A),
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.6,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Track directories, verify proof, then fix manually where needed.',
-            style: AppTypography.card(
-              fontSize: 18,
-              color: AppColors.brandBlue,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'VisibloAI checks if your business listing is publicly visible, compares visible name, address, phone, and website with your master NAP, and shows proof or confidence.',
-            style: AppTypography.body(
-              fontSize: 12.6,
-              color: AppColors.mutedText,
-              height: 1.45,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: const [
-              Expanded(
-                child: _WorkflowStep(
-                  number: '1',
-                  title: 'Track',
-                  description: 'Add',
-                ),
-              ),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6),
-                child: Icon(
-                  Icons.arrow_forward_rounded,
-                  size: 18,
-                  color: Color(0xFFDE9A45),
-                ),
-              ),
-              Expanded(
-                child: _WorkflowStep(
-                  number: '2',
-                  title: 'Scan',
-                  description: 'Verify',
-                ),
-              ),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6),
-                child: Icon(
-                  Icons.arrow_forward_rounded,
-                  size: 18,
-                  color: Color(0xFFDE9A45),
-                ),
-              ),
-              Expanded(
-                child: _WorkflowStep(
-                  number: '3',
-                  title: 'Act',
-                  description: 'Fix',
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1512,19 +1429,23 @@ class _DiscoverSectionState extends State<_DiscoverSection> {
     final suggestionsLabel = controller.suggestions.isEmpty
         ? 'India directories like Justdial, IndiaMart, Sulekha, and Cylex are prioritized when relevant.'
         : controller.suggestions.take(5).map((item) => item.name).join(', ');
-    final filteredSuggestions = controller.suggestions.where((suggestion) {
-      final query = _discoverQuery.trim().toLowerCase();
-      if (query.isEmpty) {
-        return true;
-      }
-      return suggestion.name.toLowerCase().contains(query) ||
-          suggestion.domain.toLowerCase().contains(query);
-    }).toList(growable: false);
+    final filteredSuggestions = controller.suggestions
+        .where((suggestion) {
+          final query = _discoverQuery.trim().toLowerCase();
+          if (query.isEmpty) {
+            return true;
+          }
+          return suggestion.name.toLowerCase().contains(query) ||
+              suggestion.domain.toLowerCase().contains(query);
+        })
+        .toList(growable: false);
     final groupedSuggestions = _groupSuggestions(filteredSuggestions);
-    final visibleGroups = groupedSuggestions.entries.where((entry) {
-      if (entry.value.isEmpty) return false;
-      return _discoverFilter == 'all' || _discoverFilter == entry.key;
-    }).toList(growable: false);
+    final visibleGroups = groupedSuggestions.entries
+        .where((entry) {
+          if (entry.value.isEmpty) return false;
+          return _discoverFilter == 'all' || _discoverFilter == entry.key;
+        })
+        .toList(growable: false);
     final selectedCategory =
         (controller.selectedLocation?.primaryCategory ?? '').trim();
 
@@ -1633,21 +1554,25 @@ class _DiscoverSectionState extends State<_DiscoverSection> {
                       ),
                       const SizedBox(width: 8),
                       _FilterChip(
-                        label: 'Core (${groupedSuggestions['core']?.length ?? 0})',
+                        label:
+                            'Core (${groupedSuggestions['core']?.length ?? 0})',
                         selected: _discoverFilter == 'core',
                         onTap: () => setState(() => _discoverFilter = 'core'),
                       ),
                       const SizedBox(width: 8),
                       _FilterChip(
-                        label: 'Social (${groupedSuggestions['social']?.length ?? 0})',
+                        label:
+                            'Social (${groupedSuggestions['social']?.length ?? 0})',
                         selected: _discoverFilter == 'social',
                         onTap: () => setState(() => _discoverFilter = 'social'),
                       ),
                       const SizedBox(width: 8),
                       _FilterChip(
-                        label: 'Category fit (${groupedSuggestions['industry']?.length ?? 0})',
+                        label:
+                            'Category fit (${groupedSuggestions['industry']?.length ?? 0})',
                         selected: _discoverFilter == 'industry',
-                        onTap: () => setState(() => _discoverFilter = 'industry'),
+                        onTap: () =>
+                            setState(() => _discoverFilter = 'industry'),
                       ),
                     ],
                   ),
@@ -2449,7 +2374,7 @@ class _CitationCard extends StatelessWidget {
   }
 }
 
-class _DirectorySuggestionCard extends StatelessWidget {
+class _DirectorySuggestionCard extends StatefulWidget {
   const _DirectorySuggestionCard({
     required this.groupKey,
     required this.suggestion,
@@ -2465,8 +2390,17 @@ class _DirectorySuggestionCard extends StatelessWidget {
   final Future<void> Function(String url) onOpenExternal;
 
   @override
+  State<_DirectorySuggestionCard> createState() =>
+      _DirectorySuggestionCardState();
+}
+
+class _DirectorySuggestionCardState extends State<_DirectorySuggestionCard> {
+  bool _showReasons = false;
+
+  @override
   Widget build(BuildContext context) {
-    final theme = _discoverGroupThemeFor(groupKey);
+    final suggestion = widget.suggestion;
+    final theme = _discoverGroupThemeFor(widget.groupKey);
     final whyReasons = suggestion.recommendationReasons
         .take(3)
         .toList(growable: false);
@@ -2479,46 +2413,33 @@ class _DirectorySuggestionCard extends StatelessWidget {
         border: Border.all(color: theme.border),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x090F2746),
-            blurRadius: 12,
-            offset: Offset(0, 4),
+            color: Color(0x100D2544),
+            blurRadius: 16,
+            offset: Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  theme.softAccent,
-                  theme.surface,
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    theme.bannerLabel,
-                    style: AppTypography.label(
-                      fontSize: 11.2,
-                      color: theme.accent,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                Icon(Icons.auto_awesome_rounded, size: 16, color: theme.accent),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: theme.softAccent,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: theme.border),
+                ),
+                child: Icon(
+                  Icons.travel_explore_rounded,
+                  size: 21,
+                  color: theme.accent,
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2526,8 +2447,9 @@ class _DirectorySuggestionCard extends StatelessWidget {
                     Text(
                       suggestion.name,
                       style: AppTypography.card(
-                        fontSize: 15,
+                        fontSize: 16.2,
                         color: theme.accent,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -2542,109 +2464,111 @@ class _DirectorySuggestionCard extends StatelessWidget {
                   ],
                 ),
               ),
-              _Badge(
-                label: suggestion.tier.label,
-                foreground: suggestion.tier == DirectoryTier.tier1
-                    ? Colors.white
-                    : suggestion.tier == DirectoryTier.tier2
-                    ? theme.accent
-                    : const Color(0xFF617085),
-                background: suggestion.tier == DirectoryTier.tier1
-                    ? theme.accent
-                    : suggestion.tier == DirectoryTier.tier2
-                    ? theme.softAccent
-                    : const Color(0xFFF3F5F8),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _TinyChip(
-                label: suggestion.domainAuthority == null
-                    ? 'Authority pending'
-                    : 'Authority ${suggestion.domainAuthority}',
-                foreground: theme.accent,
-                background: theme.softAccent,
-              ),
-              _TinyChip(
-                label: _getAutomationLabel(suggestion.automationReady),
-                foreground: theme.accent,
-                background: theme.softAccent,
-              ),
-              if (suggestion.supportsBacklink)
-                const _TinyChip(
-                  label: 'Website link',
-                  foreground: Color(0xFF1B9E5A),
-                  background: Color(0xFFE9F8EF),
-                ),
-              if (suggestion.estimatedApprovalDays != null)
-                _TinyChip(
-                  label: '~${suggestion.estimatedApprovalDays} day review',
-                ),
-              if (suggestion.isIndiaDirectory)
-                const _TinyChip(
-                  label: 'India',
-                  foreground: Color(0xFF1B9E5A),
-                  background: Color(0xFFE9F8EF),
-                ),
+              Icon(Icons.auto_awesome_rounded, size: 18, color: theme.accent),
             ],
           ),
           if (whyReasons.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: theme.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Why this directory?',
-                    style: AppTypography.label(
-                      fontSize: 11.2,
-                      color: theme.accent,
-                      fontWeight: FontWeight.w800,
-                    ),
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: () => setState(() => _showReasons = !_showReasons),
+              borderRadius: BorderRadius.circular(14),
+              child: Ink(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.softAccent.withValues(alpha: 0.64),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: theme.border.withValues(alpha: 0.8),
                   ),
-                  const SizedBox(height: 8),
-                  ...whyReasons.map(
-                    (reason) => Padding(
-                      padding: const EdgeInsets.only(bottom: 5),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Icon(
-                              Icons.check_circle_rounded,
-                              size: 12,
-                              color: theme.accent,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              reason,
-                              style: AppTypography.body(
-                                fontSize: 12.1,
-                                color: AppColors.mutedText,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 16,
+                      color: theme.accent,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _showReasons
+                            ? 'Hide directory details'
+                            : 'Why this directory?',
+                        style: AppTypography.label(
+                          fontSize: 12.2,
+                          color: theme.accent,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    AnimatedRotation(
+                      turns: _showReasons ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 18,
+                        color: theme.accent,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+            ),
+            AnimatedCrossFade(
+              firstChild: const SizedBox.shrink(),
+              secondChild: Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: theme.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: whyReasons
+                        .map(
+                          (reason) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Icon(
+                                    Icons.check_circle_rounded,
+                                    size: 12,
+                                    color: theme.accent,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    reason,
+                                    style: AppTypography.body(
+                                      fontSize: 12.1,
+                                      color: AppColors.mutedText,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                ),
+              ),
+              crossFadeState: _showReasons
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              duration: const Duration(milliseconds: 180),
             ),
           ],
           if ((suggestion.notes ?? '').trim().isNotEmpty) ...[
@@ -2662,12 +2586,12 @@ class _DirectorySuggestionCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _InlineAction(
-                  icon: isAdding ? null : Icons.add_task_outlined,
-                  label: isAdding ? 'Adding...' : 'Track directory',
-                  isLoading: isAdding,
-                  customForeground: theme.accent,
-                  customBackground: theme.softAccent,
-                  onPressed: isAdding ? null : onAdd,
+                  icon: widget.isAdding ? null : Icons.add_task_outlined,
+                  label: widget.isAdding ? 'Adding...' : 'Track directory',
+                  isLoading: widget.isAdding,
+                  customForeground: Colors.white,
+                  customBackground: theme.accent,
+                  onPressed: widget.isAdding ? null : widget.onAdd,
                 ),
               ),
               if ((suggestion.submissionUrl ?? '').trim().isNotEmpty) ...[
@@ -2677,9 +2601,10 @@ class _DirectorySuggestionCard extends StatelessWidget {
                     icon: Icons.open_in_new_rounded,
                     label: 'Open site',
                     customForeground: theme.accent,
-                    customBackground: theme.surface,
+                    customBackground: Colors.white,
                     borderColor: theme.border,
-                    onPressed: () => onOpenExternal(suggestion.submissionUrl!),
+                    onPressed: () =>
+                        widget.onOpenExternal(suggestion.submissionUrl!),
                   ),
                 ),
               ],
@@ -3913,16 +3838,21 @@ class _EmptyLocationsState extends StatelessWidget {
 }
 
 class _PanelCard extends StatelessWidget {
-  const _PanelCard({required this.child, this.backgroundColor = Colors.white});
+  const _PanelCard({
+    required this.child,
+    this.backgroundColor = Colors.white,
+    this.padding = const EdgeInsets.all(16),
+  });
 
   final Widget child;
   final Color backgroundColor;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: padding,
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(16),
@@ -4004,40 +3934,58 @@ class _ScoreMetricCard extends StatelessWidget {
     required this.title,
     required this.score,
     required this.accentColor,
+    required this.icon,
     required this.description,
     required this.footerLabel,
+    required this.footerOutlined,
     required this.onFooterTap,
   });
 
   final String title;
   final int score;
   final Color accentColor;
+  final IconData icon;
   final String description;
   final String footerLabel;
+  final bool footerOutlined;
   final VoidCallback? onFooterTap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 198),
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      constraints: const BoxConstraints(minHeight: 170),
+      padding: const EdgeInsets.fromLTRB(13, 13, 13, 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF9FE6F0)),
-        boxShadow: const [
+        border: Border.all(color: AppColors.brandBlue.withValues(alpha: 0.22)),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x0D0F2746),
-            blurRadius: 14,
-            offset: Offset(0, 4),
+            color: AppColors.brandBlue.withValues(alpha: 0.07),
+            blurRadius: 16,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _ScoreCircle(score: score, accentColor: accentColor),
-          const SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                width: 31,
+                height: 31,
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: accentColor, size: 17),
+              ),
+              const Spacer(),
+              _ScoreCircle(score: score, accentColor: accentColor),
+            ],
+          ),
+          const SizedBox(height: 9),
           Text(
             title,
             textAlign: TextAlign.center,
@@ -4047,45 +3995,67 @@ class _ScoreMetricCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 4),
-          SizedBox(
-            height: 50,
-            child: Text(
-              description,
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.body(
-                fontSize: 11.5,
-                color: AppColors.mutedText,
-                height: 1.35,
-              ),
+          const SizedBox(height: 5),
+          Text(
+            description,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.body(
+              fontSize: 11.2,
+              color: const Color(0xFF617085),
+              height: 1.25,
+              fontWeight: FontWeight.w600,
             ),
           ),
           if (onFooterTap != null) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
-              child: FilledButton(
-                onPressed: onFooterTap,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 11),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  footerLabel,
-                  style: AppTypography.button(
-                    fontSize: 12.6,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+              child: footerOutlined
+                  ? OutlinedButton(
+                      onPressed: onFooterTap,
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.brandBlue,
+                        side: const BorderSide(
+                          color: AppColors.brandBlue,
+                          width: 1,
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Text(
+                        footerLabel,
+                        style: AppTypography.button(
+                          fontSize: 12.6,
+                          color: AppColors.brandBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
+                  : FilledButton(
+                      onPressed: onFooterTap,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.brandBlue,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Text(
+                        footerLabel,
+                        style: AppTypography.button(
+                          fontSize: 12.6,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
             ),
           ],
         ],
@@ -4105,17 +4075,17 @@ class _ScoreCircle extends StatelessWidget {
     final progress = (score.clamp(0, 100)) / 100;
 
     return SizedBox(
-      width: 82,
-      height: 82,
+      width: 64,
+      height: 64,
       child: Stack(
         alignment: Alignment.center,
         children: [
           SizedBox(
-            width: 82,
-            height: 82,
+            width: 64,
+            height: 64,
             child: CircularProgressIndicator(
               value: progress.toDouble(),
-              strokeWidth: 5,
+              strokeWidth: 4.5,
               backgroundColor: accentColor.withValues(alpha: 0.14),
               color: accentColor,
             ),
@@ -4126,7 +4096,7 @@ class _ScoreCircle extends StatelessWidget {
               Text(
                 '$score',
                 style: AppTypography.card(
-                  fontSize: 23,
+                  fontSize: 20,
                   color: AppColors.brandBlue,
                   fontWeight: FontWeight.w800,
                 ),
@@ -4170,10 +4140,10 @@ class _QuickActionCapsule extends StatelessWidget {
         ? FilledButton.icon(
             onPressed: onTap,
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: AppColors.brandBlue,
               foregroundColor: Colors.white,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -4191,7 +4161,7 @@ class _QuickActionCapsule extends StatelessWidget {
             label: Text(
               label,
               style: AppTypography.button(
-                fontSize: 12.4,
+                fontSize: 11.6,
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
               ),
@@ -4201,9 +4171,9 @@ class _QuickActionCapsule extends StatelessWidget {
             onPressed: onTap,
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.brandBlue,
-              side: const BorderSide(color: Color(0xFFD7E4F1)),
+              side: const BorderSide(color: AppColors.brandBlue, width: 1.1),
               backgroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -4221,7 +4191,7 @@ class _QuickActionCapsule extends StatelessWidget {
             label: Text(
               label,
               style: AppTypography.button(
-                fontSize: 12.4,
+                fontSize: 11.6,
                 color: AppColors.brandBlue,
                 fontWeight: FontWeight.w700,
               ),
@@ -4304,71 +4274,6 @@ class _NapDetailTile extends StatelessWidget {
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WorkflowStep extends StatelessWidget {
-  const _WorkflowStep({
-    required this.number,
-    required this.title,
-    required this.description,
-  });
-
-  final String number;
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF6DDBF)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF5E6),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              number,
-              style: AppTypography.label(
-                fontSize: 12,
-                color: const Color(0xFFE3A400),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: AppTypography.card(
-              fontSize: 13.8,
-              color: AppColors.brandBlue,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            description,
-            textAlign: TextAlign.center,
-            style: AppTypography.body(
-              fontSize: 11.1,
-              color: AppColors.mutedText,
-              height: 1.35,
             ),
           ),
         ],
@@ -4511,14 +4416,12 @@ class _InlineAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = customForeground ??
-        (isDestructive
-        ? const Color(0xFFD64545)
-        : AppColors.brandBlue);
-    final background = customBackground ??
-        (isDestructive
-        ? const Color(0xFFFFF2F2)
-        : const Color(0xFFF4F8FC));
+    final foreground =
+        customForeground ??
+        (isDestructive ? const Color(0xFFD64545) : AppColors.brandBlue);
+    final background =
+        customBackground ??
+        (isDestructive ? const Color(0xFFFFF2F2) : const Color(0xFFF4F8FC));
 
     return TextButton.icon(
       onPressed: onPressed,
@@ -4528,7 +4431,9 @@ class _InlineAction extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: borderColor == null ? BorderSide.none : BorderSide(color: borderColor!),
+          side: borderColor == null
+              ? BorderSide.none
+              : BorderSide(color: borderColor!),
         ),
       ),
       icon: isLoading

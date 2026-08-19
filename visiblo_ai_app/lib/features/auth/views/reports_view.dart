@@ -9,6 +9,7 @@ import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../onboarding/controllers/onboarding_controller.dart';
+import '../models/report_models.dart';
 import '../widgets/auth_navigation_shell.dart';
 import '../widgets/trend_chart.dart' hide AnimatedTrendChart;
 
@@ -38,6 +39,11 @@ class _ReportsContentState extends State<_ReportsContent> {
   final GlobalKey _trendsSectionKey = GlobalKey();
 
   late DateTimeRange _selectedRange;
+  LocationInsightsResponse? _reportInsights;
+  LocationInsightsResponse? _previousInsights;
+  List<SearchKeyword> _reportKeywords = const <SearchKeyword>[];
+  bool _isLoadingSnapshot = false;
+  int _reportsRequestToken = 0;
   TrendWindow _trendWindow = TrendWindow.month;
   bool _showAllTopQueries = false;
   int _discoveryAnimationCycle = 1;
@@ -56,7 +62,7 @@ class _ReportsContentState extends State<_ReportsContent> {
       end: now,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      controller.fetchReportsData(_selectedRange);
+      _loadReportsSnapshot();
     });
   }
 
@@ -65,6 +71,12 @@ class _ReportsContentState extends State<_ReportsContent> {
     return Obx(() {
       final user = controller.currentUser.value;
       if (user == null) {
+        return const Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        );
+      }
+
+      if (_isLoadingSnapshot && _reportInsights == null) {
         return const Center(
           child: CircularProgressIndicator(color: AppColors.primary),
         );
@@ -220,6 +232,47 @@ class _ReportsContentState extends State<_ReportsContent> {
     );
   }
 
+  Future<void> _loadReportsSnapshot() async {
+    final requestToken = ++_reportsRequestToken;
+    setState(() => _isLoadingSnapshot = true);
+
+    try {
+      final currentRange = _selectedRange;
+      final inclusiveDays =
+          currentRange.end.difference(currentRange.start).inDays + 1;
+      final previousEnd = currentRange.start.subtract(const Duration(days: 1));
+      final previousStart = previousEnd.subtract(
+        Duration(days: inclusiveDays - 1),
+      );
+      final previousRange = DateTimeRange(
+        start: previousStart,
+        end: previousEnd,
+      );
+
+      final results = await Future.wait<Object?>([
+        controller.loadInsightsForRange(currentRange),
+        controller.loadInsightsForRange(previousRange),
+        controller.loadReportKeywords(),
+      ]);
+
+      if (!mounted || requestToken != _reportsRequestToken) {
+        return;
+      }
+
+      setState(() {
+        _reportInsights = results[0] as LocationInsightsResponse?;
+        _previousInsights = results[1] as LocationInsightsResponse?;
+        _reportKeywords = (results[2] as List<dynamic>)
+            .whereType<SearchKeyword>()
+            .toList(growable: false);
+      });
+    } finally {
+      if (mounted && requestToken == _reportsRequestToken) {
+        setState(() => _isLoadingSnapshot = false);
+      }
+    }
+  }
+
   Widget _buildActivitySection(List<_ActivityCardData> activityCards) {
     return _ReportSectionCard(
       child: Column(
@@ -276,9 +329,9 @@ class _ReportsContentState extends State<_ReportsContent> {
   }
 
   Widget _buildDiscoverySection() {
-    final insights = controller.liveInsights.value;
+    final insights = _reportInsights;
     final breakdown = insights?.platformBreakdown;
-    
+
     final sm = breakdown?.searchMobile ?? 0;
     final sd = breakdown?.searchDesktop ?? 0;
     final mm = breakdown?.mapsMobile ?? 0;
@@ -565,18 +618,27 @@ class _ReportsContentState extends State<_ReportsContent> {
   }
 
   List<_ActivityCardData> _buildActivityCards() {
-    final insights = controller.liveInsights.value;
-    final views = (insights?.totals.searchImpressions ?? 0) + (insights?.totals.mapsImpressions ?? 0);
+    final insights = _reportInsights;
+    final previous = _previousInsights;
+    final views =
+        (insights?.totals.searchImpressions ?? 0) +
+        (insights?.totals.mapsImpressions ?? 0);
     final calls = insights?.totals.callClicks ?? 0;
     final directions = insights?.totals.directionRequests ?? 0;
     final websiteVisits = insights?.totals.websiteClicks ?? 0;
+    final previousViews =
+        (previous?.totals.searchImpressions ?? 0) +
+        (previous?.totals.mapsImpressions ?? 0);
+    final previousCalls = previous?.totals.callClicks ?? 0;
+    final previousDirections = previous?.totals.directionRequests ?? 0;
+    final previousWebsiteVisits = previous?.totals.websiteClicks ?? 0;
 
     return [
       _ActivityCardData(
         title: 'Google Views',
         value: _formatNumber(views),
-        delta: '+0%', // Deltas can be added later with historical comparisons
-        deltaColor: const Color(0xFF2BA54A),
+        delta: _formatDeltaText(views, previousViews),
+        deltaColor: _deltaColor(views, previousViews),
         iconBackground: const Color(0xFFFFF3F3),
         icon: SvgPicture.asset(
           'assets/icons/google_logo.svg',
@@ -587,8 +649,8 @@ class _ReportsContentState extends State<_ReportsContent> {
       _ActivityCardData(
         title: 'Customer Calls',
         value: _formatNumber(calls),
-        delta: '+0%',
-        deltaColor: const Color(0xFF2BA54A),
+        delta: _formatDeltaText(calls, previousCalls),
+        deltaColor: _deltaColor(calls, previousCalls),
         iconBackground: const Color(0xFFF1FBF5),
         icon: const Icon(
           Icons.call_rounded,
@@ -599,8 +661,8 @@ class _ReportsContentState extends State<_ReportsContent> {
       _ActivityCardData(
         title: 'Direction requests',
         value: _formatNumber(directions),
-        delta: '+0%',
-        deltaColor: const Color(0xFF2BA54A),
+        delta: _formatDeltaText(directions, previousDirections),
+        deltaColor: _deltaColor(directions, previousDirections),
         iconBackground: const Color(0xFFF1F6FF),
         icon: const Icon(
           Icons.public_rounded,
@@ -611,8 +673,8 @@ class _ReportsContentState extends State<_ReportsContent> {
       _ActivityCardData(
         title: 'Website Visits',
         value: _formatNumber(websiteVisits),
-        delta: '+0%',
-        deltaColor: const Color(0xFF2BA54A),
+        delta: _formatDeltaText(websiteVisits, previousWebsiteVisits),
+        deltaColor: _deltaColor(websiteVisits, previousWebsiteVisits),
         iconBackground: const Color(0xFFFFF8DE),
         icon: const Icon(
           Icons.star_rounded,
@@ -624,12 +686,12 @@ class _ReportsContentState extends State<_ReportsContent> {
   }
 
   TrendConfig _buildTrendConfig() {
-    final insights = controller.liveInsights.value;
+    final insights = _reportInsights;
     final daily = insights?.daily ?? [];
     final fallbackConfig = _trendWindow.config;
-    
+
     if (daily.isEmpty) {
-      return fallbackConfig; // Fallback to mock config if no data yet
+      return TrendConfigFactory.emptyStateConfig(fallbackConfig);
     }
 
     final xLabels = <String>[];
@@ -640,13 +702,26 @@ class _ReportsContentState extends State<_ReportsContent> {
 
     // Downsample for xLabels if there are too many points
     final step = (daily.length / 6).ceil();
-    
+
     for (var i = 0; i < daily.length; i++) {
       final d = daily[i];
       if (i % step == 0 || i == daily.length - 1) {
         try {
           final dt = DateTime.parse(d.date);
-          final monthStr = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][dt.month - 1];
+          final monthStr = [
+            'Jan',
+            'Feb',
+            'Mar',
+            'Apr',
+            'May',
+            'Jun',
+            'Jul',
+            'Aug',
+            'Sep',
+            'Oct',
+            'Nov',
+            'Dec',
+          ][dt.month - 1];
           xLabels.add('$monthStr ${dt.day}');
         } catch (_) {
           xLabels.add(d.date.substring(5)); // MM-DD fallback
@@ -671,14 +746,17 @@ class _ReportsContentState extends State<_ReportsContent> {
     }
 
     final maxVal = [
-      ...viewsPoints, ...clicksPoints, ...callsPoints, ...dirPoints
+      ...viewsPoints,
+      ...clicksPoints,
+      ...callsPoints,
+      ...dirPoints,
     ].fold(0.0, (m, v) => math.max(m, v));
 
     final yLabels = <int>[
       maxVal.ceil(),
       (maxVal * 0.66).ceil(),
       (maxVal * 0.33).ceil(),
-      0
+      0,
     ];
 
     return TrendConfig(
@@ -714,15 +792,14 @@ class _ReportsContentState extends State<_ReportsContent> {
   }
 
   List<_TopQueryData> _buildTopQueries() {
-    final keywords = controller.liveKeywords;
+    final keywords = _reportKeywords;
     if (keywords.isEmpty) {
       return [];
     }
 
-    return keywords.map((k) => _TopQueryData(
-      query: k.term,
-      searches: k.totalImpressions,
-    )).toList();
+    return keywords
+        .map((k) => _TopQueryData(query: k.term, searches: k.totalImpressions))
+        .toList();
   }
 
   void _handleBackTap() {
@@ -854,25 +931,56 @@ class _ReportsContentState extends State<_ReportsContent> {
     setState(() {
       _trendWindow = selectedWindow;
       _trendAnimationCycle++;
-      
+
       final now = DateTime.now();
       switch (selectedWindow) {
         case TrendWindow.month:
-          _selectedRange = DateTimeRange(start: now.subtract(const Duration(days: 29)), end: now);
+          _selectedRange = DateTimeRange(
+            start: now.subtract(const Duration(days: 29)),
+            end: now,
+          );
           break;
         case TrendWindow.quarter:
-          _selectedRange = DateTimeRange(start: now.subtract(const Duration(days: 89)), end: now);
+          _selectedRange = DateTimeRange(
+            start: now.subtract(const Duration(days: 89)),
+            end: now,
+          );
           break;
         case TrendWindow.halfYear:
-          _selectedRange = DateTimeRange(start: now.subtract(const Duration(days: 179)), end: now);
+          _selectedRange = DateTimeRange(
+            start: now.subtract(const Duration(days: 179)),
+            end: now,
+          );
           break;
         case TrendWindow.year:
-          _selectedRange = DateTimeRange(start: now.subtract(const Duration(days: 364)), end: now);
+          _selectedRange = DateTimeRange(
+            start: now.subtract(const Duration(days: 364)),
+            end: now,
+          );
           break;
       }
     });
 
-    controller.fetchReportsData(_selectedRange);
+    _loadReportsSnapshot();
+  }
+
+  String _formatDeltaText(int current, int previous) {
+    if (previous <= 0) {
+      return current <= 0 ? '0%' : '+100%';
+    }
+    final diff = ((current - previous) / previous) * 100;
+    final rounded = diff.round();
+    if (rounded > 0) {
+      return '+$rounded%';
+    }
+    return '$rounded%';
+  }
+
+  Color _deltaColor(int current, int previous) {
+    if (current < previous) {
+      return const Color(0xFFE24B4B);
+    }
+    return const Color(0xFF2BA54A);
   }
 }
 
@@ -1098,10 +1206,18 @@ class _ActivityMetricDelta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isNegative = value.trim().startsWith('-');
+    final isZero = value.trim() == '0%' || value.trim() == '+0%';
+    final icon = isZero
+        ? Icons.remove_rounded
+        : isNegative
+        ? Icons.south_east_rounded
+        : Icons.north_east_rounded;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.north_east_rounded, size: compact ? 11 : 12, color: color),
+        Icon(icon, size: compact ? 11 : 12, color: color),
         SizedBox(width: compact ? 0.25 : 0.75),
         Text(
           value.startsWith('+') ? value.substring(1) : value,
@@ -1136,7 +1252,7 @@ class _AnimatedDiscoveryDonutChart extends StatelessWidget {
       curve: Curves.easeInOutCubic,
       builder: (context, progress, child) {
         final textScale = 0.92 + (progress * 0.08);
-        
+
         // Find largest segment for center text
         double maxVal = 0;
         for (var s in segments) {
@@ -1149,7 +1265,10 @@ class _AnimatedDiscoveryDonutChart extends StatelessWidget {
           width: size,
           height: size,
           child: CustomPaint(
-            painter: _DiscoveryDonutPainter(progress: progress, segments: segments),
+            painter: _DiscoveryDonutPainter(
+              progress: progress,
+              segments: segments,
+            ),
             child: Center(
               child: Transform.scale(
                 scale: textScale,
@@ -1175,10 +1294,7 @@ class _AnimatedDiscoveryDonutChart extends StatelessWidget {
 }
 
 class _DiscoveryLegendItem extends StatelessWidget {
-  const _DiscoveryLegendItem({
-    required this.data,
-    this.compact = false,
-  });
+  const _DiscoveryLegendItem({required this.data, this.compact = false});
 
   final _DiscoveryLegendData data;
   final bool compact;
@@ -1484,7 +1600,10 @@ class _TopQueryTile extends StatelessWidget {
 }
 
 class _DiscoveryDonutPainter extends CustomPainter {
-  const _DiscoveryDonutPainter({required this.progress, required this.segments});
+  const _DiscoveryDonutPainter({
+    required this.progress,
+    required this.segments,
+  });
 
   final double progress;
   final List<({double value, Color color})> segments;
@@ -1638,9 +1757,6 @@ class _TopQueryData {
   final String query;
   final int searches;
 }
-
-
-
 
 String _formatNumber(int value) {
   final valueString = value.toString();

@@ -354,6 +354,7 @@ class _GbpPostEditorViewState extends State<GbpPostEditorView> {
     setState(() => _isSaving = true);
 
     try {
+      GbpPost? backendPost;
       if (!widget.isCreating && widget.initialPost.id.isNotEmpty) {
         // Save to backend
         final controller = Get.find<OnboardingController>();
@@ -370,11 +371,11 @@ class _GbpPostEditorViewState extends State<GbpPostEditorView> {
           await controller.deleteAiPost(widget.initialPost.id, revertToDraft: true);
         } else if (_status == GbpPostStatus.live && widget.initialPost.status != GbpPostStatus.live) {
           // If they changed to live from editor, publish it
-          await controller.publishAiPost(widget.initialPost.id);
+          backendPost = await controller.publishAiPost(widget.initialPost.id);
         }
       }
 
-      final updated = widget.initialPost.copyWith(
+      final updated = (backendPost ?? widget.initialPost).copyWith(
         status: _status,
         title: title,
         subtitle: subtitle,

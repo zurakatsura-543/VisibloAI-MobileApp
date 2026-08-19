@@ -118,54 +118,77 @@ class OnboardingController extends GetxController {
   final isLoadingAudit = false.obs;
   int _dashboardFetchToken = 0;
 
+  Future<String> _resolveReportsLocationId() async {
+    final user = currentUser.value;
+    if (user == null) {
+      return '';
+    }
+
+    try {
+      final meProfile = await _authApiService.fetchMyData();
+      return meProfile.locationId;
+    } catch (_) {
+      if (user.backendAvailableBusinesses.isNotEmpty) {
+        return user.backendAvailableBusinesses.first['locationId']
+                ?.toString() ??
+            '';
+      }
+    }
+    return '';
+  }
+
+  Future<LocationInsightsResponse?> loadInsightsForRange(
+    DateTimeRange range,
+  ) async {
+    final dbLocationId = await _resolveReportsLocationId();
+    if (dbLocationId.isEmpty) {
+      debugPrint('loadInsightsForRange: No dbLocationId found.');
+      return null;
+    }
+
+    final start = range.start.toIso8601String().substring(0, 10);
+    final end = range.end.toIso8601String().substring(0, 10);
+
+    return _authApiService.fetchLocationInsights(
+      dbLocationId,
+      startDate: start,
+      endDate: end,
+    );
+  }
+
+  Future<List<SearchKeyword>> loadReportKeywords() async {
+    final dbLocationId = await _resolveReportsLocationId();
+    if (dbLocationId.isEmpty) {
+      debugPrint('loadReportKeywords: No dbLocationId found.');
+      return const <SearchKeyword>[];
+    }
+
+    final keywordsEnd = DateTime.now();
+    final keywordsStart = DateTime(
+      keywordsEnd.year,
+      keywordsEnd.month - 6,
+      keywordsEnd.day,
+    );
+    final kwStartStr = keywordsStart.toIso8601String().substring(0, 10);
+    final kwEndStr = keywordsEnd.toIso8601String().substring(0, 10);
+
+    return _authApiService.fetchLocationSearchKeywords(
+      dbLocationId,
+      startDate: kwStartStr,
+      endDate: kwEndStr,
+    );
+  }
+
   Future<void> fetchReportsData(DateTimeRange range) async {
     final user = currentUser.value;
     if (user == null) return;
 
     isLoadingReports.value = true;
     try {
-      String dbLocationId = '';
-      try {
-        final meProfile = await _authApiService.fetchMyData();
-        dbLocationId = meProfile.locationId;
-      } catch (e) {
-        if (user.backendAvailableBusinesses.isNotEmpty) {
-          dbLocationId =
-              user.backendAvailableBusinesses.first['locationId']?.toString() ??
-              '';
-        }
-      }
-
-      if (dbLocationId.isEmpty) {
-        debugPrint('fetchReportsData: No dbLocationId found.');
-        return;
-      }
-
-      final start = range.start.toIso8601String().substring(0, 10);
-      final end = range.end.toIso8601String().substring(0, 10);
-
-      // Keywords use 6 month lookback
-      final keywordsEnd = DateTime.now();
-      final keywordsStart = DateTime(
-        keywordsEnd.year,
-        keywordsEnd.month - 6,
-        keywordsEnd.day,
-      );
-      final kwStartStr = keywordsStart.toIso8601String().substring(0, 10);
-      final kwEndStr = keywordsEnd.toIso8601String().substring(0, 10);
-
-      final insights = await _authApiService.fetchLocationInsights(
-        dbLocationId,
-        startDate: start,
-        endDate: end,
-      );
+      final insights = await loadInsightsForRange(range);
       if (insights != null) liveInsights.value = insights;
 
-      final keywords = await _authApiService.fetchLocationSearchKeywords(
-        dbLocationId,
-        startDate: kwStartStr,
-        endDate: kwEndStr,
-      );
+      final keywords = await loadReportKeywords();
       liveKeywords.value = keywords;
     } finally {
       isLoadingReports.value = false;
@@ -299,6 +322,7 @@ class OnboardingController extends GetxController {
                   fetchToken: fetchToken,
                 )) {
               liveGbpLocation.value = loc;
+              _persistRemoteGbpPhotoIfUseful(loc.photoUrl);
             }
           })
           .catchError((e) {
@@ -2145,20 +2169,19 @@ class OnboardingController extends GetxController {
     GbpReview review, {
     String? manualReviewType,
   }) async {
+    final user = currentUser.value;
+    final loc = liveGbpLocation.value;
+
+    final businessName =
+        (loc?.title.isNotEmpty == true ? loc!.title : user?.businessName) ?? '';
+    final businessCategory = loc?.primaryCategory.isNotEmpty == true
+        ? loc!.primaryCategory
+        : user?.categoryTitle;
+    final businessAddress = loc?.formattedAddress.isNotEmpty == true
+        ? loc!.formattedAddress
+        : user?.streetAddress;
+
     try {
-      final user = currentUser.value;
-      final loc = liveGbpLocation.value;
-
-      final businessName =
-          (loc?.title.isNotEmpty == true ? loc!.title : user?.businessName) ??
-          '';
-      final businessCategory = loc?.primaryCategory.isNotEmpty == true
-          ? loc!.primaryCategory
-          : user?.categoryTitle;
-      final businessAddress = loc?.formattedAddress.isNotEmpty == true
-          ? loc!.formattedAddress
-          : user?.streetAddress;
-
       return await _authApiService.generateReviewReply(
         reviewerName: review.reviewerName,
         starRating: review.starRating,
@@ -2174,8 +2197,78 @@ class OnboardingController extends GetxController {
       );
     } catch (e) {
       debugPrint('Failed to generate AI reply: $e');
-      throw Exception('Failed to generate AI reply. Please try again.');
+      return _fallbackGeneratedReviewReply(
+        review: review,
+        businessName: businessName.isNotEmpty ? businessName : 'our business',
+        manualReviewType: manualReviewType,
+      );
     }
+  }
+
+  Map<String, dynamic> _fallbackGeneratedReviewReply({
+    required GbpReview review,
+    required String businessName,
+    String? manualReviewType,
+  }) {
+    final reviewType = manualReviewType ?? _inferFallbackReviewType(review);
+    final sentiment = switch (reviewType) {
+      'positive' || 'rating_mismatch_positive' => 'positive',
+      'neutral' || 'no_comment' =>
+        review.starRating >= 4
+            ? 'positive'
+            : review.starRating == 3
+            ? 'neutral'
+            : 'negative',
+      _ => review.starRating >= 4 ? 'positive' : 'negative',
+    };
+    final safeName = review.reviewerName.trim().split(RegExp(r'\s+')).first;
+    final customerName = safeName.isNotEmpty ? safeName : 'Customer';
+
+    String reply;
+    if (reviewType == 'wrong_business') {
+      reply =
+          'Hi $customerName, thank you for sharing this. It looks like this review may be for a different business or service. $businessName is unable to verify this experience on our side.\n\nPlease re-check the business you meant to review. If this was posted here by mistake, we would appreciate it if you could update or remove it.\n\nRegards,\n$businessName';
+    } else if (reviewType == 'no_comment' ||
+        review.commentText.trim().isEmpty) {
+      reply = review.suggestedReply.replaceAll('Our team', businessName);
+    } else if (sentiment == 'positive') {
+      reply =
+          'Hi $customerName, thank you for your kind review. We are glad you had a good experience with us and truly appreciate your support.\n\nRegards,\n$businessName';
+    } else if (sentiment == 'neutral') {
+      reply =
+          'Hi $customerName, thank you for your feedback. We appreciate you taking the time to share your experience and will keep working to improve.\n\nRegards,\n$businessName';
+    } else {
+      reply =
+          'Hi $customerName, thank you for bringing this to our attention. We are sorry your experience did not meet expectations. Please contact us directly so we can understand what happened and work on the right next step.\n\nRegards,\n$businessName';
+    }
+
+    return <String, dynamic>{
+      'reply': reply,
+      'sentiment': sentiment,
+      'sentimentScore': sentiment == 'positive'
+          ? 0.82
+          : sentiment == 'neutral'
+          ? 0.0
+          : -0.62,
+      'reviewType': reviewType,
+      'riskLevel': sentiment == 'negative' ? 'medium' : 'low',
+      'confidence': 0.78,
+      'reason':
+          'Generated from available review context while the live AI service was unavailable.',
+    };
+  }
+
+  String _inferFallbackReviewType(GbpReview review) {
+    if (review.commentText.trim().isEmpty) {
+      return 'no_comment';
+    }
+    if (review.starRating >= 4) {
+      return 'positive';
+    }
+    if (review.starRating == 3) {
+      return 'neutral';
+    }
+    return 'genuine_negative';
   }
 
   Future<Map<String, dynamic>> generateAiPost({
@@ -2192,11 +2285,42 @@ class OnboardingController extends GetxController {
     String? offerCouponCode,
     String? offerRedeemUrl,
     String? offerTerms,
+    String? imageQuality,
+    String? clientRequestId,
   }) async {
     try {
       final meProfile = await _authApiService.fetchMyData();
-      final businessId = meProfile.businessId;
-      final locationId = meProfile.locationId;
+      final user = currentUser.value;
+      final loc = liveGbpLocation.value;
+      final businessId = _firstNonEmpty([
+        user?.backendBusinessId ?? '',
+        meProfile.businessId,
+      ]);
+      final locationId = _firstNonEmpty([
+        loc?.locationId ?? '',
+        meProfile.gmbLocationId,
+      ]);
+      final businessName = _firstNonEmpty([
+        loc?.title ?? '',
+        user?.businessName ?? '',
+        meProfile.businessName,
+      ]);
+      final businessCategory = _firstNonEmpty([
+        loc?.primaryCategory ?? '',
+        user?.categoryTitle ?? '',
+      ]);
+      final businessAddress = _firstNonEmpty([
+        loc?.formattedAddress ?? '',
+        user?.streetAddress ?? '',
+      ]);
+      final businessCity = _firstNonEmpty([
+        user?.city ?? '',
+        _cityFromAddress(businessAddress),
+      ]);
+      final businessCountry = _firstNonEmpty([
+        user?.country ?? '',
+        _countryFromAddress(businessAddress),
+      ]);
 
       return await _authApiService.generateAiPost(
         topic: topic,
@@ -2212,13 +2336,30 @@ class OnboardingController extends GetxController {
         offerCouponCode: offerCouponCode,
         offerRedeemUrl: offerRedeemUrl,
         offerTerms: offerTerms,
+        imageQuality: imageQuality,
         businessId: businessId.isNotEmpty ? businessId : null,
         locationId: locationId.isNotEmpty ? locationId : null,
+        businessName: businessName.isNotEmpty ? businessName : null,
+        businessCategory: businessCategory.isNotEmpty ? businessCategory : null,
+        businessAddress: businessAddress.isNotEmpty ? businessAddress : null,
+        businessCity: businessCity.isNotEmpty ? businessCity : null,
+        businessCountry: businessCountry.isNotEmpty ? businessCountry : null,
+        clientRequestId: clientRequestId,
       );
     } catch (e) {
       debugPrint('Failed to generate AI post: $e');
-      throw Exception('Failed to generate AI post. Please try again.');
+      rethrow;
     }
+  }
+
+  Future<Map<String, dynamic>> uploadAiPostImage({
+    required String postId,
+    required String imagePath,
+  }) {
+    return _authApiService.uploadAiPostImage(
+      postId: postId,
+      imagePath: imagePath,
+    );
   }
 
   Future<bool> generateAndSaveAiPhoto(String prompt) async {
@@ -2294,7 +2435,7 @@ class OnboardingController extends GetxController {
     }
   }
 
-  Future<void> publishAiPost(String postId) async {
+  Future<GbpPost> publishAiPost(String postId) async {
     try {
       final meProfile = await _authApiService.fetchMyData();
       final businessId = meProfile.businessId;
@@ -2304,7 +2445,7 @@ class OnboardingController extends GetxController {
         throw Exception('Business profile is incomplete. Cannot publish post.');
       }
 
-      await _authApiService.publishAiPost(
+      return await _authApiService.publishAiPost(
         postId,
         businessId: businessId,
         locationId: gmbLocationId,
@@ -2800,6 +2941,19 @@ class OnboardingController extends GetxController {
           ]),
         ]),
       ),
+      subscriptionPlanId: _normalizeSubscriptionPlanId(
+        _firstNonEmpty([
+          _readRawString(remoteProfile.subscription, const ['plan']),
+          _readBusinessString(primaryBusiness, const ['plan']),
+          savedUser?.subscriptionPlanId ?? '',
+        ]),
+      ),
+      subscriptionBillingCycle: _normalizeSubscriptionBillingCycle(
+        _firstNonEmpty([
+          _readRawString(remoteProfile.subscription, const ['billingCycle']),
+          savedUser?.subscriptionBillingCycle ?? '',
+        ]),
+      ),
       googleBusinessProfileConnected: remoteProfile.googleConnected,
       backendUserId: remoteProfile.userId,
       backendBusinessId: remoteProfile.businessId,
@@ -2814,6 +2968,38 @@ class OnboardingController extends GetxController {
           savedUser?.businessPhotoGalleryPaths ?? const [],
       businessReviews: savedUser?.businessReviews ?? const [],
     );
+  }
+
+  Future<void> _persistRemoteGbpPhotoIfUseful(String photoUrl) async {
+    final trimmedPhotoUrl = photoUrl.trim();
+    final user = currentUser.value;
+    if (user == null || !_isRemoteUrl(trimmedPhotoUrl)) {
+      return;
+    }
+
+    final currentPhoto = user.businessPhotoPath.trim();
+    if (currentPhoto == trimmedPhotoUrl) {
+      return;
+    }
+    if (currentPhoto.isNotEmpty && !_isRemoteUrl(currentPhoto)) {
+      try {
+        if (await File(currentPhoto).exists()) {
+          return;
+        }
+      } catch (_) {
+        // If the old local file cannot be read, replace it with the durable GBP URL.
+      }
+    }
+
+    final updatedUser = user.copyWith(businessPhotoPath: trimmedPhotoUrl);
+    currentUser.value = updatedUser;
+    await _authService.updateCurrentUser(updatedUser);
+  }
+
+  bool _isRemoteUrl(String value) {
+    final normalized = value.trim().toLowerCase();
+    return normalized.startsWith('http://') ||
+        normalized.startsWith('https://');
   }
 
   String _readRawString(Map<String, dynamic> source, List<String> keys) {
@@ -2848,6 +3034,34 @@ class OnboardingController extends GetxController {
       }
     }
     return '';
+  }
+
+  String _cityFromAddress(String address) {
+    final parts = address
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.length >= 3) {
+      return parts[parts.length - 3];
+    }
+    return '';
+  }
+
+  String _countryFromAddress(String address) {
+    final parts = address
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) {
+      return '';
+    }
+    final lastPart = parts.last;
+    if (RegExp(r'\d').hasMatch(lastPart) && parts.length >= 2) {
+      return parts[parts.length - 2];
+    }
+    return lastPart;
   }
 
   String _humanizeError(Object error) {
@@ -3513,11 +3727,15 @@ class OnboardingController extends GetxController {
 
   String _normalizeSubscriptionPlanId(String value) {
     switch (value.trim().toLowerCase()) {
+      case 'single':
       case 'starter':
+        return 'starter';
+      case 'pro':
       case 'growth':
+        return 'growth';
       case 'premium':
       case 'enterprise':
-        return value.trim().toLowerCase();
+        return 'premium';
       default:
         return 'growth';
     }

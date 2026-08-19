@@ -24,8 +24,7 @@ enum ReviewPosterTemplate {
 
 enum ReviewPosterPaperSize {
   a4('a4', 'A4', Size(595, 842)),
-  a5('a5', 'A5', Size(420, 595)),
-  letter('letter', 'Letter', Size(612, 792));
+  a5('a5', 'A5', Size(420, 595));
 
   const ReviewPosterPaperSize(this.id, this.label, this.pageSize);
 
@@ -41,8 +40,6 @@ enum ReviewPosterPaperSize {
         return 'A4 (8.3in x 11.7in)';
       case ReviewPosterPaperSize.a5:
         return 'A5 (5.8in x 8.3in)';
-      case ReviewPosterPaperSize.letter:
-        return 'Letter (8.5in x 11in)';
     }
   }
 

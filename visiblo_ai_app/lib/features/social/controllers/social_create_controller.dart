@@ -179,13 +179,18 @@ class SocialCreateController extends GetxController {
     successMessage.value = 'Generation stopped.';
   }
 
-  Future<void> publishPost(GeneratedSocialPost post) async {
+  Future<void> publishPost(
+    GeneratedSocialPost post, {
+    List<String>? platforms,
+  }) async {
     if (!hasBusinessId) {
       errorMessage.value = 'No active business selected.';
       return;
     }
 
-    final platform = _platformEnum(post.platform);
+    final resolvedPlatforms = (platforms == null || platforms.isEmpty)
+        ? <String>[_platformEnum(post.platform)]
+        : platforms.map(_platformEnum).toSet().toList(growable: false);
     publishingPlatform.value = post.platform;
     errorMessage.value = null;
     successMessage.value = null;
@@ -196,13 +201,14 @@ class SocialCreateController extends GetxController {
         caption: post.content.caption,
         hashtags: post.content.hashtags,
         imageUrl: post.content.imageUrl,
-        platforms: [platform],
+        platforms: resolvedPlatforms,
       );
       final index = generatedPosts.indexOf(post);
       if (index != -1) {
         generatedPosts[index] = post.copyWith(isPublished: true);
       }
-      successMessage.value = '${post.platform} post published.';
+      successMessage.value =
+          '${_publishPlatformSummary(resolvedPlatforms)} post published.';
     } catch (error) {
       errorMessage.value = _humanizeError(error);
     } finally {
@@ -440,6 +446,17 @@ class SocialCreateController extends GetxController {
     if (value.contains('facebook')) return 'FACEBOOK';
     if (value.contains('linkedin')) return 'LINKEDIN';
     return 'INSTAGRAM';
+  }
+
+  String _publishPlatformSummary(List<String> platforms) {
+    final labels = platforms.map(_displayPlatform).toList(growable: false);
+    if (labels.length == 1) {
+      return labels.first;
+    }
+    if (labels.length == 2) {
+      return '${labels.first} and ${labels.last}';
+    }
+    return 'All selected platforms';
   }
 
   String _displayPlatform(String platform) {

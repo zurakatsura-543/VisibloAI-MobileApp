@@ -74,7 +74,11 @@ class _DashboardContentState extends State<_DashboardContent> {
         return _posts;
       case _PostFilter.drafts:
         return _posts
-            .where((post) => post.status == GbpPostStatus.draft || post.status == GbpPostStatus.failed)
+            .where(
+              (post) =>
+                  post.status == GbpPostStatus.draft ||
+                  post.status == GbpPostStatus.failed,
+            )
             .toList();
       case _PostFilter.scheduled:
         return _posts
@@ -93,7 +97,11 @@ class _DashboardContentState extends State<_DashboardContent> {
         return _posts.length;
       case _PostFilter.drafts:
         return _posts
-            .where((post) => post.status == GbpPostStatus.draft || post.status == GbpPostStatus.failed)
+            .where(
+              (post) =>
+                  post.status == GbpPostStatus.draft ||
+                  post.status == GbpPostStatus.failed,
+            )
             .length;
       case _PostFilter.scheduled:
         return _posts
@@ -164,111 +172,126 @@ class _DashboardContentState extends State<_DashboardContent> {
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.refresh_rounded, color: AppColors.brandBlue),
+                    icon: const Icon(
+                      Icons.refresh_rounded,
+                      color: AppColors.brandBlue,
+                    ),
                     onPressed: _doRefresh,
                     tooltip: 'Refresh GBP Posts',
                   ),
                 ],
               ),
               const SizedBox(height: AuthViewSpacing.cardGap),
-              _ProfileCard(
-              user: widget.user,
-              onLogout: widget.onLogout,
-              onUpdateLogo: _handleUpdateLogo,
-            ),
-            const SizedBox(height: AuthViewSpacing.sectionGap),
-            _GeneratorCard(
-              businessName: _businessName(widget.user),
-              onGenerate: _handleGeneratePost,
-              onSchedule: _handleSchedulePost,
-            ),
-            const SizedBox(height: 14),
-            _FilterBar(
-              selectedFilter: _selectedFilter,
-              draftCount: _countFor(_PostFilter.drafts),
-              scheduledCount: _countFor(_PostFilter.scheduled),
-              liveCount: _countFor(_PostFilter.live),
-              onChanged: (filter) {
-                setState(() {
-                  _selectedFilter = filter;
-                  _currentPage = 1;
-                });
-              },
-            ),
-            const SizedBox(height: 8),
-            if (_visiblePosts.isEmpty)
-              const _EmptyPostsCard()
-            else ...[
-              ..._visiblePosts.skip((_currentPage - 1) * 7).take(7).map(
-                    (post) => _PostCard(
-                      post: post,
-                      onView: () => _handleViewPost(post),
-                      onEdit: () => _handleEditPost(post),
-                      onDelete: () => _handleDeletePost(post),
-                      onPublish: (post.status == GbpPostStatus.draft ||
-                              post.status == GbpPostStatus.failed)
-                          ? () => _handlePublishPost(post)
-                          : null,
-                      onSchedule: (post.status == GbpPostStatus.draft ||
-                              post.status == GbpPostStatus.failed)
-                          ? () => _handleScheduleDraftPost(post)
-                          : null,
-                    ),
-                  ),
-              if (_visiblePosts.length > 7)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16.0),
-                  child: _PaginationBar(
-                    currentPage: _currentPage,
-                    totalPages: (_visiblePosts.length / 7).ceil(),
-                    onPageChanged: (page) {
-                      setState(() => _currentPage = page);
-                    },
-                  ),
-                ),
-            ],
-            const SizedBox(height: 14),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final sectionMaxWidth = constraints.maxWidth >= 520
-                    ? 430.0
-                    : constraints.maxWidth;
-                return Align(
-                  alignment: Alignment.centerLeft,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: sectionMaxWidth),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: _metricCards
-                              .map(
-                                (metric) => Expanded(
-                                  child: Padding(
-                                    padding: EdgeInsets.only(
-                                      right: metric == _metricCards.last
-                                          ? 0
-                                          : 10,
-                                    ),
-                                    child: _MetricCard(metric: metric),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                        const SizedBox(height: 14),
-                        const _WeekStrip(),
-                      ],
-                    ),
-                  ),
+              Obx(() {
+                final livePhoto =
+                    controller.liveGbpLocation.value?.photoUrl.trim() ?? '';
+                return _ProfileCard(
+                  user: widget.user,
+                  profileImagePath: livePhoto.isNotEmpty
+                      ? livePhoto
+                      : widget.user.businessPhotoPath,
+                  onLogout: widget.onLogout,
+                  onUpdateLogo: _handleUpdateLogo,
                 );
-              },
-            ),
-          ],
+              }),
+              const SizedBox(height: AuthViewSpacing.sectionGap),
+              _GeneratorCard(
+                businessName: _businessName(widget.user),
+                onGenerate: _handleGeneratePost,
+                onSchedule: _handleSchedulePost,
+              ),
+              const SizedBox(height: 14),
+              _FilterBar(
+                selectedFilter: _selectedFilter,
+                draftCount: _countFor(_PostFilter.drafts),
+                scheduledCount: _countFor(_PostFilter.scheduled),
+                liveCount: _countFor(_PostFilter.live),
+                onChanged: (filter) {
+                  setState(() {
+                    _selectedFilter = filter;
+                    _currentPage = 1;
+                  });
+                },
+              ),
+              const SizedBox(height: 8),
+              if (_visiblePosts.isEmpty)
+                const _EmptyPostsCard()
+              else ...[
+                ..._visiblePosts
+                    .skip((_currentPage - 1) * 7)
+                    .take(7)
+                    .map(
+                      (post) => _PostCard(
+                        post: post,
+                        onView: () => _handleViewPost(post),
+                        onEdit: () => _handleEditPost(post),
+                        onDelete: () => _handleDeletePost(post),
+                        onPublish:
+                            (post.status == GbpPostStatus.draft ||
+                                post.status == GbpPostStatus.failed)
+                            ? () => _handlePublishPost(post)
+                            : null,
+                        onSchedule:
+                            (post.status == GbpPostStatus.draft ||
+                                post.status == GbpPostStatus.failed)
+                            ? () => _handleScheduleDraftPost(post)
+                            : null,
+                      ),
+                    ),
+                if (_visiblePosts.length > 7)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16.0),
+                    child: _PaginationBar(
+                      currentPage: _currentPage,
+                      totalPages: (_visiblePosts.length / 7).ceil(),
+                      onPageChanged: (page) {
+                        setState(() => _currentPage = page);
+                      },
+                    ),
+                  ),
+              ],
+              const SizedBox(height: 14),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final sectionMaxWidth = constraints.maxWidth >= 520
+                      ? 430.0
+                      : constraints.maxWidth;
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: sectionMaxWidth),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: _metricCards
+                                .map(
+                                  (metric) => Expanded(
+                                    child: Padding(
+                                      padding: EdgeInsets.only(
+                                        right: metric == _metricCards.last
+                                            ? 0
+                                            : 10,
+                                      ),
+                                      child: _MetricCard(metric: metric),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                          const SizedBox(height: 14),
+                          const _WeekStrip(),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  });
-}
+      );
+    });
+  }
 
   Future<void> _doRefresh() async {
     // Reset filter to All so posts that moved (e.g. Scheduled → Live) are visible
@@ -325,7 +348,8 @@ class _DashboardContentState extends State<_DashboardContent> {
       final draftPost = created.copyWith(status: GbpPostStatus.draft);
       _addCreatedPost(draftPost);
       await _handlePublishPost(draftPost);
-    } else if (created.status == GbpPostStatus.scheduled && created.scheduledFor != null) {
+    } else if (created.status == GbpPostStatus.scheduled &&
+        created.scheduledFor != null) {
       _addCreatedPost(created);
       try {
         await controller.scheduleAiPost(created.id, created.scheduledFor!);
@@ -410,7 +434,10 @@ class _DashboardContentState extends State<_DashboardContent> {
   }
 
   Future<void> _handleDeletePost(GbpPost post) async {
-    final isLive = post.status == GbpPostStatus.live || post.status == GbpPostStatus.scheduled || post.status == GbpPostStatus.failed;
+    final isLive =
+        post.status == GbpPostStatus.live ||
+        post.status == GbpPostStatus.scheduled ||
+        post.status == GbpPostStatus.failed;
     final String? action = await showDialog<String>(
       context: context,
       builder: (context) {
@@ -444,18 +471,31 @@ class _DashboardContentState extends State<_DashboardContent> {
             ),
             if (isLive)
               Tooltip(
-                message: post.id.contains('/') ? 'Posts created directly on Google cannot be reverted to draft in VisibloAI' : '',
+                message: post.id.contains('/')
+                    ? 'Posts created directly on Google cannot be reverted to draft in VisibloAI'
+                    : '',
                 child: TextButton(
-                  onPressed: post.id.contains('/') ? null : () => Navigator.of(context).pop('revert'),
+                  onPressed: post.id.contains('/')
+                      ? null
+                      : () => Navigator.of(context).pop('revert'),
                   style: TextButton.styleFrom(
-                    backgroundColor: post.id.contains('/') ? Colors.grey.shade200 : const Color(0xFFF0E9FF),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    backgroundColor: post.id.contains('/')
+                        ? Colors.grey.shade200
+                        : const Color(0xFFF0E9FF),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   child: Text(
                     'Revert to Draft',
                     style: TextStyle(
-                      color: post.id.contains('/') ? Colors.grey.shade600 : const Color(0xFF7C63F1),
+                      color: post.id.contains('/')
+                          ? Colors.grey.shade600
+                          : const Color(0xFF7C63F1),
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -482,7 +522,7 @@ class _DashboardContentState extends State<_DashboardContent> {
 
     try {
       final revertToDraft = action == 'revert';
-      
+
       if (post.id.contains('/')) {
         // GBP-only post
         await controller.deleteGbpPost(post.id);
@@ -539,13 +579,12 @@ class _DashboardContentState extends State<_DashboardContent> {
     );
 
     try {
-      await controller.publishAiPost(post.id);
+      final publishedPost = await controller.publishAiPost(post.id);
 
-      // Optimistically update local list to LIVE immediately
       final liveList = controller.liveGbpPosts;
       final index = liveList.indexWhere((p) => p.id == post.id);
       if (index != -1) {
-        liveList[index] = post.copyWith(status: GbpPostStatus.live);
+        liveList[index] = publishedPost;
       }
       setState(() {
         _selectedFilter = _PostFilter.live;
@@ -660,21 +699,95 @@ class _DashboardContentState extends State<_DashboardContent> {
 class _ProfileCard extends StatelessWidget {
   const _ProfileCard({
     required this.user,
+    required this.profileImagePath,
     required this.onLogout,
     required this.onUpdateLogo,
   });
 
   final TestAccount user;
+  final String profileImagePath;
   final Future<void> Function() onLogout;
   final VoidCallback onUpdateLogo;
 
   String _formatPlanName(String planId) {
-    if (planId.isEmpty) return 'Plan';
-    return '${planId[0].toUpperCase()}${planId.substring(1)} Plan';
+    switch (planId.trim().toLowerCase()) {
+      case 'single':
+      case 'starter':
+        return 'Starter Plan';
+      case 'pro':
+      case 'growth':
+        return 'Growth Plan';
+      case 'premium':
+      case 'enterprise':
+        return 'Business Pro';
+      default:
+        return 'Plan';
+    }
+  }
+
+  String get _profileStatusLabel {
+    final business = _activeBusiness;
+    final locked =
+        _readBool(business?['locked']) || _readBool(business?['isPaused']);
+    if (locked) return 'Locked';
+    if (!user.googleBusinessProfileConnected) return 'Not connected';
+    return 'Profile Active';
+  }
+
+  Color get _profileStatusColor {
+    if (_profileStatusLabel == 'Locked') return _DashboardPalette.danger;
+    if (_profileStatusLabel == 'Not connected') {
+      return _DashboardPalette.warning;
+    }
+    return _DashboardPalette.liveGreen;
+  }
+
+  Color get _profileStatusBackground {
+    if (_profileStatusLabel == 'Locked') return _DashboardPalette.dangerSoft;
+    if (_profileStatusLabel == 'Not connected') {
+      return _DashboardPalette.warningSoft;
+    }
+    return _DashboardPalette.liveSoft;
+  }
+
+  Map<String, dynamic>? get _activeBusiness {
+    for (final business in user.backendAvailableBusinesses) {
+      if ((business['id'] ?? '').toString().trim() ==
+          user.backendBusinessId.trim()) {
+        return business;
+      }
+    }
+    return user.backendAvailableBusinesses.isNotEmpty
+        ? user.backendAvailableBusinesses.first
+        : null;
+  }
+
+  bool _readBool(Object? value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final normalized = value?.toString().trim().toLowerCase() ?? '';
+    return normalized == 'true' || normalized == '1' || normalized == 'yes';
+  }
+
+  ImageProvider? _profileImageProvider() {
+    final value = profileImagePath.trim();
+    if (value.isEmpty) {
+      return null;
+    }
+    final lower = value.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      return NetworkImage(value);
+    }
+    final file = File(value);
+    if (file.existsSync()) {
+      return FileImage(file);
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
+    final imageProvider = _profileImageProvider();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
@@ -703,9 +816,9 @@ class _ProfileCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0xFFF4F8FC),
                     shape: BoxShape.circle,
-                    image: user.businessPhotoPath.isNotEmpty
+                    image: imageProvider != null
                         ? DecorationImage(
-                            image: FileImage(File(user.businessPhotoPath)),
+                            image: imageProvider,
                             fit: BoxFit.cover,
                           )
                         : null,
@@ -717,7 +830,7 @@ class _ProfileCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: user.businessPhotoPath.isEmpty
+                  child: imageProvider == null
                       ? const Icon(
                           Icons.storefront_rounded,
                           color: AppColors.brandBlue,
@@ -767,10 +880,10 @@ class _ProfileCard extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Row(
                     children: [
-                      const _BadgePill(
-                        label: 'Profile Active',
-                        foreground: _DashboardPalette.liveGreen,
-                        background: _DashboardPalette.liveSoft,
+                      _BadgePill(
+                        label: _profileStatusLabel,
+                        foreground: _profileStatusColor,
+                        background: _profileStatusBackground,
                         icon: Icons.circle,
                       ),
                       const SizedBox(width: 8),
@@ -1281,7 +1394,11 @@ class _PostCard extends StatelessWidget {
                       )
                     : post.isBase64Asset
                     ? Image.memory(
-                        base64Decode(post.assetPath.substring(post.assetPath.indexOf(',') + 1)),
+                        base64Decode(
+                          post.assetPath.substring(
+                            post.assetPath.indexOf(',') + 1,
+                          ),
+                        ),
                         width: double.infinity,
                         height: 214,
                         fit: BoxFit.cover,
@@ -1418,7 +1535,8 @@ class _PostCard extends StatelessWidget {
             ],
           ),
           // Row 2: Publish Now (only for drafts)
-          if (post.status == GbpPostStatus.failed && post.errorMessage == 'Auth Required') ...[
+          if (post.status == GbpPostStatus.failed &&
+              post.errorMessage == 'Auth Required') ...[
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
@@ -1554,12 +1672,60 @@ class _GoogleWordmark extends StatelessWidget {
         const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('G', style: TextStyle(fontSize: 24, height: 1, color: Color(0xFF4285F4), fontWeight: FontWeight.w700)),
-            Text('o', style: TextStyle(fontSize: 24, height: 1, color: Color(0xFFEA4335), fontWeight: FontWeight.w700)),
-            Text('o', style: TextStyle(fontSize: 24, height: 1, color: Color(0xFFFBBC05), fontWeight: FontWeight.w700)),
-            Text('g', style: TextStyle(fontSize: 24, height: 1, color: Color(0xFF4285F4), fontWeight: FontWeight.w700)),
-            Text('l', style: TextStyle(fontSize: 24, height: 1, color: Color(0xFF34A853), fontWeight: FontWeight.w700)),
-            Text('e', style: TextStyle(fontSize: 24, height: 1, color: Color(0xFFEA4335), fontWeight: FontWeight.w700)),
+            Text(
+              'G',
+              style: TextStyle(
+                fontSize: 24,
+                height: 1,
+                color: Color(0xFF4285F4),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              'o',
+              style: TextStyle(
+                fontSize: 24,
+                height: 1,
+                color: Color(0xFFEA4335),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              'o',
+              style: TextStyle(
+                fontSize: 24,
+                height: 1,
+                color: Color(0xFFFBBC05),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              'g',
+              style: TextStyle(
+                fontSize: 24,
+                height: 1,
+                color: Color(0xFF4285F4),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              'l',
+              style: TextStyle(
+                fontSize: 24,
+                height: 1,
+                color: Color(0xFF34A853),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              'e',
+              style: TextStyle(
+                fontSize: 24,
+                height: 1,
+                color: Color(0xFFEA4335),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 1),
@@ -2205,6 +2371,7 @@ abstract final class _DashboardPalette {
   static const warning = Color(0xFFF3A53B);
   static const warningSoft = Color(0xFFFEF7E9);
   static const danger = Color(0xFFFF4954);
+  static const dangerSoft = Color(0xFFFFF0F1);
 }
 
 class _ExpandableText extends StatefulWidget {
@@ -2227,7 +2394,7 @@ class _ExpandableTextState extends State<_ExpandableText> {
     // Split by double newline or single newline to find paragraphs
     final parts = text.split(RegExp(r'\n\s*\n|\n'));
     String firstPara = parts.first;
-    
+
     // If there are no newlines but the text is very long, truncate it
     bool hasMore = text.length > firstPara.length;
     if (!hasMore && text.length > 150) {
@@ -2295,7 +2462,9 @@ class _PaginationBar extends StatelessWidget {
               shape: BoxShape.circle,
               color: isSelected ? AppColors.brandBlue : Colors.transparent,
               border: Border.all(
-                color: isSelected ? AppColors.brandBlue : const Color(0xFFE2E8F0),
+                color: isSelected
+                    ? AppColors.brandBlue
+                    : const Color(0xFFE2E8F0),
               ),
             ),
             child: Text(

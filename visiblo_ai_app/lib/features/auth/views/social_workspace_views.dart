@@ -1548,6 +1548,10 @@ class _SocialCreateViewState extends State<SocialCreateView> {
       Get.isRegistered<SocialCreateController>()
       ? Get.find<SocialCreateController>()
       : Get.put(SocialCreateController());
+  late final SocialAccountsController _accountsController =
+      Get.isRegistered<SocialAccountsController>()
+      ? Get.find<SocialAccountsController>()
+      : Get.put(SocialAccountsController());
   late final SocialSchedulerController _schedulerController =
       Get.isRegistered<SocialSchedulerController>()
       ? Get.find<SocialSchedulerController>()
@@ -1615,6 +1619,97 @@ class _SocialCreateViewState extends State<SocialCreateView> {
     for (final post in posts.where((post) => !post.isPublished)) {
       await _createController.publishPost(post);
     }
+  }
+
+  Future<void> _openPublishPlatformsSheet(GeneratedSocialPost post) async {
+    final connectedPlatforms = _accountsController.connectedPlatforms
+        .map((item) => item.toLowerCase())
+        .toSet();
+    final availablePlatforms = <String>[
+      if (connectedPlatforms.contains('instagram')) 'instagram',
+      if (connectedPlatforms.contains('facebook')) 'facebook',
+      if (connectedPlatforms.contains('linkedin')) 'linkedin',
+    ];
+
+    if (availablePlatforms.isEmpty) {
+      _createController.errorMessage.value =
+          'Connect at least one social platform before publishing.';
+      return;
+    }
+
+    final initialPlatform = _normalizePublishPlatform(post.platform);
+    final selectedPlatforms = <String>{
+      availablePlatforms.contains(initialPlatform)
+          ? initialPlatform
+          : availablePlatforms.first,
+    };
+
+    final result = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void togglePlatform(String platform) {
+              setSheetState(() {
+                if (platform == 'all') {
+                  if (selectedPlatforms.contains('all')) {
+                    selectedPlatforms
+                      ..remove('all')
+                      ..clear()
+                      ..add(
+                        availablePlatforms.contains(initialPlatform)
+                            ? initialPlatform
+                            : availablePlatforms.first,
+                      );
+                    return;
+                  }
+                  selectedPlatforms
+                    ..clear()
+                    ..add('all');
+                  return;
+                }
+
+                selectedPlatforms.remove('all');
+                if (selectedPlatforms.contains(platform)) {
+                  if (selectedPlatforms.length > 1) {
+                    selectedPlatforms.remove(platform);
+                  }
+                  return;
+                }
+                selectedPlatforms.add(platform);
+              });
+            }
+
+            return _PublishPlatformsSheet(
+              selectedPlatforms: selectedPlatforms,
+              availablePlatforms: availablePlatforms,
+              onTogglePlatform: togglePlatform,
+              onConfirm: () {
+                final payload = selectedPlatforms.contains('all')
+                    ? availablePlatforms
+                    : selectedPlatforms.toList(growable: false);
+                Navigator.of(sheetContext).pop(payload);
+              },
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted || result == null || result.isEmpty) {
+      return;
+    }
+
+    await _createController.publishPost(post, platforms: result);
+  }
+
+  String _normalizePublishPlatform(String platform) {
+    final value = platform.toLowerCase();
+    if (value.contains('facebook')) return 'facebook';
+    if (value.contains('linkedin')) return 'linkedin';
+    return 'instagram';
   }
 
   Future<void> _editGeneratedPost(GeneratedSocialPost post) async {
@@ -2154,6 +2249,7 @@ class _SocialCreateViewState extends State<SocialCreateView> {
         });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _createController.loadDrafts();
+      await _accountsController.loadAccounts();
       if (!mounted) return;
       _openPendingDraftIfNeeded();
       await _handleInitialCreateArguments();
@@ -2490,6 +2586,7 @@ class _SocialCreateViewState extends State<SocialCreateView> {
               const SizedBox(height: 24),
               _GeneratedSocialPostsSection(
                 controller: _createController,
+                onPublishPost: _openPublishPlatformsSheet,
                 onSchedulePost: _showSuggestedScheduleDialogForGenerated,
                 onEditPost: _editGeneratedPost,
                 onDeletePost: _confirmDeleteGeneratedPost,
@@ -3179,12 +3276,14 @@ String _qualityKeyFromLabel(String value) {
 class _GeneratedSocialPostsSection extends StatefulWidget {
   const _GeneratedSocialPostsSection({
     required this.controller,
+    required this.onPublishPost,
     required this.onSchedulePost,
     required this.onEditPost,
     required this.onDeletePost,
   });
 
   final SocialCreateController controller;
+  final ValueChanged<GeneratedSocialPost> onPublishPost;
   final ValueChanged<GeneratedSocialPost> onSchedulePost;
   final ValueChanged<GeneratedSocialPost> onEditPost;
   final ValueChanged<GeneratedSocialPost> onDeletePost;
@@ -3300,7 +3399,7 @@ class _GeneratedSocialPostsSectionState
                       isPublishing:
                           widget.controller.publishingPlatform.value ==
                           post.platform,
-                      onPublish: () => widget.controller.publishPost(post),
+                      onPublish: () => widget.onPublishPost(post),
                       onSchedule: post.isPublished
                           ? null
                           : () => widget.onSchedulePost(post),
@@ -3332,6 +3431,235 @@ class _GeneratedSocialPostsSectionState
         ),
       );
     });
+  }
+}
+
+class _PublishPlatformsSheet extends StatelessWidget {
+  const _PublishPlatformsSheet({
+    required this.selectedPlatforms,
+    required this.availablePlatforms,
+    required this.onTogglePlatform,
+    required this.onConfirm,
+  });
+
+  final Set<String> selectedPlatforms;
+  final List<String> availablePlatforms;
+  final ValueChanged<String> onTogglePlatform;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    final allSelected = selectedPlatforms.contains('all');
+    final options = <({String key, String label, String asset})>[
+      (
+        key: 'instagram',
+        label: 'Instagram',
+        asset: 'assets/images/instagram.png',
+      ),
+      (key: 'facebook', label: 'Facebook', asset: 'assets/images/facebook.png'),
+      (key: 'linkedin', label: 'LinkedIn', asset: 'assets/images/link.png'),
+    ];
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 54,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD9E2EE),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Where do you want to publish?',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF101A35),
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Choose one or more connected social platforms for this post.',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF66748E),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...options.map((option) {
+              final isAvailable = availablePlatforms.contains(option.key);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _PublishPlatformOptionTile(
+                  title: option.label,
+                  assetPath: option.asset,
+                  selected: selectedPlatforms.contains(option.key),
+                  disabled: !isAvailable || allSelected,
+                  onTap: isAvailable && !allSelected
+                      ? () => onTogglePlatform(option.key)
+                      : null,
+                ),
+              );
+            }),
+            _PublishPlatformOptionTile(
+              title: 'All',
+              icon: Icons.public_rounded,
+              selected: allSelected,
+              disabled: false,
+              onTap: () => onTogglePlatform('all'),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onConfirm,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0A3F85),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text(
+                  'Publish now',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PublishPlatformOptionTile extends StatelessWidget {
+  const _PublishPlatformOptionTile({
+    required this.title,
+    required this.selected,
+    required this.disabled,
+    required this.onTap,
+    this.assetPath,
+    this.icon,
+  });
+
+  final String title;
+  final bool selected;
+  final bool disabled;
+  final VoidCallback? onTap;
+  final String? assetPath;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = selected
+        ? const Color(0xFF0A3F85)
+        : const Color(0xFFDDE6F0);
+    final backgroundColor = selected
+        ? const Color(0xFFF0F7FF)
+        : disabled
+        ? const Color(0xFFF7F9FC)
+        : Colors.white;
+    final titleColor = disabled
+        ? const Color(0xFF9AA7BA)
+        : const Color(0xFF111827);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor, width: selected ? 1.4 : 1),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE1E9F2)),
+              ),
+              padding: const EdgeInsets.all(8),
+              child: assetPath != null
+                  ? Opacity(
+                      opacity: disabled ? 0.45 : 1,
+                      child: Image.asset(assetPath!, fit: BoxFit.contain),
+                    )
+                  : Icon(
+                      icon,
+                      color: disabled
+                          ? const Color(0xFF9AA7BA)
+                          : const Color(0xFF0A3F85),
+                      size: 20,
+                    ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: titleColor,
+                  fontSize: 14.2,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: selected ? const Color(0xFF0A3F85) : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: selected
+                      ? const Color(0xFF0A3F85)
+                      : const Color(0xFFCAD5E3),
+                ),
+              ),
+              child: selected
+                  ? const Icon(
+                      Icons.check_rounded,
+                      size: 16,
+                      color: Colors.white,
+                    )
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

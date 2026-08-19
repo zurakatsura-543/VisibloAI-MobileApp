@@ -1,12 +1,15 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/theme/app_colors.dart';
@@ -16,6 +19,8 @@ import '../models/review_poster_models.dart';
 import '../models/website_manager_models.dart';
 import '../widgets/auth_layout.dart';
 import '../widgets/auth_navigation_shell.dart';
+
+final GlobalKey _posterExportKey = GlobalKey();
 
 class ReviewPosterView extends GetView<ReviewPosterController> {
   const ReviewPosterView({super.key});
@@ -99,6 +104,9 @@ class ReviewPosterView extends GetView<ReviewPosterController> {
                     hasDirectReviewUrl: controller.hasDirectReviewUrl,
                     reviewUrl: controller.reviewUrl,
                     onLocationChanged: controller.selectLocation,
+                    onPasteReviewLink:
+                        () => _openReviewLinkSetupSheet(context),
+                    onSyncGoogle: _syncGoogleReviewLink,
                   ),
                 ],
               );
@@ -115,9 +123,56 @@ class ReviewPosterView extends GetView<ReviewPosterController> {
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        leftColumn,
-                        const SizedBox(height: 14),
-                        previewColumn,
+                        _HeaderCard(
+                          onRefresh: controller.refreshData,
+                          isRefreshing:
+                              controller.isLoading.value ||
+                              controller.isResolvingReviewUrl.value,
+                        ),
+                        const SizedBox(height: 12),
+                        if (controller.errorMessage.value != null) ...[
+                          _FeedbackBanner(
+                            message: controller.errorMessage.value!,
+                            isError: true,
+                            onDismiss: controller.clearError,
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (controller.infoMessage.value != null) ...[
+                          _FeedbackBanner(
+                            message: controller.infoMessage.value!,
+                            onDismiss: controller.clearInfo,
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        _PreviewPanel(
+                          controller: controller,
+                          onOpenReview: _openReviewPage,
+                        ),
+                        const SizedBox(height: 12),
+                        _DesignCard(controller: controller),
+                        const SizedBox(height: 12),
+                        _PosterContentCard(
+                          controller: controller,
+                          onCopy: _copyReviewLink,
+                          onShareWhatsApp: _shareReviewLinkOnWhatsApp,
+                        ),
+                        const SizedBox(height: 12),
+                        _ExportCard(onOpenPosterPdf: _openPosterPdf),
+                        const SizedBox(height: 12),
+                        _LocationCard(
+                          locations: controller.locations,
+                          selectedLocation: selectedLocation,
+                          dropdownValue: dropdownValue,
+                          isResolvingReviewUrl:
+                              controller.isResolvingReviewUrl.value,
+                          hasDirectReviewUrl: controller.hasDirectReviewUrl,
+                          reviewUrl: controller.reviewUrl,
+                          onLocationChanged: controller.selectLocation,
+                          onPasteReviewLink:
+                              () => _openReviewLinkSetupSheet(context),
+                          onSyncGoogle: _syncGoogleReviewLink,
+                        ),
                       ],
                     );
 
@@ -224,26 +279,202 @@ class ReviewPosterView extends GetView<ReviewPosterController> {
     );
   }
 
+  Future<void> _syncGoogleReviewLink() async {
+    await controller.resolveReviewUrlForSelectedLocation();
+    if (controller.hasDirectReviewUrl) {
+      Get.snackbar(
+        'Google sync complete',
+        'The direct review link is now ready for this business.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.white,
+        colorText: AppColors.text,
+        margin: const EdgeInsets.all(12),
+      );
+      return;
+    }
+
+    Get.snackbar(
+      'Review link still missing',
+      'Paste the direct Google review link manually if sync has not brought it in yet.',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.white,
+      colorText: AppColors.text,
+      margin: const EdgeInsets.all(12),
+    );
+  }
+
+  Future<void> _openReviewLinkSetupSheet(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 24,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+          ),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x140F172A),
+                  blurRadius: 32,
+                  offset: Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Add Google Review Link',
+                        style: AppTypography.card(
+                          fontSize: 18,
+                          color: AppColors.brandBlue,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                      color: AppColors.brandBlue,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Paste the direct "Write a Review" Google link for this business. Once saved, the poster QR will use that live review link.',
+                  style: AppTypography.body(
+                    fontSize: 13,
+                    color: AppColors.mutedText,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: controller.reviewUrlController,
+                  keyboardType: TextInputType.url,
+                  autofocus: true,
+                  decoration: _inputDecoration(
+                    hintText: 'Paste your Google review link here...',
+                  ),
+                  style: AppTypography.body(
+                    fontSize: 13,
+                    color: AppColors.brandBlue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: controller.isResolvingReviewUrl.value
+                            ? null
+                            : () async {
+                                Navigator.of(sheetContext).pop();
+                                await _syncGoogleReviewLink();
+                              },
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          side: const BorderSide(color: Color(0xFFBFD7E6)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text('Sync Google'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final raw = controller.reviewUrlController.text.trim();
+                          final normalized = normalizeWriteReviewUrl(raw);
+                          if (normalized == null) {
+                            _showFailure(
+                              'Invalid review link',
+                              'Paste the direct Google "Write a Review" link for this business.',
+                            );
+                            return;
+                          }
+
+                          controller.reviewUrlController.text = normalized;
+                          Navigator.of(sheetContext).pop();
+                          Get.snackbar(
+                            'Review link saved',
+                            'The QR poster now uses the direct Google review link.',
+                            snackPosition: SnackPosition.BOTTOM,
+                            backgroundColor: Colors.white,
+                            colorText: AppColors.text,
+                            margin: const EdgeInsets.all(12),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text('Save Link'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _openPosterPdf() async {
     try {
-      final pdfFile = await _createReviewPosterPdf(
-        authorName: controller.currentUser?.fullName.trim().isNotEmpty == true
-            ? controller.currentUser!.fullName.trim()
-            : controller.businessName,
+      await WidgetsBinding.instance.endOfFrame;
+      final boundary =
+          _posterExportKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) {
+        _showFailure(
+          'Export failed',
+          'The poster preview is not ready yet. Please try again.',
+        );
+        return;
+      }
+
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        _showFailure(
+          'Export failed',
+          'The poster image could not be created right now.',
+        );
+        return;
+      }
+
+      final exportFile = await _createReviewPosterPng(
         businessName: controller.businessName,
-        title: controller.titleValue,
-        description: controller.descriptionValue,
-        reviewUrl: controller.reviewUrl,
-        shortDisplayUrl: controller.shortDisplayUrl,
-        brandColor: controller.brandColor,
-        paperSize: controller.selectedPaperSize.value,
-        template: controller.selectedTemplate.value,
-        showFooter: controller.showFooter.value,
+        bytes: byteData.buffer.asUint8List(),
       );
 
       final openResult = await OpenFilex.open(
-        pdfFile.path,
-        type: 'application/pdf',
+        exportFile.path,
+        type: 'image/png',
       );
 
       if (openResult.type == ResultType.done) {
@@ -251,7 +482,7 @@ class ReviewPosterView extends GetView<ReviewPosterController> {
       }
 
       final opened = await _launchWithFallbacks(
-        Uri.file(pdfFile.path),
+        Uri.file(exportFile.path),
         modes: const <LaunchMode>[
           LaunchMode.platformDefault,
           LaunchMode.externalApplication,
@@ -262,14 +493,14 @@ class ReviewPosterView extends GetView<ReviewPosterController> {
         _showFailure(
           'Open failed',
           resultMessage.isNotEmpty
-              ? 'The poster PDF was created, but it could not be opened: $resultMessage'
-              : 'The poster PDF was created, but no app was available to open it.',
+              ? 'The poster image was created, but it could not be opened: $resultMessage'
+              : 'The poster image was created, but no app was available to open it.',
         );
       }
     } catch (_) {
       _showFailure(
-        'PDF failed',
-        'The review poster PDF could not be created right now.',
+        'Export failed',
+        'The review poster image could not be created right now.',
       );
     }
   }
@@ -449,6 +680,8 @@ class _LocationCard extends StatelessWidget {
     required this.hasDirectReviewUrl,
     required this.reviewUrl,
     required this.onLocationChanged,
+    required this.onPasteReviewLink,
+    required this.onSyncGoogle,
   });
 
   final List<BusinessLocationSummary> locations;
@@ -458,6 +691,8 @@ class _LocationCard extends StatelessWidget {
   final bool hasDirectReviewUrl;
   final String reviewUrl;
   final Future<void> Function(String? value) onLocationChanged;
+  final Future<void> Function() onPasteReviewLink;
+  final Future<void> Function() onSyncGoogle;
 
   @override
   Widget build(BuildContext context) {
@@ -547,6 +782,9 @@ class _LocationCard extends StatelessWidget {
           _ReviewLinkStatusCard(
             reviewUrl: reviewUrl,
             hasDirectReviewUrl: hasDirectReviewUrl,
+            onPasteReviewLink: onPasteReviewLink,
+            onSyncGoogle: onSyncGoogle,
+            isResolvingReviewUrl: isResolvingReviewUrl,
           ),
         ],
       ),
@@ -561,70 +799,158 @@ class _DesignCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _PosterShellCard(
+    return GetBuilder<ReviewPosterController>(
+      id: ReviewPosterController.controlsRefreshId,
+      builder: (_) => _PosterShellCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionCardHeader(
+              icon: Icons.design_services_outlined,
+              title: 'Design & Format',
+              accentColor: const Color(0xFF6EC6F5),
+            ),
+            const SizedBox(height: 14),
+            _DesignPanel(
+              label: 'Paper Size',
+              child: Row(
+                children: ReviewPosterPaperSize.values
+                    .map(
+                      (paperSize) => Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            right: paperSize ==
+                                    ReviewPosterPaperSize.values.last
+                                ? 0
+                                : 8,
+                          ),
+                          child: _ChoiceChipButton(
+                            label: paperSize.label,
+                            selected:
+                                controller.selectedPaperSize.value == paperSize,
+                            onTap: () => controller.setPaperSize(paperSize),
+                            compact: true,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _DesignPanel(
+              label: 'Brand Color',
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: _MultiColorSwatch(
+                        isSelected: controller.isMultiColorTheme,
+                        onTap: controller.setMultiColorTheme,
+                      ),
+                    ),
+                    ...ReviewPosterController.brandColors.map(
+                      (color) => Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: _BrandSwatch(
+                          color: color,
+                          isSelected:
+                              !controller.isMultiColorTheme &&
+                              controller.brandColor.toARGB32() ==
+                                  color.toARGB32(),
+                          onTap: () => controller.setBrandColor(color),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _DesignPanel(
+              label: 'Poster Layout',
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: ReviewPosterTemplate.values
+                      .map(
+                        (template) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _ChoiceChipButton(
+                            label: template.label,
+                            selected:
+                                controller.selectedTemplate.value == template,
+                            onTap: () => controller.setTemplate(template),
+                            compact: true,
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7FBFF),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE1ECF5)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Display "Powered by VisibloAI" footer',
+                      style: AppTypography.body(
+                        fontSize: 13.5,
+                        color: AppColors.brandBlue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Switch.adaptive(
+                    value: controller.showFooter.value,
+                    activeThumbColor: Colors.white,
+                    activeTrackColor: AppColors.primary,
+                    inactiveTrackColor: const Color(0xFFDDE4EC),
+                    onChanged: controller.setShowFooter,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DesignPanel extends StatelessWidget {
+  const _DesignPanel({required this.label, required this.child});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FBFF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE1ECF5)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionCardHeader(
-            icon: Icons.design_services_outlined,
-            title: 'Design & Format',
-            accentColor: const Color(0xFF6EC6F5),
-          ),
-          const SizedBox(height: 14),
-          const _FieldLabel('Paper Size'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: ReviewPosterPaperSize.values
-                .map(
-                  (paperSize) => _ChoiceChipButton(
-                    label: paperSize.label,
-                    selected: controller.selectedPaperSize.value == paperSize,
-                    onTap: () => controller.setPaperSize(paperSize),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-          const SizedBox(height: 14),
-          const _FieldLabel('Brand Color'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: ReviewPosterController.brandColors
-                .map(
-                  (color) => _BrandSwatch(
-                    color: color,
-                    isSelected:
-                        controller.brandColor.toARGB32() == color.toARGB32(),
-                    onTap: () => controller.setBrandColor(color),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Display "Powered by VisibloAI" footer',
-                  style: AppTypography.body(
-                    fontSize: 13.5,
-                    color: AppColors.brandBlue,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Switch.adaptive(
-                value: controller.showFooter.value,
-                activeThumbColor: Colors.white,
-                activeTrackColor: AppColors.primary,
-                inactiveTrackColor: const Color(0xFFDDE4EC),
-                onChanged: controller.setShowFooter,
-              ),
-            ],
-          ),
+          _FieldLabel(label),
+          const SizedBox(height: 10),
+          child,
         ],
       ),
     );
@@ -810,7 +1136,7 @@ class _ExportCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(15),
               ),
               child: const Icon(
-                Icons.picture_as_pdf_outlined,
+                Icons.image_outlined,
                 color: AppColors.primary,
                 size: 24,
               ),
@@ -821,7 +1147,7 @@ class _ExportCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Ready to Print?',
+                    'Export Poster',
                     style: AppTypography.card(
                       fontSize: 16.5,
                       color: AppColors.brandBlue,
@@ -829,7 +1155,7 @@ class _ExportCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    'Download or print your customized review poster now.',
+                    'Download the same poster design you see in the preview.',
                     style: AppTypography.body(
                       fontSize: 12.4,
                       color: AppColors.mutedText,
@@ -864,7 +1190,7 @@ class _ExportCard extends StatelessWidget {
                     ),
                     icon: const Icon(Icons.open_in_new_rounded, size: 18),
                     label: Text(
-                      'Open PDF',
+                      'Open PNG',
                       style: AppTypography.button(
                         fontSize: 13,
                         color: Colors.white,
@@ -896,7 +1222,7 @@ class _ExportCard extends StatelessWidget {
                 ),
                 icon: const Icon(Icons.open_in_new_rounded, size: 18),
                 label: Text(
-                  'Open PDF',
+                  'Open PNG',
                   style: AppTypography.button(
                     fontSize: 13,
                     color: Colors.white,
@@ -919,72 +1245,78 @@ class _PreviewPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final paperSize = controller.selectedPaperSize.value;
+    return GetBuilder<ReviewPosterController>(
+      id: ReviewPosterController.previewRefreshId,
+      builder: (_) {
+        final paperSize = controller.selectedPaperSize.value;
 
-    return _PosterShellCard(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Poster Preview',
-            style: AppTypography.card(fontSize: 17, color: AppColors.brandBlue),
-          ),
-          const SizedBox(height: 10),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final previewWidth = math.min(constraints.maxWidth, 620.0);
-              final previewHeight = previewWidth / paperSize.aspectRatio;
+        return _PosterShellCard(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Poster Preview',
+                style: AppTypography.card(
+                  fontSize: 17,
+                  color: AppColors.brandBlue,
+                ),
+              ),
+              const SizedBox(height: 10),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final previewWidth = math.min(constraints.maxWidth, 620.0);
+                  final previewHeight = previewWidth / paperSize.aspectRatio;
 
-              return Center(
-                child: GestureDetector(
-                  onTap: onOpenReview,
-                  child: RepaintBoundary(
-                    child: Container(
-                      width: previewWidth,
-                      height: previewHeight,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFE5C8FF)),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x120A3E6E),
-                            blurRadius: 20,
-                            offset: Offset(0, 10),
+                  return Center(
+                    child: GestureDetector(
+                      onTap: onOpenReview,
+                      child: Container(
+                          width: previewWidth,
+                          height: previewHeight,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFE5C8FF)),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x120A3E6E),
+                                blurRadius: 20,
+                                offset: Offset(0, 10),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 220),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeOutCubic,
-                          child: _PosterTemplatePreview(
-                            key: ValueKey(
-                              '${controller.selectedTemplate.value.name}-${controller.brandColor.toARGB32()}-${controller.showFooter.value}-${controller.titleValue}-${controller.descriptionValue}-${controller.shortDisplayUrl}',
+                          child: RepaintBoundary(
+                            key: _posterExportKey,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: _PosterTemplatePreview(
+                                key: ValueKey(
+                                  '${controller.selectedPaperSize.value.name}-${controller.selectedTemplate.value.name}-${controller.brandColor.toARGB32()}-${controller.showFooter.value}-${controller.titleValue}-${controller.descriptionValue}-${controller.businessName}-${controller.shortDisplayUrl}-${controller.reviewUrl}',
+                                ),
+                                template: controller.selectedTemplate.value,
+                                title: controller.titleValue,
+                                description: controller.descriptionValue,
+                                businessName: controller.businessName,
+                                brandColor: controller.brandColor,
+                                isMultiColorTheme:
+                                    controller.isMultiColorTheme,
+                                shortDisplayUrl: controller.shortDisplayUrl,
+                                reviewUrl: controller.reviewUrl,
+                                showFooter: controller.showFooter.value,
+                                onOpenReview: onOpenReview,
+                              ),
                             ),
-                            template: controller.selectedTemplate.value,
-                            title: controller.titleValue,
-                            description: controller.descriptionValue,
-                            businessName: controller.businessName,
-                            brandColor: controller.brandColor,
-                            shortDisplayUrl: controller.shortDisplayUrl,
-                            reviewUrl: controller.reviewUrl,
-                            showFooter: controller.showFooter.value,
-                            onOpenReview: onOpenReview,
                           ),
                         ),
-                      ),
                     ),
-                  ),
-                ),
-              );
-            },
+                  );
+                },
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -997,6 +1329,7 @@ class _PosterTemplatePreview extends StatelessWidget {
     required this.description,
     required this.businessName,
     required this.brandColor,
+    required this.isMultiColorTheme,
     required this.shortDisplayUrl,
     required this.reviewUrl,
     required this.showFooter,
@@ -1008,6 +1341,7 @@ class _PosterTemplatePreview extends StatelessWidget {
   final String description;
   final String businessName;
   final Color brandColor;
+  final bool isMultiColorTheme;
   final String shortDisplayUrl;
   final String reviewUrl;
   final bool showFooter;
@@ -1022,6 +1356,7 @@ class _PosterTemplatePreview extends StatelessWidget {
           description: description,
           businessName: businessName,
           brandColor: brandColor,
+          isMultiColorTheme: isMultiColorTheme,
           shortDisplayUrl: shortDisplayUrl,
           reviewUrl: reviewUrl,
           showFooter: showFooter,
@@ -1033,6 +1368,7 @@ class _PosterTemplatePreview extends StatelessWidget {
           description: description,
           businessName: businessName,
           brandColor: brandColor,
+          isMultiColorTheme: isMultiColorTheme,
           shortDisplayUrl: shortDisplayUrl,
           reviewUrl: reviewUrl,
           showFooter: showFooter,
@@ -1044,6 +1380,7 @@ class _PosterTemplatePreview extends StatelessWidget {
           description: description,
           businessName: businessName,
           brandColor: brandColor,
+          isMultiColorTheme: isMultiColorTheme,
           shortDisplayUrl: shortDisplayUrl,
           reviewUrl: reviewUrl,
           showFooter: showFooter,
@@ -1059,6 +1396,7 @@ class _SplitPosterTemplate extends StatelessWidget {
     required this.description,
     required this.businessName,
     required this.brandColor,
+    required this.isMultiColorTheme,
     required this.shortDisplayUrl,
     required this.reviewUrl,
     required this.showFooter,
@@ -1069,6 +1407,7 @@ class _SplitPosterTemplate extends StatelessWidget {
   final String description;
   final String businessName;
   final Color brandColor;
+  final bool isMultiColorTheme;
   final String shortDisplayUrl;
   final String reviewUrl;
   final bool showFooter;
@@ -1079,6 +1418,7 @@ class _SplitPosterTemplate extends StatelessWidget {
     final softTop = _blendWithWhite(brandColor, 0.82);
     final softBottom = _blendWithWhite(brandColor, 0.96);
     final deepAccent = _blendWithBlack(brandColor, 0.2);
+    final multiPalette = ReviewPosterController.multiColorTheme;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1091,39 +1431,39 @@ class _SplitPosterTemplate extends StatelessWidget {
             constraints.maxHeight < 600 || constraints.maxWidth < 300;
         final horizontalPadding = isCompact ? 18.0 : 24.0;
         final topPadding = ultraCompact
-            ? 14.0
+            ? 18.0
             : isCompact
             ? 18.0
             : 24.0;
         final bottomPadding = ultraCompact
-            ? 10.0
+            ? 14.0
             : isCompact
             ? 12.0
             : 16.0;
         final qrCardWidth = ultraCompact
-            ? 166.0
+            ? math.min(constraints.maxWidth - 52, 214.0)
             : isCompact
-            ? 188.0
-            : 204.0;
+            ? math.min(constraints.maxWidth - 56, 232.0)
+            : 248.0;
         final qrPadding = ultraCompact
             ? 10.0
             : isCompact
             ? 12.0
-            : 16.0;
+            : 14.0;
         final qrHeight = ultraCompact
-            ? 128.0
+            ? math.min(constraints.maxHeight * 0.26, 182.0)
             : isCompact
-            ? 146.0
-            : 162.0;
+            ? math.min(constraints.maxHeight * 0.29, 198.0)
+            : 214.0;
         final titleSize = ultraCompact
-            ? 17.8
+            ? 24.0
             : isCompact
-            ? 19.8
+            ? 22.0
             : 22.4;
         final descriptionSize = ultraCompact
-            ? 10.0
+            ? 12.8
             : isCompact
-            ? 10.8
+            ? 11.8
             : 11.6;
         final starSize = ultraCompact
             ? 16.2
@@ -1131,20 +1471,27 @@ class _SplitPosterTemplate extends StatelessWidget {
             ? 17.6
             : 19.4;
         final businessNameSize = ultraCompact
-            ? 11.8
+            ? 14.0
             : isCompact
-            ? 12.8
+            ? 13.2
             : 13.6;
         final urlSize = ultraCompact
-            ? 9.8
+            ? 11.6
             : isCompact
-            ? 10.4
+            ? 10.8
             : 11.2;
 
         return DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [softTop, softBottom, Colors.white, Colors.white],
+              colors: isMultiColorTheme
+                  ? [
+                      _blendWithWhite(multiPalette[0], 0.8),
+                      _blendWithWhite(multiPalette[1], 0.86),
+                      _blendWithWhite(multiPalette[2], 0.92),
+                      Colors.white,
+                    ]
+                  : [softTop, softBottom, Colors.white, Colors.white],
               stops: const [0, 0.56, 0.56, 1],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
@@ -1166,7 +1513,9 @@ class _SplitPosterTemplate extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.section(
                     fontSize: titleSize,
-                    color: const Color(0xFF1F2937),
+                    color: isMultiColorTheme
+                        ? multiPalette[1]
+                        : const Color(0xFF1F2937),
                     fontWeight: FontWeight.w800,
                     height: 1.16,
                   ),
@@ -1175,7 +1524,7 @@ class _SplitPosterTemplate extends StatelessWidget {
                 Text(
                   description,
                   textAlign: TextAlign.center,
-                  maxLines: 2,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.body(
                     fontSize: descriptionSize,
@@ -1219,7 +1568,7 @@ class _SplitPosterTemplate extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: AppTypography.body(
                     fontSize: ultraCompact
-                        ? 9.8
+                        ? 11.4
                         : isCompact
                         ? 10.6
                         : 11.2,
@@ -1268,24 +1617,24 @@ class _SplitPosterTemplate extends StatelessWidget {
                         height: qrHeight,
                         child: _PosterQrPreview(reviewUrl: reviewUrl),
                       ),
-                      SizedBox(height: isCompact ? 8 : 10),
-                      Text(
-                        'SCAN CODE',
-                        style: AppTypography.label(
-                          fontSize: 10.6,
-                          color: const Color(0xFF5D6D83),
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.4,
-                        ),
-                      ),
                     ],
+                  ),
+                ),
+                SizedBox(height: ultraCompact ? 6 : 8),
+                Text(
+                  'SCAN CODE',
+                  style: AppTypography.label(
+                    fontSize: ultraCompact ? 10.2 : 10.6,
+                    color: const Color(0xFF5D6D83),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.4,
                   ),
                 ),
                 SizedBox(
                   height: ultraCompact
-                      ? 10
+                      ? 8
                       : isCompact
-                      ? 14
+                      ? 10
                       : 16,
                 ),
                 Row(
@@ -1343,7 +1692,9 @@ class _SplitPosterTemplate extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.label(
                             fontSize: businessNameSize,
-                            color: deepAccent,
+                            color: isMultiColorTheme
+                                ? multiPalette[1]
+                                : deepAccent,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -1358,17 +1709,17 @@ class _SplitPosterTemplate extends StatelessWidget {
                       Expanded(
                         child: Text(
                           'We partner with VisibloAI for review generation',
-                          style: AppTypography.label(
-                            fontSize: isCompact ? 9.2 : 9.8,
-                            color: const Color(0xFF7E8A9A),
-                            fontWeight: FontWeight.w600,
-                          ),
+                        style: AppTypography.label(
+                          fontSize: ultraCompact ? 10.8 : isCompact ? 9.6 : 9.8,
+                          color: const Color(0xFF7E8A9A),
+                          fontWeight: FontWeight.w600,
+                        ),
                         ),
                       ),
                       Text(
                         'VisibloAI',
                         style: AppTypography.label(
-                          fontSize: isCompact ? 9.6 : 10.2,
+                          fontSize: ultraCompact ? 11.2 : isCompact ? 9.8 : 10.2,
                           color: const Color(0xFF58667B),
                           fontWeight: FontWeight.w700,
                         ),
@@ -1379,7 +1730,7 @@ class _SplitPosterTemplate extends StatelessWidget {
                   Text(
                     'VisibloAI',
                     style: AppTypography.label(
-                      fontSize: 8.8,
+                      fontSize: 10.6,
                       color: const Color(0xFF58667B),
                       fontWeight: FontWeight.w700,
                     ),
@@ -1399,6 +1750,7 @@ class _ClassicPosterTemplate extends StatelessWidget {
     required this.description,
     required this.businessName,
     required this.brandColor,
+    required this.isMultiColorTheme,
     required this.shortDisplayUrl,
     required this.reviewUrl,
     required this.showFooter,
@@ -1409,6 +1761,7 @@ class _ClassicPosterTemplate extends StatelessWidget {
   final String description;
   final String businessName;
   final Color brandColor;
+  final bool isMultiColorTheme;
   final String shortDisplayUrl;
   final String reviewUrl;
   final bool showFooter;
@@ -1418,178 +1771,202 @@ class _ClassicPosterTemplate extends StatelessWidget {
   Widget build(BuildContext context) {
     final mutedText = const Color(0xFF1E293B).withValues(alpha: 0.82);
     final softTone = _blendWithWhite(brandColor, 0.84);
+    final multiPalette = ReviewPosterController.multiColorTheme;
 
-    return ColoredBox(
-      color: softTone,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 26, 24, 18),
-        child: Column(
-          children: [
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: AppTypography.section(
-                fontSize: 24,
-                color: const Color(0xFF0F172A),
-                fontWeight: FontWeight.w800,
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompactPreview = constraints.maxHeight < 600;
+        final qrSize = isCompactPreview
+            ? math.min(constraints.maxWidth * 0.42, 176.0)
+            : 208.0;
+
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isMultiColorTheme
+                  ? [
+                      _blendWithWhite(multiPalette[0], 0.84),
+                      _blendWithWhite(multiPalette[2], 0.9),
+                      _blendWithWhite(multiPalette[3], 0.92),
+                    ]
+                  : [softTone, softTone],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            const SizedBox(height: 8),
-            Text(
-              description,
-              textAlign: TextAlign.center,
-              style: AppTypography.body(
-                fontSize: 12.4,
-                color: mutedText,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        _TemplateStepCard(
-                          number: '1',
-                          label: 'Open your camera app',
-                        ),
-                        SizedBox(height: 10),
-                        _TemplateStepCard(
-                          number: '2',
-                          label: 'Scan the QR code',
-                        ),
-                        SizedBox(height: 10),
-                        _TemplateStepCard(
-                          number: '3',
-                          label: 'Share your thoughts',
-                        ),
-                      ],
-                    ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 26, 24, 18),
+            child: Column(
+              children: [
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.section(
+                    fontSize: isCompactPreview ? 28 : 24,
+                    color: isMultiColorTheme
+                        ? multiPalette[1]
+                        : const Color(0xFF0F172A),
+                    fontWeight: FontWeight.w800,
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(22),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x170A233F),
-                                blurRadius: 18,
-                                offset: Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            children: [
-                              SizedBox(
-                                height: 136,
-                                child: _PosterQrPreview(reviewUrl: reviewUrl),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                'SCAN CODE',
-                                style: AppTypography.label(
-                                  fontSize: 10.5,
-                                  color: const Color(0xFF475569),
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  description,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.body(
+                    fontSize: isCompactPreview ? 13.6 : 12.4,
+                    color: mutedText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: List<Widget>.generate(
-                            5,
-                            (_) => const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 1.5),
-                              child: Icon(
-                                Icons.star_rounded,
-                                size: 18,
-                                color: Color(0xFFFACC15),
+                          children: const [
+                            _TemplateStepCard(
+                              number: '1',
+                              label: 'Open your camera app',
+                            ),
+                            SizedBox(height: 10),
+                            _TemplateStepCard(
+                              number: '2',
+                              label: 'Scan the QR code',
+                            ),
+                            SizedBox(height: 10),
+                            _TemplateStepCard(
+                              number: '3',
+                              label: 'Share your thoughts',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(22),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x170A233F),
+                                    blurRadius: 18,
+                                    offset: Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                children: [
+                                  SizedBox(
+                                    height: qrSize,
+                                    child: _PosterQrPreview(reviewUrl: reviewUrl),
+                                  ),
+                                ],
                               ),
                             ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'SCAN CODE',
+                              style: AppTypography.label(
+                                fontSize: 10.5,
+                                color: const Color(0xFF475569),
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List<Widget>.generate(
+                                5,
+                                (_) => const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 1.5),
+                                  child: Icon(
+                                    Icons.star_rounded,
+                                    size: 18,
+                                    color: Color(0xFFFACC15),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        businessName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.card(
+                          fontSize: 15,
+                          color: const Color(0xFF0F172A),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        shortDisplayUrl,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.label(
+                          fontSize: 11.2,
+                          color: const Color(0xFF64748B),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (showFooter) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'We partner with VisibloAI for review generation',
+                          style: AppTypography.label(
+                            fontSize: isCompactPreview ? 11.0 : 9.8,
+                            color: const Color(0xFF1E293B).withValues(alpha: 0.72),
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    businessName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.card(
-                      fontSize: 15,
-                      color: const Color(0xFF0F172A),
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    shortDisplayUrl,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.label(
-                      fontSize: 11.2,
-                      color: const Color(0xFF64748B),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (showFooter) ...[
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'We partner with VisibloAI for review generation',
-                      style: AppTypography.label(
-                        fontSize: 9.8,
-                        color: const Color(0xFF1E293B).withValues(alpha: 0.72),
-                        fontWeight: FontWeight.w600,
                       ),
-                    ),
-                  ),
-                  Text(
-                    'VisibloAI',
-                    style: AppTypography.label(
-                      fontSize: 10.8,
-                      color: const Color(0xFF1E293B),
-                      fontWeight: FontWeight.w800,
-                    ),
+                      Text(
+                        'VisibloAI',
+                        style: AppTypography.label(
+                          fontSize: isCompactPreview ? 11.6 : 10.8,
+                          color: const Color(0xFF1E293B),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ],
-          ],
-        ),
-      ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1600,6 +1977,7 @@ class _MinimalPosterTemplate extends StatelessWidget {
     required this.description,
     required this.businessName,
     required this.brandColor,
+    required this.isMultiColorTheme,
     required this.shortDisplayUrl,
     required this.reviewUrl,
     required this.showFooter,
@@ -1610,6 +1988,7 @@ class _MinimalPosterTemplate extends StatelessWidget {
   final String description;
   final String businessName;
   final Color brandColor;
+  final bool isMultiColorTheme;
   final String shortDisplayUrl;
   final String reviewUrl;
   final bool showFooter;
@@ -1618,126 +1997,173 @@ class _MinimalPosterTemplate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final softTone = _blendWithWhite(brandColor, 0.9);
+    final multiPalette = ReviewPosterController.multiColorTheme;
+    final effectiveColor = isMultiColorTheme ? multiPalette[0] : brandColor;
 
-    return ColoredBox(
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(26, 26, 26, 18),
-        child: Column(
-          children: [
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: AppTypography.section(
-                fontSize: 24,
-                color: brandColor,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              description,
-              textAlign: TextAlign.center,
-              style: AppTypography.body(
-                fontSize: 12.2,
-                color: const Color(0xFF64748B),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: softTone,
-                borderRadius: BorderRadius.circular(30),
-                boxShadow: [
-                  BoxShadow(
-                    color: brandColor.withValues(alpha: 0.18),
-                    blurRadius: 22,
-                    offset: const Offset(0, 12),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompactPreview = constraints.maxHeight < 600;
+        final qrSize = isCompactPreview
+            ? math.min(constraints.maxWidth * 0.44, 154.0)
+            : 204.0;
+
+        return ColoredBox(
+          color: Colors.white,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(26, 26, 26, 18),
+            child: Column(
+              children: [
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.section(
+                    fontSize: isCompactPreview ? 24 : 24,
+                    color: isMultiColorTheme ? multiPalette[1] : brandColor,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  description,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.body(
+                    fontSize: isCompactPreview ? 12.0 : 12.2,
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: isCompactPreview ? 10 : 18),
+                Container(
+                  padding: EdgeInsets.all(isCompactPreview ? 8 : 12),
+                  decoration: BoxDecoration(
+                    gradient: isMultiColorTheme
+                        ? LinearGradient(
+                            colors: [
+                              _blendWithWhite(multiPalette[0], 0.75),
+                              _blendWithWhite(multiPalette[2], 0.84),
+                              _blendWithWhite(multiPalette[3], 0.88),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: isMultiColorTheme ? null : softTone,
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: effectiveColor.withValues(alpha: 0.18),
+                        blurRadius: 22,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: Container(
+                    padding: EdgeInsets.all(isCompactPreview ? 6 : 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: SizedBox(
+                      width: qrSize,
+                      height: qrSize,
+                      child: _PosterQrPreview(reviewUrl: reviewUrl),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'SCAN CODE',
+                  style: AppTypography.label(
+                    fontSize: isCompactPreview ? 9.8 : 10.5,
+                    color: const Color(0xFF475569),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                SizedBox(height: isCompactPreview ? 10 : 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: _MinimalStepBubble(
+                        number: '1',
+                        label: 'Scan',
+                        compact: isCompactPreview,
+                      ),
+                    ),
+                    SizedBox(width: isCompactPreview ? 6 : 10),
+                    Expanded(
+                      child: _MinimalStepBubble(
+                        number: '2',
+                        label: 'Rate',
+                        compact: isCompactPreview,
+                      ),
+                    ),
+                    SizedBox(width: isCompactPreview ? 6 : 10),
+                    Expanded(
+                      child: _MinimalStepBubble(
+                        number: '3',
+                        label: 'Share',
+                        compact: isCompactPreview,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: isCompactPreview ? 10 : 14),
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isCompactPreview ? 12 : 16,
+                    vertical: isCompactPreview ? 9 : 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        businessName,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.card(
+                          fontSize: isCompactPreview ? 12.8 : 14,
+                          color: const Color(0xFF0F172A),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(height: isCompactPreview ? 2 : 4),
+                      Text(
+                        shortDisplayUrl,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.label(
+                          fontSize: isCompactPreview ? 10.0 : 11.2,
+                          color: isMultiColorTheme ? multiPalette[2] : brandColor,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (showFooter) ...[
+                  SizedBox(height: isCompactPreview ? 10 : 14),
+                  Text(
+                    'Powered by VisibloAI',
+                    style: AppTypography.label(
+                      fontSize: isCompactPreview ? 10.0 : 10.5,
+                      color: const Color(0xFF94A3B8),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: SizedBox(
-                  width: 168,
-                  height: 168,
-                  child: _PosterQrPreview(reviewUrl: reviewUrl),
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Expanded(
-                  child: _MinimalStepBubble(number: '1', label: 'Scan'),
-                ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: _MinimalStepBubble(number: '2', label: 'Rate'),
-                ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: _MinimalStepBubble(number: '3', label: 'Share'),
-                ),
               ],
             ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    businessName,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.card(
-                      fontSize: 14,
-                      color: const Color(0xFF0F172A),
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    shortDisplayUrl,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.label(
-                      fontSize: 11.2,
-                      color: brandColor,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (showFooter) ...[
-              const SizedBox(height: 14),
-              Text(
-                'Powered by VisibloAI',
-                style: AppTypography.label(
-                  fontSize: 10.5,
-                  color: const Color(0xFF94A3B8),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1829,18 +2255,23 @@ class _TemplateStepCard extends StatelessWidget {
 }
 
 class _MinimalStepBubble extends StatelessWidget {
-  const _MinimalStepBubble({required this.number, required this.label});
+  const _MinimalStepBubble({
+    required this.number,
+    required this.label,
+    this.compact = false,
+  });
 
   final String number;
   final String label;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         Container(
-          width: 36,
-          height: 36,
+          width: compact ? 30 : 36,
+          height: compact ? 30 : 36,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(color: AppColors.primary, width: 1.8),
@@ -1849,17 +2280,18 @@ class _MinimalStepBubble extends StatelessWidget {
           child: Text(
             number,
             style: AppTypography.label(
-              fontSize: 13,
+              fontSize: compact ? 11.5 : 13,
               color: AppColors.primary,
               fontWeight: FontWeight.w800,
             ),
           ),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: compact ? 4 : 6),
         Text(
           label,
+          textAlign: TextAlign.center,
           style: AppTypography.label(
-            fontSize: 11,
+            fontSize: compact ? 9.6 : 11,
             color: const Color(0xFF475569),
             fontWeight: FontWeight.w800,
           ),
@@ -1873,10 +2305,16 @@ class _ReviewLinkStatusCard extends StatelessWidget {
   const _ReviewLinkStatusCard({
     required this.reviewUrl,
     required this.hasDirectReviewUrl,
+    required this.onPasteReviewLink,
+    required this.onSyncGoogle,
+    required this.isResolvingReviewUrl,
   });
 
   final String reviewUrl;
   final bool hasDirectReviewUrl;
+  final Future<void> Function() onPasteReviewLink;
+  final Future<void> Function() onSyncGoogle;
+  final bool isResolvingReviewUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -1914,7 +2352,7 @@ class _ReviewLinkStatusCard extends StatelessWidget {
                 child: Text(
                   isDirect
                       ? 'Direct "Write a Review" link ready'
-                      : 'Fallback Google Maps search link',
+                      : 'Review link not ready yet',
                   softWrap: true,
                   style: AppTypography.button(
                     fontSize: 12.2,
@@ -1929,25 +2367,94 @@ class _ReviewLinkStatusCard extends StatelessWidget {
           Text(
             isDirect
                 ? 'The QR opens the Google review form directly for this business.'
-                : 'No direct review URL was found yet, so the QR opens a Google Maps search fallback. Sync or paste a direct review link if you have one.',
+                : 'We could not find the direct Google review link for this business yet. Sync the Google Business Profile again or paste the review link manually before sharing this poster.',
             style: AppTypography.body(
               fontSize: 12.2,
               color: headingColor,
               height: 1.4,
             ),
           ),
-          const SizedBox(height: 6),
-          SelectableText(
-            reviewUrl,
-            minLines: 1,
-            maxLines: 3,
-            enableInteractiveSelection: true,
-            style: AppTypography.label(
-              fontSize: 11,
-              color: headingColor,
-              fontWeight: FontWeight.w700,
+          if (isDirect) ...[
+            const SizedBox(height: 6),
+            SelectableText(
+              reviewUrl,
+              minLines: 1,
+              maxLines: 3,
+              enableInteractiveSelection: true,
+              style: AppTypography.label(
+                fontSize: 11,
+                color: headingColor,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
+          ] else ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF6E5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFF0D08D)),
+              ),
+              child: Text(
+                'Sync your Google Business Profile or paste the direct review link above to activate the QR poster.',
+                style: AppTypography.label(
+                  fontSize: 11.1,
+                  color: const Color(0xFF9A6A12),
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onPasteReviewLink,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(44),
+                      side: const BorderSide(color: Color(0xFFF0D08D)),
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF8A5B12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                    ),
+                    icon: const Icon(Icons.link_rounded, size: 18),
+                    label: const Text('Paste review link'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: isResolvingReviewUrl ? null : onSyncGoogle,
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(44),
+                      backgroundColor: const Color(0xFFB7791F),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                    ),
+                    icon: isResolvingReviewUrl
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.sync_rounded, size: 18),
+                    label: Text(isResolvingReviewUrl ? 'Syncing...' : 'Sync Google'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1961,9 +2468,6 @@ class _PosterQrPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final qrUrl =
-        'https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=${Uri.encodeComponent(reviewUrl)}';
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final dimension = math.min(constraints.maxWidth, constraints.maxHeight);
@@ -1971,115 +2475,28 @@ class _PosterQrPreview extends StatelessWidget {
         return Center(
           child: SizedBox.square(
             dimension: dimension,
-            child: Image.network(
-              qrUrl,
-              fit: BoxFit.contain,
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) {
-                  return child;
-                }
-                return const Center(
-                  child: SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.2,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) {
-                return CustomPaint(
-                  painter: _FallbackQrPainter(reviewUrl),
-                  child: const SizedBox.expand(),
-                );
-              },
+            child: ColoredBox(
+              color: Colors.white,
+              child: QrImageView(
+                data: reviewUrl,
+                version: QrVersions.auto,
+                padding: EdgeInsets.zero,
+                gapless: true,
+                backgroundColor: Colors.white,
+                eyeStyle: const QrEyeStyle(
+                  eyeShape: QrEyeShape.square,
+                  color: Color(0xFF14181F),
+                ),
+                dataModuleStyle: const QrDataModuleStyle(
+                  dataModuleShape: QrDataModuleShape.square,
+                  color: Color(0xFF14181F),
+                ),
+              ),
             ),
           ),
         );
       },
     );
-  }
-}
-
-class _FallbackQrPainter extends CustomPainter {
-  const _FallbackQrPainter(this.data);
-
-  final String data;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const modules = 29;
-    final cellSize = size.shortestSide / modules;
-    final darkPaint = Paint()..color = const Color(0xFF14181F);
-    final lightPaint = Paint()..color = Colors.white;
-
-    canvas.drawRect(Offset.zero & size, lightPaint);
-
-    bool isInFinder(int x, int y, int startX, int startY) {
-      return x >= startX && x < startX + 7 && y >= startY && y < startY + 7;
-    }
-
-    void drawModule(int x, int y) {
-      canvas.drawRect(
-        Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize),
-        darkPaint,
-      );
-    }
-
-    void drawFinder(int startX, int startY) {
-      for (var y = 0; y < 7; y++) {
-        for (var x = 0; x < 7; x++) {
-          final isBorder = x == 0 || x == 6 || y == 0 || y == 6;
-          final isCenter = x >= 2 && x <= 4 && y >= 2 && y <= 4;
-          if (isBorder || isCenter) {
-            drawModule(startX + x, startY + y);
-          }
-        }
-      }
-    }
-
-    drawFinder(0, 0);
-    drawFinder(modules - 7, 0);
-    drawFinder(0, modules - 7);
-
-    for (var index = 8; index < modules - 8; index++) {
-      if (index.isEven) {
-        drawModule(6, index);
-        drawModule(index, 6);
-      }
-    }
-
-    final seed = data.codeUnits.fold<int>(
-      0x2A2F3A,
-      (value, element) => ((value * 33) ^ element) & 0x7fffffff,
-    );
-
-    for (var y = 0; y < modules; y++) {
-      for (var x = 0; x < modules; x++) {
-        final reserved =
-            isInFinder(x, y, 0, 0) ||
-            isInFinder(x, y, modules - 7, 0) ||
-            isInFinder(x, y, 0, modules - 7) ||
-            x == 6 ||
-            y == 6;
-        if (reserved) {
-          continue;
-        }
-
-        final bit = ((seed + (x * 97) + (y * 57) + (x * y * 13)) >> 2) & 1;
-        final altBit = ((seed ^ (x * 911) ^ (y * 353) ^ (x + y)) >> 4) & 1;
-        if (bit == 1 || (x + y).isEven && altBit == 1) {
-          drawModule(x, y);
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _FallbackQrPainter oldDelegate) {
-    return oldDelegate.data != data;
   }
 }
 
@@ -2195,11 +2612,13 @@ class _ChoiceChipButton extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.compact = false,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -2209,18 +2628,31 @@ class _ChoiceChipButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 12 : 14,
+            vertical: compact ? 11 : 10,
+          ),
           decoration: BoxDecoration(
             color: selected ? const Color(0xFFEAFBFA) : Colors.white,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: selected ? AppColors.primary : const Color(0xFFD7DEE7),
             ),
+            boxShadow: selected
+                ? const [
+                    BoxShadow(
+                      color: Color(0x120FA4AF),
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
+                  ]
+                : null,
           ),
           child: Text(
             label,
+            textAlign: TextAlign.center,
             style: AppTypography.label(
-              fontSize: 12.4,
+              fontSize: compact ? 11.7 : 12.4,
               color: selected ? AppColors.primaryDark : const Color(0xFF6F7C90),
               fontWeight: FontWeight.w700,
             ),
@@ -2250,8 +2682,8 @@ class _BrandSwatch extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
         child: Ink(
-          width: 28,
-          height: 28,
+          width: 30,
+          height: 30,
           decoration: BoxDecoration(
             color: color,
             shape: BoxShape.circle,
@@ -2269,6 +2701,55 @@ class _BrandSwatch extends StatelessWidget {
           ),
           child: isSelected
               ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _MultiColorSwatch extends StatelessWidget {
+  const _MultiColorSwatch({
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ReviewPosterController.multiColorTheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Ink(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: palette,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isSelected ? const Color(0xFFDBF4F2) : Colors.transparent,
+              width: 3,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1F7C4DFF),
+                blurRadius: 10,
+                offset: Offset(0, 5),
+              ),
+            ],
+          ),
+          child: isSelected
+              ? const Icon(Icons.auto_awesome_rounded,
+                  size: 14, color: Colors.white)
               : null,
         ),
       ),
@@ -2415,6 +2896,7 @@ Color _blendWithBlack(Color color, double amount) {
   return Color.lerp(color, const Color(0xFF0F172A), amount) ?? color;
 }
 
+// ignore: unused_element
 Future<File> _createReviewPosterPdf({
   required String authorName,
   required String businessName,
@@ -2432,9 +2914,10 @@ Future<File> _createReviewPosterPdf({
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
       .replaceAll(RegExp(r'^-+|-+$'), '');
-  final fileName = safeBusinessName.isEmpty
-      ? 'review-poster.pdf'
-      : '$safeBusinessName-review-poster.pdf';
+  final fileStem = safeBusinessName.isEmpty ? 'review-poster' : safeBusinessName;
+  final exportStamp = DateTime.now().millisecondsSinceEpoch;
+  final fileName =
+      '$fileStem-${template.id}-${paperSize.id}-${brandColor.toARGB32()}-$exportStamp-review-poster.pdf';
   final file = File('${directory.path}/$fileName');
 
   final bytes = _PosterPdfBuilder.build(
@@ -2449,6 +2932,22 @@ Future<File> _createReviewPosterPdf({
     template: template,
     showFooter: showFooter,
   );
+  await file.writeAsBytes(bytes, flush: true);
+  return file;
+}
+
+Future<File> _createReviewPosterPng({
+  required String businessName,
+  required Uint8List bytes,
+}) async {
+  final directory = await getTemporaryDirectory();
+  final safeBusinessName = businessName
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  final fileStem = safeBusinessName.isEmpty ? 'review-poster' : safeBusinessName;
+  final exportStamp = DateTime.now().millisecondsSinceEpoch;
+  final file = File('${directory.path}/$fileStem-$exportStamp-review-poster.png');
   await file.writeAsBytes(bytes, flush: true);
   return file;
 }

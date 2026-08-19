@@ -354,12 +354,12 @@ class GbpPostPreviewView extends StatelessWidget {
   Future<void> _handlePublish(BuildContext context) async {
     try {
       final controller = Get.find<OnboardingController>();
-      await controller.publishAiPost(post.id);
+      final publishedPost = await controller.publishAiPost(post.id);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Post published successfully!')),
         );
-        Navigator.of(context).pop();
+        Navigator.of(context).pop(publishedPost);
       }
     } catch (e) {
       if (context.mounted) {

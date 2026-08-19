@@ -194,6 +194,26 @@ class TrendSeries {
 class TrendConfigFactory {
   TrendConfigFactory._();
 
+  static TrendConfig emptyStateConfig(TrendConfig baseConfig) {
+    return TrendConfig(
+      buttonLabel: baseConfig.buttonLabel,
+      subtitle: baseConfig.subtitle,
+      periodUnitLabel: baseConfig.periodUnitLabel,
+      chartCaption: baseConfig.chartCaption,
+      xLabels: baseConfig.xLabels,
+      yLabels: const [0, 0, 0, 0],
+      series: baseConfig.series
+          .map(
+            (series) => TrendSeries(
+              label: series.label,
+              color: series.color,
+              points: List<double>.filled(baseConfig.xLabels.length, 0),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
   static TrendConfig fromInsights(
     LocationInsightsResponse? insights,
     TrendConfig fallbackConfig,
@@ -202,7 +222,7 @@ class TrendConfigFactory {
     final daily = insights?.daily ?? [];
 
     if (daily.isEmpty) {
-      return fallbackConfig;
+      return emptyStateConfig(fallbackConfig);
     }
 
     final datedInsights =
@@ -214,7 +234,7 @@ class TrendConfigFactory {
           ..sort((a, b) => a.date.compareTo(b.date));
 
     if (datedInsights.isEmpty) {
-      return fallbackConfig;
+      return emptyStateConfig(fallbackConfig);
     }
 
     final bucketCount = _bucketCountForWindow(window, datedInsights.length);

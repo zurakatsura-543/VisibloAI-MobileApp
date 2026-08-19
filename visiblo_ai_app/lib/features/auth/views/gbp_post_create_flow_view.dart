@@ -110,6 +110,7 @@ class _GbpPostAiComposerViewState extends State<GbpPostAiComposerView> {
   late final ImagePicker _imagePicker;
   _AIPostTone _selectedTone = _AIPostTone.professional;
   _AIPostLanguage _selectedLanguage = _AIPostLanguage.english;
+  _GbpAiImageQuality _selectedImageQuality = _GbpAiImageQuality.good;
   bool _generateImage = true;
   bool _isGenerateAiExpanded = true;
   bool _isUploadExpanded = false;
@@ -169,8 +170,22 @@ class _GbpPostAiComposerViewState extends State<GbpPostAiComposerView> {
                 Row(
                   children: [
                     Expanded(
+                      child: _CreateDropdownField<_GbpAiImageQuality>(
+                        label: 'Model quality',
+                        value: _selectedImageQuality,
+                        items: _GbpAiImageQuality.values,
+                        itemLabel: (item) => item.label,
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _selectedImageQuality = value);
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
                       child: _CreateDropdownField<_AIPostTone>(
-                        label: 'Tone',
+                        label: 'Post style',
                         value: _selectedTone,
                         items: _AIPostTone.values,
                         itemLabel: (item) => item.label,
@@ -181,21 +196,19 @@ class _GbpPostAiComposerViewState extends State<GbpPostAiComposerView> {
                         },
                       ),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: _CreateDropdownField<_AIPostLanguage>(
-                        label: 'Language',
-                        value: _selectedLanguage,
-                        items: _AIPostLanguage.values,
-                        itemLabel: (item) => item.label,
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _selectedLanguage = value);
-                          }
-                        },
-                      ),
-                    ),
                   ],
+                ),
+                const SizedBox(height: 16),
+                _CreateDropdownField<_AIPostLanguage>(
+                  label: 'Language',
+                  value: _selectedLanguage,
+                  items: _AIPostLanguage.values,
+                  itemLabel: (item) => item.label,
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _selectedLanguage = value);
+                    }
+                  },
                 ),
                 const SizedBox(height: 16),
                 _AiComposerHintCard(
@@ -353,7 +366,9 @@ class _GbpPostAiComposerViewState extends State<GbpPostAiComposerView> {
                     onTap: () async {
                       final updated = await Get.to<GbpPost>(
                         () => GbpPostEditorView(
-                          initialPost: _generatedPost!.copyWith(status: GbpPostStatus.scheduled),
+                          initialPost: _generatedPost!.copyWith(
+                            status: GbpPostStatus.scheduled,
+                          ),
                           businessName: widget.businessName,
                           isCreating: true,
                         ),
@@ -368,8 +383,12 @@ class _GbpPostAiComposerViewState extends State<GbpPostAiComposerView> {
                 Expanded(
                   child: _FilledCreateActionButton(
                     label: _isPublishing ? 'Publishing...' : 'Publish Now',
-                    icon: _isPublishing ? Icons.hourglass_top_rounded : Icons.send_outlined,
-                    onTap: (_isPublishing || _isGenerating) ? () {} : _publishNow,
+                    icon: _isPublishing
+                        ? Icons.hourglass_top_rounded
+                        : Icons.send_outlined,
+                    onTap: (_isPublishing || _isGenerating)
+                        ? () {}
+                        : _publishNow,
                   ),
                 ),
               ],
@@ -462,7 +481,7 @@ class _GbpPostAiComposerViewState extends State<GbpPostAiComposerView> {
 
     try {
       final controller = Get.find<OnboardingController>();
-      await controller.publishAiPost(post.id);
+      final publishedPost = await controller.publishAiPost(post.id);
 
       if (Get.isSnackbarOpen) Get.closeCurrentSnackbar();
 
@@ -481,7 +500,7 @@ class _GbpPostAiComposerViewState extends State<GbpPostAiComposerView> {
 
       // Pop back with the live post so the dashboard list updates
       if (mounted) {
-        Get.back(result: post.copyWith(status: GbpPostStatus.live));
+        Get.back(result: publishedPost);
       }
     } catch (e) {
       if (Get.isSnackbarOpen) Get.closeCurrentSnackbar();
@@ -502,6 +521,10 @@ class _GbpPostAiComposerViewState extends State<GbpPostAiComposerView> {
   }
 
   Future<void> _generatePost({required bool useUploadedImage}) async {
+    if (_isGenerating) {
+      return;
+    }
+
     final typedTopic = _topicController.text.trim();
     final topic = typedTopic.isNotEmpty
         ? typedTopic
@@ -528,14 +551,29 @@ class _GbpPostAiComposerViewState extends State<GbpPostAiComposerView> {
     setState(() => _isGenerating = true);
 
     try {
+      final requestId =
+          'gbp:${DateTime.now().microsecondsSinceEpoch}:${widget.businessName.hashCode}:${widget.postType}';
       final controller = Get.find<OnboardingController>();
-      final result = await controller.generateAiPost(
+      var result = await controller.generateAiPost(
         topic: topic,
         tone: _selectedTone.label,
         language: _selectedLanguage.label,
-        skipImage: !_generateImage,
+        skipImage: useUploadedImage || !_generateImage,
         type: widget.postType,
+        imageQuality: _selectedImageQuality.apiValue,
+        clientRequestId: requestId,
       );
+
+      if (useUploadedImage && _uploadedImagePaths.isNotEmpty) {
+        final postId = result['id']?.toString() ?? '';
+        if (postId.isEmpty) {
+          throw Exception('Could not prepare the draft for image upload.');
+        }
+        result = await controller.uploadAiPostImage(
+          postId: postId,
+          imagePath: _uploadedImagePaths.first,
+        );
+      }
 
       debugPrint('=== AI POST RESULT ===');
       debugPrint('id: ${result['id']}');
@@ -2553,6 +2591,24 @@ extension on _AIPostTone {
       _AIPostTone.friendly => 'Friendly',
       _AIPostTone.promotional => 'Promotional',
       _AIPostTone.informative => 'Informative',
+    };
+  }
+}
+
+enum _GbpAiImageQuality { good, high }
+
+extension on _GbpAiImageQuality {
+  String get label {
+    return switch (this) {
+      _GbpAiImageQuality.good => 'Good (10s)',
+      _GbpAiImageQuality.high => 'High (20s)',
+    };
+  }
+
+  String get apiValue {
+    return switch (this) {
+      _GbpAiImageQuality.good => 'good',
+      _GbpAiImageQuality.high => 'high',
     };
   }
 }

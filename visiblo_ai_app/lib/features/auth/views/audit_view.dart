@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
@@ -218,6 +219,7 @@ class _AuditExperienceState extends State<_AuditExperience> {
   final OnboardingController controller = Get.find<OnboardingController>();
   late _AuditModule _selectedModule;
   late _AuditTab _currentTab;
+  String? _generatedDescription;
 
   @override
   void initState() {
@@ -276,6 +278,35 @@ class _AuditExperienceState extends State<_AuditExperience> {
           snackPosition: SnackPosition.BOTTOM,
         );
     }
+  }
+
+  void _handleGenerateDescription(TestAccount user, AuditResult audit) {
+    final generated = _buildAuditAiDescription(
+      user: user,
+      audit: audit,
+      keywords: _keywordChipsFor(_AuditModule.description, user),
+    );
+
+    setState(() {
+      _generatedDescription = generated;
+      _selectedModule = _AuditModule.description;
+      _currentTab = _AuditTab.profile;
+    });
+
+    Get.snackbar(
+      'Description updated',
+      'A fresh business description was generated from your audit signals.',
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  }
+
+  Future<void> _openFullAuditReport(AuditResult audit) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _AuditFullReportSheet(audit: audit),
+    );
   }
 
   @override
@@ -386,7 +417,10 @@ class _AuditExperienceState extends State<_AuditExperience> {
             ),
             const SizedBox(height: 20),
             if (_currentTab == _AuditTab.health) ...[
-              _AuditHeroCard(audit: audit),
+              _AuditHeroCard(
+                audit: audit,
+                onViewFullReport: () => _openFullAuditReport(audit),
+              ),
               const SizedBox(height: AuthViewSpacing.cardGap),
               _AuditMetricsGrid(audit: audit),
               const SizedBox(height: AuthViewSpacing.cardGap),
@@ -401,6 +435,9 @@ class _AuditExperienceState extends State<_AuditExperience> {
                 activePhotoPath: activePhotoPath,
                 onModuleSelected: _selectModule,
                 onPrimaryAction: _handlePrimaryAction,
+                generatedDescription: _generatedDescription,
+                onGenerateDescription: () =>
+                    _handleGenerateDescription(user, audit),
               ),
             ],
           ],
@@ -411,15 +448,19 @@ class _AuditExperienceState extends State<_AuditExperience> {
 }
 
 class _AuditHeroCard extends StatelessWidget {
-  const _AuditHeroCard({required this.audit});
+  const _AuditHeroCard({
+    required this.audit,
+    required this.onViewFullReport,
+  });
 
   final AuditResult audit;
+  final VoidCallback onViewFullReport;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(18),
@@ -435,126 +476,145 @@ class _AuditHeroCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Column(
-              children: [
-                RichText(
-                  textAlign: TextAlign.center,
-                  text: TextSpan(
-                    style: AppTypography.card(
-                      fontSize: 28,
-                      color: const Color(0xFF0D253F),
-                      fontWeight: FontWeight.w900,
-                    ),
-                    children: const [
-                      TextSpan(text: 'Your '),
-                      TextSpan(
-                        text: 'local visibility',
-                        style: TextStyle(color: Color(0xFF2EADC0)),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stacked = constraints.maxWidth < 300;
+
+              final textBlock = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RichText(
+                    text: TextSpan(
+                      style: AppTypography.card(
+                        fontSize: 24,
+                        color: const Color(0xFF0D253F),
+                        fontWeight: FontWeight.w900,
+                        height: 1.08,
                       ),
-                      TextSpan(text: '\ncommand center.'),
+                      children: const [
+                        TextSpan(text: 'Local visibility\n'),
+                        TextSpan(
+                          text: 'command center',
+                          style: TextStyle(color: Color(0xFF2EADC0)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Track, monitor, and improve your local AI visibility.',
+                    style: AppTypography.body(
+                      fontSize: 13,
+                      height: 1.35,
+                      color: AppColors.mutedText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    width: 138,
+                    height: 1.2,
+                    color: const Color(0xFFE6ECF3),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'AI Visibility Score',
+                    style: AppTypography.label(
+                      fontSize: 15.6,
+                      color: AppColors.brandBlue,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 9,
+                        height: 9,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF19B26B),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      RichText(
+                        text: TextSpan(
+                          style: AppTypography.label(
+                            fontSize: 13.2,
+                            color: AppColors.mutedText,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          children: const [
+                            TextSpan(
+                              text: 'Good',
+                              style: TextStyle(
+                                color: AppColors.brandBlue,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            TextSpan(text: ' · Improving'),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Track and rank in AI overviews, LLMs, and local platforms. Monitor mentions, fix issues, and grow your presence where it matters.',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.body(
-                    fontSize: 13.2,
-                    height: 1.35,
-                    color: AppColors.mutedText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 22),
-                _ScoreRing(score: audit.overallScore),
-                const SizedBox(height: 14),
-                Text(
-                  'AI Visibility Score',
-                  style: AppTypography.label(
-                    fontSize: 15.6,
-                    color: AppColors.brandBlue,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF3E87E0),
-                        shape: BoxShape.circle,
-                      ),
+                ],
+              );
+
+              final scoreBlock = Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: _ScoreRing(score: audit.overallScore),
+              );
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (stacked) ...[
+                    textBlock,
+                    const SizedBox(height: 16),
+                    Center(child: scoreBlock),
+                  ] else
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: textBlock),
+                        const SizedBox(width: 16),
+                        scoreBlock,
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    RichText(
-                      text: TextSpan(
-                        style: AppTypography.label(
-                          fontSize: 13.4,
-                          color: AppColors.mutedText,
-                          fontWeight: FontWeight.w700,
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: 220,
+                    height: 46,
+                    child: FilledButton.icon(
+                      onPressed: onViewFullReport,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF0A3F85),
+                        foregroundColor: AppColors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        children: const [
-                          TextSpan(
-                            text: 'Good',
-                            style: TextStyle(
-                              color: AppColors.brandBlue,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          TextSpan(text: ' · Improving'),
-                        ],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Continue optimizing to lead locally.',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.body(
-                    fontSize: 12.4,
-                    color: AppColors.mutedText,
-                    height: 1.32,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 40,
-                  child: FilledButton(
-                    onPressed: () {
-                      Get.snackbar(
-                        'Full report',
-                        'The full audit report can be connected here next.',
-                        snackPosition: SnackPosition.BOTTOM,
-                      );
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF2EADC0),
-                      foregroundColor: AppColors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                      icon: const Icon(
+                        Icons.bar_chart_rounded,
+                        size: 18,
+                        color: Colors.white,
                       ),
-                    ),
-                    child: Text(
-                      'View full report',
-                      style: AppTypography.button(
-                        fontSize: 14.2,
-                        color: AppColors.white,
-                        fontWeight: FontWeight.w800,
+                      label: Text(
+                        'View full report',
+                        style: AppTypography.button(
+                          fontSize: 14.2,
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -569,44 +629,55 @@ class _ScoreRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 104,
-      height: 104,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: 104,
-            height: 104,
-            child: CircularProgressIndicator(
-              value: score / 100,
-              strokeWidth: 9,
-              backgroundColor: const Color(0xFFE9EDF3),
-              color: const Color(0xFF1EA362),
+    return Transform.translate(
+      offset: const Offset(0, 36),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: score / 100),
+        duration: const Duration(milliseconds: 900),
+        curve: Curves.easeOutCubic,
+        builder: (context, progress, _) {
+          return SizedBox(
+            width: 118,
+            height: 118,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 118,
+                  height: 118,
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 8,
+                    backgroundColor: const Color(0xFFE9EDF3),
+                    color: const Color(0xFF1EA362),
+                  ),
+                ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$score',
+                      style: GoogleFonts.manrope(
+                        fontSize: 37,
+                        color: const Color(0xFF0D253F),
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                      ),
+                    ),
+                    Text(
+                      '/100',
+                      style: AppTypography.label(
+                        fontSize: 12.2,
+                        color: AppColors.mutedText,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$score',
-                style: AppTypography.card(
-                  fontSize: 38,
-                  color: const Color(0xFF0D253F),
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              Text(
-                '/100',
-                style: AppTypography.label(
-                  fontSize: 12.2,
-                  color: AppColors.mutedText,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -625,7 +696,7 @@ class _AuditMetricsGrid extends StatelessWidget {
       (
         background: AppColors.white,
         borderColor: const Color(0xFFAED5FF),
-        label: 'PAGES OPTIMIZED',
+        label: 'Pages Optimized',
         value: '4', // In a full implementation, you might map this from another field
         change: '+2 since last 7 days',
         valueColor: const Color(0xFF3F84DA),
@@ -637,7 +708,7 @@ class _AuditMetricsGrid extends StatelessWidget {
       (
         background: AppColors.white,
         borderColor: const Color(0xFFE4C1F4),
-        label: 'MENTIONS FOUND',
+        label: 'Mentions Found',
         value: '${metricsData?.activeCitations ?? 0}',
         change: 'Directory trust',
         valueColor: const Color(0xFFAA57CC),
@@ -649,26 +720,26 @@ class _AuditMetricsGrid extends StatelessWidget {
       (
         background: AppColors.white,
         borderColor: const Color(0xFFFFBBB4),
-        label: 'CRITICAL ISSUES',
+        label: 'Issues Found',
         value: '${audit.sections.where((s) => s.status == 'fail').length}',
-        change: 'Requires urgent attention',
-        valueColor: const Color(0xFFF45B5B),
-        changeColor: const Color(0xFFF45B5B),
+        change: 'Needs attention',
+        valueColor: const Color(0xFFFF6B1A),
+        changeColor: const Color(0xFF718099),
         accent: const Color(0xFFFF5A5A),
         iconBackground: const Color(0xFFFFF2F1),
-        icon: Icons.warning_amber_rounded,
+        icon: Icons.shield_outlined,
       ),
       (
         background: AppColors.white,
         borderColor: const Color(0xFFF5D2D7),
-        label: 'COMPETITORS TRACKED',
-        value: '7',
-        change: 'Across locations',
-        valueColor: const Color(0xFFCF6887),
+        label: 'Competitors Tracked',
+        value: '3',
+        change: 'Active tracking',
+        valueColor: const Color(0xFF19A9C8),
         changeColor: const Color(0xFF718099),
         accent: const Color(0xFFD35987),
         iconBackground: const Color(0xFFFFF2F5),
-        icon: Icons.store_mall_directory_outlined,
+        icon: Icons.groups_2_outlined,
       ),
     ];
 
@@ -680,7 +751,7 @@ class _AuditMetricsGrid extends StatelessWidget {
         crossAxisCount: 2,
         mainAxisSpacing: 14,
         crossAxisSpacing: 16,
-        mainAxisExtent: 166,
+        mainAxisExtent: 148,
       ),
       itemBuilder: (context, index) {
         return _MetricCard(data: metrics[index]);
@@ -709,57 +780,67 @@ class _MetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
       decoration: BoxDecoration(
         color: data.background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: data.borderColor.withValues(alpha: 0.6)),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: data.borderColor.withValues(alpha: 0.42)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x070F2746),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: data.iconBackground,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                alignment: Alignment.center,
+                child: Icon(data.icon, size: 18, color: data.accent),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   data.label,
-                  style: AppTypography.label(
-                    fontSize: 11.5,
-                    color: const Color(0xFF4D4D54),
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.4,
+                  style: AppTypography.body(
+                    fontSize: 15,
+                    color: const Color(0xFF203250),
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
                   ),
                 ),
               ),
-              Container(
-                width: 25,
-                height: 25,
-                decoration: BoxDecoration(
-                  color: data.iconBackground,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                alignment: Alignment.center,
-                child: Icon(data.icon, size: 15, color: data.accent),
-              ),
             ],
-          ),
-          const SizedBox(height: 20),
-          Text(
-            data.value,
-            style: AppTypography.card(
-              fontSize: 29,
-              color: data.valueColor,
-              fontWeight: FontWeight.w900,
-            ),
           ),
           const Spacer(),
           Text(
+            data.value,
+            style: GoogleFonts.manrope(
+              fontSize: 38,
+              color: data.valueColor,
+              fontWeight: FontWeight.w700,
+              height: 0.95,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
             data.change,
             style: AppTypography.body(
-              fontSize: 12.2,
+              fontSize: 12.6,
               color: data.changeColor,
-              height: 1.35,
-              fontWeight: FontWeight.w700,
+              height: 1.25,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -1254,6 +1335,8 @@ class _AuditWorkbenchCard extends StatelessWidget {
     required this.activePhotoPath,
     required this.onModuleSelected,
     required this.onPrimaryAction,
+    required this.generatedDescription,
+    required this.onGenerateDescription,
   });
 
   final TestAccount user;
@@ -1264,6 +1347,8 @@ class _AuditWorkbenchCard extends StatelessWidget {
   final String activePhotoPath;
   final ValueChanged<_AuditModule> onModuleSelected;
   final VoidCallback onPrimaryAction;
+  final String? generatedDescription;
+  final VoidCallback onGenerateDescription;
 
   @override
   Widget build(BuildContext context) {
@@ -1380,6 +1465,8 @@ class _AuditWorkbenchCard extends StatelessWidget {
             activePhotoPath: activePhotoPath,
             moduleChecks: moduleChecks,
             onPrimaryAction: onPrimaryAction,
+            generatedDescription: generatedDescription,
+            onGenerateDescription: onGenerateDescription,
           ),
         ],
       ),
@@ -1477,6 +1564,8 @@ class _ModulePanel extends StatelessWidget {
     required this.activePhotoPath,
     required this.moduleChecks,
     required this.onPrimaryAction,
+    required this.generatedDescription,
+    required this.onGenerateDescription,
   });
 
   final _AuditModule module;
@@ -1487,6 +1576,8 @@ class _ModulePanel extends StatelessWidget {
   final String activePhotoPath;
   final List<_AuditCheckItem> moduleChecks;
   final VoidCallback onPrimaryAction;
+  final String? generatedDescription;
+  final VoidCallback onGenerateDescription;
 
   @override
   Widget build(BuildContext context) {
@@ -1500,8 +1591,8 @@ class _ModulePanel extends StatelessWidget {
 
     if (module == _AuditModule.hours) {
       return AuditHoursModuleContent(
+        user: user,
         section: section,
-        onSyncTap: () => Get.toNamed(AppRoutes.auditHours),
       );
     }
 
@@ -1702,19 +1793,14 @@ class _ModulePanel extends StatelessWidget {
           businessReviews: businessReviews,
           activePhotoPath: activePhotoPath,
           section: section,
+          generatedDescription: generatedDescription,
         ),
         const SizedBox(height: 14),
         SizedBox(
           width: double.infinity,
           height: 46,
           child: OutlinedButton.icon(
-            onPressed: () {
-              Get.snackbar(
-                'Generate with AI',
-                'AI generation can be connected here next.',
-                snackPosition: SnackPosition.BOTTOM,
-              );
-            },
+            onPressed: onGenerateDescription,
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: const BorderSide(color: AppColors.primary),
@@ -1795,6 +1881,7 @@ class _ModulePreviewCard extends StatelessWidget {
     required this.businessReviews,
     required this.activePhotoPath,
     this.section,
+    this.generatedDescription,
   });
 
   final _AuditModule module;
@@ -1803,6 +1890,7 @@ class _ModulePreviewCard extends StatelessWidget {
   final List<BusinessReview> businessReviews;
   final String activePhotoPath;
   final AuditSection? section;
+  final String? generatedDescription;
 
   @override
   Widget build(BuildContext context) {
@@ -1815,7 +1903,12 @@ class _ModulePreviewCard extends StatelessWidget {
               '${preview.split(RegExp(r'\s+')).length} words, ${preview.characters.length}/120 characters',
         );
       case _AuditModule.description:
-        final preview = section?.currentValue?.isNotEmpty == true ? section!.currentValue! : _recommendedDescription(user);
+        final preview =
+            generatedDescription?.trim().isNotEmpty == true
+            ? generatedDescription!.trim()
+            : section?.currentValue?.isNotEmpty == true
+            ? section!.currentValue!
+            : _recommendedDescription(user);
         return _TextPreviewCard(
           title: preview,
           subtitle:
@@ -2777,6 +2870,32 @@ String _recommendedDescription(TestAccount user) {
   return '$businessName is a trusted $category business serving $city. Highlight the services customers search for most, keep the profile details accurate, and publish fresh proof so Google can better understand your local relevance.';
 }
 
+String _buildAuditAiDescription({
+  required TestAccount user,
+  required AuditResult audit,
+  required List<_KeywordChipData> keywords,
+}) {
+  final businessName = _businessName(user);
+  final category = _businessCategory(user);
+  final city = _businessLocation(user);
+  final pickedKeywords = keywords
+      .map((chip) => chip.label.trim())
+      .where((value) => value.isNotEmpty)
+      .take(3)
+      .toList(growable: false);
+  final strongestSignal =
+      audit.summary?.strongestSignal.trim().isNotEmpty == true
+      ? audit.summary!.strongestSignal.trim()
+      : 'trusted service quality';
+  final keywordText = pickedKeywords.isEmpty
+      ? '$category in $city'
+      : pickedKeywords.join(', ');
+
+  return '$businessName is a $category business serving $city with a focus on $keywordText. '
+      'Customers choose the business for ${strongestSignal.toLowerCase()}. '
+      'Use this profile to explore services, review local expertise, and connect with a team that stays active, responsive, and committed to stronger visibility on Google.';
+}
+
 String _businessName(TestAccount user) {
   final businessName = user.businessName.trim();
   if (businessName.isNotEmpty) {
@@ -2830,4 +2949,341 @@ AuditSection? _getSectionForModule(AuditResult audit, _AuditModule module) {
       key = module.name;
   }
   return audit.sections.firstWhereOrNull((s) => s.key == key);
+}
+
+class _AuditFullReportSheet extends StatelessWidget {
+  const _AuditFullReportSheet({required this.audit});
+
+  final AuditResult audit;
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = audit.summary;
+    final findings = audit.sections
+        .expand((section) => section.findings.map((finding) => (section, finding)))
+        .toList(growable: false);
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.88,
+        decoration: const BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD4DDE8),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Full Audit Report',
+                          style: AppTypography.card(
+                            fontSize: 22,
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          audit.businessName.isNotEmpty
+                              ? audit.businessName
+                              : 'Active business audit',
+                          style: AppTypography.body(
+                            fontSize: 13.2,
+                            color: AppColors.mutedText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF8F7),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${audit.overallScore}/100',
+                      style: AppTypography.label(
+                        fontSize: 12.8,
+                        color: AppColors.primaryDark,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                children: [
+                  if (summary != null) ...[
+                    _AuditSheetSummaryCard(summary: summary),
+                    const SizedBox(height: 14),
+                  ],
+                  ...audit.sections.map(
+                    (section) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _AuditReportSectionCard(section: section),
+                    ),
+                  ),
+                  if (findings.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Key Findings',
+                      style: AppTypography.card(
+                        fontSize: 18,
+                        color: AppColors.text,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ...findings.take(10).map(
+                      (entry) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _AuditFindingTile(
+                          sectionTitle: entry.$1.title,
+                          finding: entry.$2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AuditSheetSummaryCard extends StatelessWidget {
+  const _AuditSheetSummaryCard({required this.summary});
+
+  final AuditSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE4ECF5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            summary.verdict,
+            style: AppTypography.card(
+              fontSize: 18,
+              color: AppColors.text,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _VerdictInfoChip(
+                  label: 'CONFIDENCE',
+                  value: summary.confidence,
+                  background: const Color(0xFFF4F8FF),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _VerdictInfoChip(
+                  label: 'DATA SOURCES',
+                  value: '${summary.dataSources.length}',
+                  background: const Color(0xFFF5F0FF),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _InsightStrip(
+            accent: const Color(0xFFE9447A),
+            label: 'STRONGEST SIGNAL',
+            value: summary.strongestSignal,
+          ),
+          const SizedBox(height: 8),
+          _InsightStrip(
+            accent: const Color(0xFFFF7A26),
+            label: 'BIGGEST GROWTH LEAK',
+            value: summary.biggestLeak,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuditReportSectionCard extends StatelessWidget {
+  const _AuditReportSectionCard({required this.section});
+
+  final AuditSection section;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = switch (section.status) {
+      'pass' => const Color(0xFF19B26B),
+      'fail' => const Color(0xFFFF5D5D),
+      _ => const Color(0xFFF0B640),
+    };
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE7EDF4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  section.title,
+                  style: AppTypography.card(
+                    fontSize: 16,
+                    color: AppColors.text,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '${section.score}/100',
+                  style: AppTypography.label(
+                    fontSize: 12,
+                    color: accent,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (section.currentValue?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 8),
+            Text(
+              section.currentValue!.trim(),
+              style: AppTypography.body(
+                fontSize: 13.2,
+                color: AppColors.brandBlue,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          if (section.findings.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            ...section.findings.take(3).map(
+              (finding) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _AuditFindingTile(
+                  sectionTitle: section.title,
+                  finding: finding,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AuditFindingTile extends StatelessWidget {
+  const _AuditFindingTile({
+    required this.sectionTitle,
+    required this.finding,
+  });
+
+  final String sectionTitle;
+  final AuditFinding finding;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = switch (finding.status) {
+      'pass' => const Color(0xFF19B26B),
+      'fail' => const Color(0xFFFF5D5D),
+      _ => const Color(0xFFF0B640),
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBFCFE),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE6ECF3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            sectionTitle,
+            style: AppTypography.label(
+              fontSize: 10.8,
+              color: accent,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            finding.label,
+            style: AppTypography.body(
+              fontSize: 13.6,
+              color: AppColors.text,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            finding.detail,
+            style: AppTypography.body(
+              fontSize: 12.6,
+              color: AppColors.mutedText,
+              height: 1.4,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

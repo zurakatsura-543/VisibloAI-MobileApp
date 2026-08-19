@@ -15,6 +15,10 @@ import '../controllers/product_mode_controller.dart';
 import '../../onboarding/controllers/onboarding_controller.dart';
 import '../models/report_models.dart';
 import '../models/test_account.dart';
+import '../models/audit_models.dart';
+import '../models/citation_manager_models.dart';
+import '../models/gbp_post.dart';
+import '../services/auth_api_service.dart';
 import '../widgets/auth_layout.dart';
 import '../widgets/auth_navigation_shell.dart';
 import '../widgets/auth_sidebar.dart';
@@ -67,6 +71,7 @@ class _HomeOverviewContent extends StatefulWidget {
 
 class _HomeOverviewContentState extends State<_HomeOverviewContent> {
   final OnboardingController controller = Get.find<OnboardingController>();
+  final AuthApiService _authApiService = Get.find<AuthApiService>();
   final GlobalKey _healthSectionKey = GlobalKey();
   final GlobalKey _growthTrendSectionKey = GlobalKey();
   final GlobalKey _aiGallerySectionKey = GlobalKey();
@@ -78,6 +83,9 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
   bool _isAiGalleryDialogOpen = false;
   TrendWindow _trendWindow = TrendWindow.month;
   TrendVisualMode _trendVisualMode = TrendVisualMode.bar;
+  LocationInsightsResponse? _previousInsights;
+  CitationStats? _citationStats;
+  int _performanceRequestToken = 0;
 
   @override
   void initState() {
@@ -90,11 +98,12 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
   }
 
   void _fetchDashboardTrends() {
+    final requestToken = ++_performanceRequestToken;
     final now = DateTime.now();
     DateTime startDate;
     switch (_trendWindow) {
       case TrendWindow.month:
-        startDate = now.subtract(const Duration(days: 30));
+        startDate = now.subtract(const Duration(days: 29));
         break;
       case TrendWindow.quarter:
         startDate = now.subtract(const Duration(days: 90));
@@ -107,7 +116,67 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
         break;
     }
     final range = DateTimeRange(start: startDate, end: now);
-    controller.fetchReportsData(range);
+    final inclusiveDays = range.end.difference(range.start).inDays + 1;
+    final previousEnd = range.start.subtract(const Duration(days: 1));
+    final previousStart = previousEnd.subtract(
+      Duration(days: inclusiveDays - 1),
+    );
+    final previousRange = DateTimeRange(start: previousStart, end: previousEnd);
+
+    Future.wait<Object?>([
+          controller.loadInsightsForRange(range),
+          controller.loadInsightsForRange(previousRange),
+          _loadDashboardCitationStats(),
+        ])
+        .then((results) {
+          if (!mounted || requestToken != _performanceRequestToken) {
+            return;
+          }
+
+          controller.liveInsights.value =
+              results[0] as LocationInsightsResponse?;
+          setState(() {
+            _previousInsights = results[1] as LocationInsightsResponse?;
+            _citationStats = results[2] as CitationStats?;
+          });
+        })
+        .catchError((error) {
+          debugPrint('HomeOverview: failed to load dashboard trends: $error');
+        });
+  }
+
+  Future<String> _resolveDashboardLocationId() async {
+    final user = controller.currentUser.value;
+    if (user == null) {
+      return '';
+    }
+
+    try {
+      final meProfile = await _authApiService.fetchMyData();
+      if (meProfile.locationId.trim().isNotEmpty) {
+        return meProfile.locationId.trim();
+      }
+    } catch (_) {}
+
+    if (user.backendAvailableBusinesses.isNotEmpty) {
+      return user.backendAvailableBusinesses.first['locationId']?.toString() ??
+          '';
+    }
+    return '';
+  }
+
+  Future<CitationStats?> _loadDashboardCitationStats() async {
+    final locationId = await _resolveDashboardLocationId();
+    if (locationId.isEmpty) {
+      return null;
+    }
+
+    try {
+      return await _authApiService.fetchCitationStats(locationId);
+    } catch (error) {
+      debugPrint('HomeOverview: failed to load citation stats: $error');
+      return null;
+    }
   }
 
   Future<void> _scrollToAiGallery() async {
@@ -579,15 +648,26 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
                     .businessReviewsFor(user)
                     .fold(0.0, (sum, r) => sum + r.rating);
           double avgRating = totalReviews > 0 ? totalStars / totalReviews : 0;
-          int reviewScore = totalReviews > 0
-              ? ((avgRating / 5) * 100).round()
-              : 0;
 
-          int citations = 0;
-          int seoScore =
-              ((gbpHealth * 0.4) + (reviewScore * 0.3) + (citations * 0.3))
-                  .round();
-          int listings = 0;
+          final citationStats = _citationStats;
+          final liveInsights = controller.liveInsights.value;
+          final previousInsights = _previousInsights;
+          final auditScore = controller.liveAudit.value?.overallScore ?? 0;
+          final citations =
+              (controller.liveAudit.value?.summary?.metrics.activeCitations ??
+                      citationStats?.active ??
+                      0)
+                  .clamp(0, 100);
+          final seoScore = _calculateSeoScore(
+            gbpHealth: gbpHealth,
+            avgRating: avgRating,
+            reviewCount: totalReviews,
+            citations: citations,
+            audit: controller.liveAudit.value,
+            insights: liveInsights,
+            previousInsights: previousInsights,
+            fallbackAuditScore: auditScore,
+          );
 
           return NotificationListener<ScrollNotification>(
             onNotification: _handleScrollNotification,
@@ -620,14 +700,14 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
                       seoScore: seoScore,
                       gbpHealth: gbpHealth,
                       citations: citations,
-                      listings: listings,
+                      auditScore: auditScore.clamp(0, 100),
                     ),
                     SizedBox(height: 6),
                     _OverviewMetricsSection(
                       isCompact: isCompact,
                       spacing: pairSpacing,
-                      reviewCount: reviewCount,
-                      insights: controller.liveInsights.value,
+                      insights: liveInsights,
+                      previousInsights: previousInsights,
                     ),
                     const SizedBox(height: AuthViewSpacing.cardGap),
                     _ActivityTrendsCard(
@@ -664,17 +744,34 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
                     const _SectionHeader(title: 'Pending Actions'),
                     const SizedBox(height: AuthViewSpacing.cardGap),
                     _PendingActionsCard(
+                      whatsAppConnected: user.whatsAppConnected,
                       pendingReviewCount: pendingReviewCount,
+                      livePhotoCount: controller.liveGbpMedia.length,
                       onPhotoTap: _openAiGalleryDialog,
                     ),
                     const SizedBox(height: AuthViewSpacing.cardGap),
-                    const _SectionHeader(
-                      title: 'May 2025 Growth Summary',
+                    _SectionHeader(
+                      title: _currentGrowthSummaryTitle(),
                       actionLabel: 'View Report',
                       actionColor: AppColors.primary,
+                      onActionTap: _openBusinessPerformance,
                     ),
                     const SizedBox(height: AuthViewSpacing.cardGap),
-                    const _GrowthSummaryCard(),
+                    _GrowthSummaryCard(
+                      visibility: _formatCompactNumber(
+                        (liveInsights?.totals.searchImpressions ?? 0) +
+                            (liveInsights?.totals.mapsImpressions ?? 0),
+                      ),
+                      enquiries: _formatCompactNumber(
+                        (liveInsights?.totals.callClicks ?? 0) +
+                            (liveInsights?.totals.websiteClicks ?? 0) +
+                            (liveInsights?.totals.directionRequests ?? 0),
+                      ),
+                      reviews: _formatCompactNumber(totalReviews),
+                      content: _formatCompactNumber(
+                        _currentMonthContentCount(controller.liveGbpPosts),
+                      ),
+                    ),
                   ] else ...[
                     _SocialHomeOverview(
                       user: user,
@@ -1319,9 +1416,7 @@ class _SocialConnectedPlatformsCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: const Color(0xFFE6EDF5),
-                            ),
+                            border: Border.all(color: const Color(0xFFE6EDF5)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1412,11 +1507,15 @@ class _SocialUpcomingPostsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now();
-    final upcoming = posts
-        .where((post) => _isScheduledSocialPost(post) && post.scheduledAt != null)
-        .where((post) => !post.scheduledAt!.isBefore(_startOfDay(today)))
-        .toList()
-      ..sort((a, b) => a.scheduledAt!.compareTo(b.scheduledAt!));
+    final upcoming =
+        posts
+            .where(
+              (post) =>
+                  _isScheduledSocialPost(post) && post.scheduledAt != null,
+            )
+            .where((post) => !post.scheduledAt!.isBefore(_startOfDay(today)))
+            .toList()
+          ..sort((a, b) => a.scheduledAt!.compareTo(b.scheduledAt!));
     final days = List.generate(7, (index) {
       final day = today.add(Duration(days: index));
       final postOnDay = _firstSocialPostOnDay(upcoming, day);
@@ -1762,10 +1861,7 @@ class _SocialQuickActionsCard extends StatelessWidget {
 }
 
 class _SocialRecentPostsCard extends StatefulWidget {
-  const _SocialRecentPostsCard({
-    required this.posts,
-    required this.isLoading,
-  });
+  const _SocialRecentPostsCard({required this.posts, required this.isLoading});
 
   final List<SocialPostInfo> posts;
   final bool isLoading;
@@ -1953,113 +2049,109 @@ class _SocialRecentPostsCardState extends State<_SocialRecentPostsCard> {
               onTap: () => Get.offNamed(AppRoutes.socialCreate),
             )
           else
-            ...visiblePosts.map(
-              (post) {
-                final statusStyle = _socialStatusStyle(post);
-                final platform = _firstSocialPlatform(post);
-                return Padding(
-                  padding: EdgeInsets.only(
-                    bottom: post == visiblePosts.last ? 0 : 12,
+            ...visiblePosts.map((post) {
+              final statusStyle = _socialStatusStyle(post);
+              final platform = _firstSocialPlatform(post);
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom: post == visiblePosts.last ? 0 : 12,
+                ),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE6EDF5)),
                   ),
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE6EDF5)),
-                    ),
-                    child: IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _SocialPostThumb(post: post, width: 88),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    _SocialHomeLogo(
-                                      asset: _socialPlatformLogoPath(platform),
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        _socialPostTitle(post),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontFamily: 'Inter',
-                                          color: Color(0xFF111827),
-                                          fontSize: 13.0,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: -0.1,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: statusStyle.$2,
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        statusStyle.$1,
-                                        style: TextStyle(
-                                          fontFamily: 'Inter',
-                                          color: statusStyle.$3,
-                                          fontSize: 11.4,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  post.content,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    color: AppColors.brandBlue.withValues(
-                                      alpha: 0.86,
-                                    ),
-                                    fontSize: 12.0,
-                                    height: 1.3,
-                                    fontWeight: FontWeight.w500,
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _SocialPostThumb(post: post, width: 88),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  _SocialHomeLogo(
+                                    asset: _socialPlatformLogoPath(platform),
+                                    size: 20,
                                   ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _socialPostDateLabel(post),
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    color: AppColors.brandBlue.withValues(
-                                      alpha: 0.68,
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _socialPostTitle(post),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        color: Color(0xFF111827),
+                                        fontSize: 13.0,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.1,
+                                      ),
                                     ),
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w500,
                                   ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: statusStyle.$2,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      statusStyle.$1,
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        color: statusStyle.$3,
+                                        fontSize: 11.4,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                post.content,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: AppColors.brandBlue.withValues(
+                                    alpha: 0.86,
+                                  ),
+                                  fontSize: 12.0,
+                                  height: 1.3,
+                                  fontWeight: FontWeight.w500,
                                 ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _socialPostDateLabel(post),
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: AppColors.brandBlue.withValues(
+                                    alpha: 0.68,
+                                  ),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            }),
           const SizedBox(height: 14),
           Center(
             child: Material(
@@ -2436,12 +2528,12 @@ class _SocialEmptyState extends StatelessWidget {
             onTap: onTap,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [_socialPrimaryStart, _socialPrimaryEnd],
-                  ),
-                  borderRadius: BorderRadius.circular(999),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [_socialPrimaryStart, _socialPrimaryEnd],
                 ),
+                borderRadius: BorderRadius.circular(999),
+              ),
               child: Text(
                 actionLabel,
                 style: const TextStyle(
@@ -2532,18 +2624,11 @@ class _SocialTextPostThumb extends StatelessWidget {
                   color: accent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(7),
                 ),
-                child: Icon(
-                  Icons.subject_rounded,
-                  size: 14,
-                  color: accent,
-                ),
+                child: Icon(Icons.subject_rounded, size: 14, color: accent),
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 6,
-                  vertical: 3,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.92),
                   borderRadius: BorderRadius.circular(999),
@@ -2716,7 +2801,9 @@ Color _socialPlatformColor(String platform) {
 String _socialPostTitle(SocialPostInfo post) {
   final normalized = post.content.replaceAll(RegExp(r'\s+'), ' ').trim();
   if (normalized.isEmpty) return 'Untitled social post';
-  return normalized.length <= 42 ? normalized : '${normalized.substring(0, 42)}...';
+  return normalized.length <= 42
+      ? normalized
+      : '${normalized.substring(0, 42)}...';
 }
 
 String _socialPostDateLabel(SocialPostInfo post) {
@@ -3289,14 +3376,14 @@ class _OverviewMetricsSection extends StatelessWidget {
   const _OverviewMetricsSection({
     required this.isCompact,
     required this.spacing,
-    required this.reviewCount,
     this.insights,
+    this.previousInsights,
   });
 
   final bool isCompact;
   final double spacing;
-  final int reviewCount;
   final LocationInsightsResponse? insights;
+  final LocationInsightsResponse? previousInsights;
 
   @override
   Widget build(BuildContext context) {
@@ -3304,7 +3391,14 @@ class _OverviewMetricsSection extends StatelessWidget {
         (insights?.totals.searchImpressions ?? 0) +
         (insights?.totals.mapsImpressions ?? 0);
     final calls = insights?.totals.callClicks ?? 0;
+    final directions = insights?.totals.directionRequests ?? 0;
     final websiteVisits = insights?.totals.websiteClicks ?? 0;
+    final previousViews =
+        (previousInsights?.totals.searchImpressions ?? 0) +
+        (previousInsights?.totals.mapsImpressions ?? 0);
+    final previousCalls = previousInsights?.totals.callClicks ?? 0;
+    final previousDirections = previousInsights?.totals.directionRequests ?? 0;
+    final previousWebsiteVisits = previousInsights?.totals.websiteClicks ?? 0;
 
     String formatNum(int number) {
       return number.toString().replaceAllMapped(
@@ -3321,7 +3415,7 @@ class _OverviewMetricsSection extends StatelessWidget {
           first: _MiniMetricCard(
             title: 'Google Views',
             value: formatNum(views),
-            delta: '+0%', // Dynamic delta calculation can be added later
+            delta: _formatMetricDeltaText(views, previousViews),
             leading: _MetricIconBubble(
               background: const Color(0xFFF6F8FE),
               child: SvgPicture.asset(
@@ -3332,9 +3426,9 @@ class _OverviewMetricsSection extends StatelessWidget {
             ),
           ),
           second: _MiniMetricCard(
-            title: 'Calls',
+            title: 'Customer Calls',
             value: formatNum(calls),
-            delta: '+0%',
+            delta: _formatMetricDeltaText(calls, previousCalls),
             leading: const _MetricIconBubble(
               background: Color(0xFFEFFAF4),
               child: Icon(
@@ -3350,9 +3444,9 @@ class _OverviewMetricsSection extends StatelessWidget {
           isCompact: isCompact,
           spacing: spacing,
           first: _MiniMetricCard(
-            title: 'Website Visits',
-            value: formatNum(websiteVisits),
-            delta: '+0%',
+            title: 'Direction requests',
+            value: formatNum(directions),
+            delta: _formatMetricDeltaText(directions, previousDirections),
             leading: const _MetricIconBubble(
               background: Color(0xFFF2F6FD),
               child: Icon(
@@ -3363,9 +3457,9 @@ class _OverviewMetricsSection extends StatelessWidget {
             ),
           ),
           second: _MiniMetricCard(
-            title: 'Total Reviews',
-            value: formatNum(reviewCount),
-            delta: '+0%',
+            title: 'Website Visits',
+            value: formatNum(websiteVisits),
+            delta: _formatMetricDeltaText(websiteVisits, previousWebsiteVisits),
             leading: const _MetricIconBubble(
               background: Color(0xFFFFF8DF),
               child: Icon(
@@ -4303,20 +4397,29 @@ class _MetricDelta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isNegative = value.trim().startsWith('-');
+    final isZero = value.trim() == '0%' || value.trim() == '+0%';
+    final color = isZero
+        ? const Color(0xFF98A2B3)
+        : isNegative
+        ? const Color(0xFFE24B4B)
+        : const Color(0xFF23BF73);
+    final icon = isZero
+        ? Icons.remove_rounded
+        : isNegative
+        ? Icons.south_east_rounded
+        : Icons.north_east_rounded;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          Icons.north_east_rounded,
-          size: compact ? 11 : 12,
-          color: Color(0xFF23BF73),
-        ),
+        Icon(icon, size: compact ? 11 : 12, color: color),
         SizedBox(width: compact ? 0.25 : 0.75),
         Text(
           value.startsWith('+') ? value.substring(1) : value,
           style: TextStyle(
             fontSize: compact ? 10 : 11,
-            color: Color(0xFF23BF73),
+            color: color,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -4458,8 +4561,7 @@ class _ActivityTrendsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // We use a mock fallback if insights are not yet loaded or missing
-    final fallback = trendWindow.config;
+    final fallback = TrendConfigFactory.emptyStateConfig(trendWindow.config);
 
     final trendConfig = TrendConfigFactory.fromInsights(
       insights,
@@ -4618,6 +4720,143 @@ class _ActivityTrendsCard extends StatelessWidget {
   }
 }
 
+String _formatMetricDeltaText(int current, int previous) {
+  if (previous <= 0) {
+    return current <= 0 ? '0%' : '+100%';
+  }
+  final diff = ((current - previous) / previous) * 100;
+  final rounded = diff.round();
+  if (rounded > 0) {
+    return '+$rounded%';
+  }
+  return '$rounded%';
+}
+
+int _calculateSeoScore({
+  required int gbpHealth,
+  required double avgRating,
+  required int reviewCount,
+  required int citations,
+  required AuditResult? audit,
+  required LocationInsightsResponse? insights,
+  required LocationInsightsResponse? previousInsights,
+  required int fallbackAuditScore,
+}) {
+  final auditMetrics = audit?.summary?.metrics;
+  final auditStrength = _clampScore(audit?.overallScore ?? fallbackAuditScore);
+  final profileStrength = _clampScore(gbpHealth);
+
+  final effectiveRating = auditMetrics?.averageRating ?? avgRating;
+  final effectiveReviewCount = auditMetrics?.reviewCount ?? reviewCount;
+  final reviewQuality = _normalizeRange(effectiveRating, max: 5) * 100;
+  final reviewVolume =
+      _normalizeRange(effectiveReviewCount.toDouble(), max: 50) * 100;
+  final reviewStrength = ((reviewQuality * 0.75) + (reviewVolume * 0.25))
+      .round();
+
+  final citationStrength =
+      (_normalizeRange(citations.toDouble(), max: 25) * 100).round();
+  final keywordStrength =
+      (_normalizeRange((auditMetrics?.top3Keywords ?? 0).toDouble(), max: 12) *
+              100)
+          .round();
+
+  final currentViews =
+      ((insights?.totals.searchImpressions ?? 0) +
+              (insights?.totals.mapsImpressions ?? 0))
+          .toDouble();
+  final profileViews =
+      (auditMetrics?.profileViews30d?.toDouble() ?? currentViews);
+  final visibilityStrength = (_normalizeRange(profileViews, max: 1500) * 100)
+      .round();
+
+  final currentActions =
+      ((insights?.totals.websiteClicks ?? 0) +
+              (insights?.totals.callClicks ?? 0) +
+              (insights?.totals.directionRequests ?? 0))
+          .toDouble();
+  final customerActions =
+      (auditMetrics?.customerActions30d?.toDouble() ?? currentActions);
+  final actionStrength = (_normalizeRange(customerActions, max: 250) * 100)
+      .round();
+
+  final conversionStrength =
+      (_normalizeRatePercent(auditMetrics?.actionRate) * 100).round();
+  final replyStrength = (_normalizeRatePercent(auditMetrics?.repliedRate) * 100)
+      .round();
+
+  final previousViews =
+      ((previousInsights?.totals.searchImpressions ?? 0) +
+              (previousInsights?.totals.mapsImpressions ?? 0))
+          .toDouble();
+  final previousActions =
+      ((previousInsights?.totals.websiteClicks ?? 0) +
+              (previousInsights?.totals.callClicks ?? 0) +
+              (previousInsights?.totals.directionRequests ?? 0))
+          .toDouble();
+  final growthMomentum = _calculateGrowthMomentum(
+    currentViews: currentViews,
+    previousViews: previousViews,
+    currentActions: currentActions,
+    previousActions: previousActions,
+  );
+
+  final composite =
+      (profileStrength * 0.22) +
+      (auditStrength * 0.20) +
+      (reviewStrength * 0.14) +
+      (citationStrength * 0.10) +
+      (keywordStrength * 0.08) +
+      (visibilityStrength * 0.10) +
+      (actionStrength * 0.07) +
+      (conversionStrength * 0.04) +
+      (replyStrength * 0.03) +
+      (growthMomentum * 0.02);
+
+  return composite.round().clamp(0, 100);
+}
+
+int _calculateGrowthMomentum({
+  required double currentViews,
+  required double previousViews,
+  required double currentActions,
+  required double previousActions,
+}) {
+  final viewsDelta = _relativeDeltaPercent(currentViews, previousViews);
+  final actionsDelta = _relativeDeltaPercent(currentActions, previousActions);
+  final blendedDelta = (viewsDelta * 0.45) + (actionsDelta * 0.55);
+  return (50 + (blendedDelta * 0.35)).round().clamp(0, 100);
+}
+
+double _relativeDeltaPercent(double current, double previous) {
+  if (previous <= 0) {
+    if (current <= 0) {
+      return 0;
+    }
+    return 25;
+  }
+  return ((current - previous) / previous) * 100;
+}
+
+double _normalizeRange(double value, {required double max}) {
+  if (max <= 0) {
+    return 0;
+  }
+  return (value / max).clamp(0, 1);
+}
+
+double _normalizeRatePercent(double? value) {
+  if (value == null) {
+    return 0;
+  }
+  if (value <= 1) {
+    return value.clamp(0, 1);
+  }
+  return (value / 100).clamp(0, 1);
+}
+
+int _clampScore(int value) => value.clamp(0, 100);
+
 class _HealthOverviewSection extends StatelessWidget {
   const _HealthOverviewSection({
     super.key,
@@ -4625,14 +4864,14 @@ class _HealthOverviewSection extends StatelessWidget {
     required this.seoScore,
     required this.gbpHealth,
     required this.citations,
-    required this.listings,
+    required this.auditScore,
   });
 
   final int animationCycle;
   final int seoScore;
   final int gbpHealth;
   final int citations;
-  final int listings;
+  final int auditScore;
 
   @override
   Widget build(BuildContext context) {
@@ -4653,7 +4892,7 @@ class _HealthOverviewSection extends StatelessWidget {
           seoScore: seoScore,
           gbpHealth: gbpHealth,
           citations: citations,
-          listings: listings,
+          auditScore: auditScore,
         ),
       ],
     );
@@ -4666,19 +4905,19 @@ class _HealthOverviewCard extends StatelessWidget {
     required this.seoScore,
     required this.gbpHealth,
     required this.citations,
-    required this.listings,
+    required this.auditScore,
   });
 
   final int animationCycle;
   final int seoScore;
   final int gbpHealth;
   final int citations;
-  final int listings;
+  final int auditScore;
 
   static const _seoScoreColor = Color(0xFFCC4568);
   static const _gbpHealthColor = Color(0xFF5DC344);
   static const _citationsColor = Color(0xFFF58AD4);
-  static const _listingsColor = Color(0xFF6673E0);
+  static const _auditScoreColor = Color(0xFF6673E0);
 
   @override
   Widget build(BuildContext context) {
@@ -4720,10 +4959,10 @@ class _HealthOverviewCard extends StatelessWidget {
           ),
           Expanded(
             child: _HealthCircle(
-              score: '$listings',
-              label: 'Listings',
-              progress: listings == 0 ? 0 : listings / 100.0,
-              color: _listingsColor,
+              score: '$auditScore',
+              label: 'Audit Score',
+              progress: auditScore / 100.0,
+              color: _auditScoreColor,
               animationCycle: animationCycle,
               index: 3,
             ),
@@ -5998,15 +6237,20 @@ const List<_AiGalleryFallbackSeed> _kAiGalleryFallbackSeeds = [
 
 class _PendingActionsCard extends StatelessWidget {
   const _PendingActionsCard({
+    required this.whatsAppConnected,
     required this.pendingReviewCount,
+    required this.livePhotoCount,
     required this.onPhotoTap,
   });
 
+  final bool whatsAppConnected;
   final int pendingReviewCount;
+  final int livePhotoCount;
   final VoidCallback onPhotoTap;
 
   @override
   Widget build(BuildContext context) {
+    final hasPhotos = livePhotoCount > 0;
     return Column(
       children: [
         _PendingActionRow(
@@ -6020,8 +6264,12 @@ class _PendingActionsCard extends StatelessWidget {
               BlendMode.srcIn,
             ),
           ),
-          title: 'Respond to WhatsApp',
-          subtitle: '5 new messages',
+          title: whatsAppConnected
+              ? 'WhatsApp is connected'
+              : 'Connect WhatsApp',
+          subtitle: whatsAppConnected
+              ? 'Ready for customer chats from this workspace'
+              : 'Enable WhatsApp to respond faster to enquiries',
         ),
         const SizedBox(height: 12),
         _PendingActionRow(
@@ -6041,8 +6289,12 @@ class _PendingActionsCard extends StatelessWidget {
         _PendingActionRow(
           icon: Icons.image_rounded,
           iconColor: AppColors.primary,
-          title: 'Add new photos',
-          subtitle: 'Take or upload photos for your business profile',
+          title: hasPhotos
+              ? 'Keep your gallery fresh'
+              : 'Add your first photos',
+          subtitle: hasPhotos
+              ? '$livePhotoCount live photos are visible on your business profile'
+              : 'Take or upload photos for your business profile',
           onTap: onPhotoTap,
         ),
       ],
@@ -6051,7 +6303,17 @@ class _PendingActionsCard extends StatelessWidget {
 }
 
 class _GrowthSummaryCard extends StatelessWidget {
-  const _GrowthSummaryCard();
+  const _GrowthSummaryCard({
+    required this.visibility,
+    required this.enquiries,
+    required this.reviews,
+    required this.content,
+  });
+
+  final String visibility;
+  final String enquiries;
+  final String reviews;
+  final String content;
 
   @override
   Widget build(BuildContext context) {
@@ -6064,14 +6326,14 @@ class _GrowthSummaryCard extends StatelessWidget {
           if (constraints.maxWidth < 320) {
             return Wrap(
               runSpacing: 12,
-              children: const [
+              children: [
                 SizedBox(
                   width: 140,
                   child: _SummaryMetric(
                     icon: Icons.visibility_rounded,
                     iconColor: AppColors.brandBlue,
                     label: 'Visibility',
-                    value: '18.5K',
+                    value: visibility,
                   ),
                 ),
                 SizedBox(
@@ -6080,7 +6342,7 @@ class _GrowthSummaryCard extends StatelessWidget {
                     icon: Icons.call_rounded,
                     iconColor: AppColors.primary,
                     label: 'Enquiries',
-                    value: '214',
+                    value: enquiries,
                   ),
                 ),
                 SizedBox(
@@ -6089,8 +6351,7 @@ class _GrowthSummaryCard extends StatelessWidget {
                     icon: Icons.star_rounded,
                     iconColor: Color(0xFFF2A114),
                     label: 'Reviews',
-                    value: '+18',
-                    valueColor: Color(0xFF2DBA77),
+                    value: reviews,
                   ),
                 ),
                 SizedBox(
@@ -6099,21 +6360,21 @@ class _GrowthSummaryCard extends StatelessWidget {
                     icon: Icons.edit_rounded,
                     iconColor: Color(0xFF9A55F5),
                     label: 'Content',
-                    value: '12',
+                    value: content,
                   ),
                 ),
               ],
             );
           }
 
-          return const Row(
+          return Row(
             children: [
               Expanded(
                 child: _SummaryMetric(
                   icon: Icons.visibility_rounded,
                   iconColor: AppColors.brandBlue,
                   label: 'Visibility',
-                  value: '18.5K',
+                  value: visibility,
                 ),
               ),
               _SummaryDivider(),
@@ -6122,7 +6383,7 @@ class _GrowthSummaryCard extends StatelessWidget {
                   icon: Icons.call_rounded,
                   iconColor: AppColors.primary,
                   label: 'Enquiries',
-                  value: '214',
+                  value: enquiries,
                 ),
               ),
               _SummaryDivider(),
@@ -6131,8 +6392,7 @@ class _GrowthSummaryCard extends StatelessWidget {
                   icon: Icons.star_rounded,
                   iconColor: Color(0xFFF2A114),
                   label: 'Reviews',
-                  value: '+18',
-                  valueColor: Color(0xFF2DBA77),
+                  value: reviews,
                 ),
               ),
               _SummaryDivider(),
@@ -6141,7 +6401,7 @@ class _GrowthSummaryCard extends StatelessWidget {
                   icon: Icons.edit_rounded,
                   iconColor: Color(0xFF9A55F5),
                   label: 'Content',
-                  value: '12',
+                  value: content,
                 ),
               ),
             ],
@@ -6150,6 +6410,49 @@ class _GrowthSummaryCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _currentGrowthSummaryTitle() {
+  const monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  final now = DateTime.now();
+  return '${monthNames[now.month - 1]} ${now.year} Growth Summary';
+}
+
+int _currentMonthContentCount(List<GbpPost> posts) {
+  final now = DateTime.now();
+  return posts.where((post) {
+    final effectiveDate = post.scheduledFor ?? post.createdAt;
+    return effectiveDate.year == now.year && effectiveDate.month == now.month;
+  }).length;
+}
+
+String _formatCompactNumber(int value) {
+  if (value >= 10000000) {
+    final amount = value / 10000000;
+    return '${amount.toStringAsFixed(value % 10000000 == 0 ? 0 : 1)}Cr';
+  }
+  if (value >= 100000) {
+    final amount = value / 100000;
+    return '${amount.toStringAsFixed(value % 100000 == 0 ? 0 : 1)}L';
+  }
+  if (value >= 1000) {
+    final amount = value / 1000;
+    return '${amount.toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K';
+  }
+  return '$value';
 }
 
 class _HealthCircle extends StatelessWidget {
@@ -6374,14 +6677,12 @@ class _SummaryMetric extends StatelessWidget {
     required this.iconColor,
     required this.label,
     required this.value,
-    this.valueColor = AppColors.text,
   });
 
   final IconData icon;
   final Color iconColor;
   final String label;
   final String value;
-  final Color valueColor;
 
   @override
   Widget build(BuildContext context) {
@@ -6402,7 +6703,7 @@ class _SummaryMetric extends StatelessWidget {
           value,
           style: TextStyle(
             fontSize: 14.8,
-            color: valueColor,
+            color: AppColors.text,
             fontWeight: FontWeight.w800,
           ),
         ),

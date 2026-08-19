@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:get/get.dart';
+import 'package:get/get.dart' hide FormData, MultipartFile;
 
 import '../../../core/api_client.dart';
 import '../../../core/notification_service.dart';
@@ -897,6 +897,13 @@ class AuthApiService extends GetxService {
     String? offerCouponCode,
     String? offerRedeemUrl,
     String? offerTerms,
+    String? imageQuality,
+    String? businessName,
+    String? businessCategory,
+    String? businessAddress,
+    String? businessCity,
+    String? businessCountry,
+    String? clientRequestId,
   }) async {
     try {
       final requestData = <String, dynamic>{
@@ -936,6 +943,27 @@ class AuthApiService extends GetxService {
       if (offerTerms != null) {
         requestData['offerTerms'] = offerTerms;
       }
+      if (imageQuality != null) {
+        requestData['imageQuality'] = imageQuality;
+      }
+      if (businessName != null && businessName.trim().isNotEmpty) {
+        requestData['businessName'] = businessName.trim();
+      }
+      if (businessCategory != null && businessCategory.trim().isNotEmpty) {
+        requestData['businessCategory'] = businessCategory.trim();
+      }
+      if (businessAddress != null && businessAddress.trim().isNotEmpty) {
+        requestData['businessAddress'] = businessAddress.trim();
+      }
+      if (businessCity != null && businessCity.trim().isNotEmpty) {
+        requestData['businessCity'] = businessCity.trim();
+      }
+      if (businessCountry != null && businessCountry.trim().isNotEmpty) {
+        requestData['businessCountry'] = businessCountry.trim();
+      }
+      if (clientRequestId != null && clientRequestId.trim().isNotEmpty) {
+        requestData['clientRequestId'] = clientRequestId.trim();
+      }
 
       final response = await _api.post(
         '/ai/generate-post',
@@ -944,6 +972,7 @@ class AuthApiService extends GetxService {
       );
 
       var postData = _asMap(response.data);
+      postData = _cleanAiPostTextFields(postData);
 
       debugPrint('--- RAW AI POST RESPONSE ---');
       debugPrint('Keys: ${postData.keys.toList()}');
@@ -962,7 +991,7 @@ class AuthApiService extends GetxService {
         await Future.delayed(const Duration(seconds: 3));
         try {
           final getResponse = await _api.get('/ai/posts/${postData['id']}');
-          postData = _asMap(getResponse.data);
+          postData = _cleanAiPostTextFields(_asMap(getResponse.data));
           // Break early if image is ready
           final img = postData['image']?.toString() ?? '';
           if (img.isNotEmpty) {
@@ -1007,13 +1036,71 @@ class AuthApiService extends GetxService {
     }
   }
 
-  Future<void> publishAiPost(
+  Future<Map<String, dynamic>> uploadAiPostImage({
+    required String postId,
+    required String imagePath,
+  }) async {
+    try {
+      final file = File(imagePath);
+      if (!await file.exists()) {
+        throw Exception('Selected image file was not found.');
+      }
+
+      final response = await _api.post(
+        '/ai/posts/$postId/image',
+        data: FormData.fromMap({
+          'image': await MultipartFile.fromFile(imagePath),
+        }),
+        options: Options(
+          contentType: 'multipart/form-data',
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 90),
+        ),
+      );
+
+      return _cleanAiPostTextFields(_asMap(response.data));
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(error, fallback: 'Unable to upload post image.'),
+      );
+    }
+  }
+
+  Map<String, dynamic> _cleanAiPostTextFields(Map<String, dynamic> postData) {
+    final cleaned = Map<String, dynamic>.from(postData);
+    final title = cleaned['title'];
+    if (title is String) {
+      cleaned['title'] = _cleanAiGeneratedText(title);
+    }
+    final content = cleaned['content'];
+    if (content is String) {
+      cleaned['content'] = _cleanAiGeneratedText(content);
+    }
+    final subtitle = cleaned['subtitle'];
+    if (subtitle is String) {
+      cleaned['subtitle'] = _cleanAiGeneratedText(subtitle);
+    }
+    return cleaned;
+  }
+
+  String _cleanAiGeneratedText(String value) {
+    return value
+        .replaceAll(r'\r\n', '\n')
+        .replaceAll(r'\n', '\n')
+        .replaceAll(r'\t', ' ')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
+  }
+
+  Future<GbpPost> publishAiPost(
     String postId, {
     required String businessId,
     required String locationId,
   }) async {
     try {
-      await _api.post(
+      final response = await _api.post(
         '/ai/posts/$postId/publish',
         data: {'businessId': businessId, 'locationId': locationId},
         options: Options(
@@ -1021,6 +1108,7 @@ class AuthApiService extends GetxService {
           sendTimeout: const Duration(seconds: 120),
         ),
       );
+      return GbpPost.fromAiApiMap(_asMap(response.data));
     } on DioException catch (error) {
       throw Exception(_readErrorMessage(error));
     } catch (error) {
@@ -1311,7 +1399,12 @@ class AuthApiService extends GetxService {
       }
 
       final response = await _api.post('/ai/review-reply', data: requestData);
-      return _asMap(response.data);
+      final result = _asMap(response.data);
+      final reply = result['reply'];
+      if (reply is String) {
+        result['reply'] = _cleanAiReviewReplyText(reply);
+      }
+      return result;
     } on DioException catch (error) {
       throw Exception(_readErrorMessage(error));
     } catch (error) {
@@ -1322,6 +1415,15 @@ class AuthApiService extends GetxService {
         ),
       );
     }
+  }
+
+  String _cleanAiReviewReplyText(String value) {
+    return value
+        .replaceAll(r'\r\n', '\n')
+        .replaceAll(r'\n', '\n')
+        .replaceAll(r'\t', ' ')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
   }
 
   Future<void> postReviewReply(
@@ -2517,10 +2619,8 @@ class AuthApiService extends GetxService {
     try {
       final response = await _api.get(
         '/seo/keywords/$keywordId/rankings',
-        queryParameters: <String, dynamic>{
-          'days': days,
-          'radiusKm': radiusKm,
-        }..removeWhere((key, value) => value == null),
+        queryParameters: <String, dynamic>{'days': days, 'radiusKm': radiusKm}
+          ..removeWhere((key, value) => value == null),
       );
       final raw = response.data as List?;
       if (raw == null) return const <KeywordRankingPoint>[];

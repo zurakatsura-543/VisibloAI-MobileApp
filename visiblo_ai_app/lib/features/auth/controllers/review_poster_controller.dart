@@ -16,6 +16,9 @@ class ReviewPosterController extends GetxController {
   }) : _authApiService = authApiService ?? Get.find<AuthApiService>(),
        _localAuthService = localAuthService ?? Get.find<LocalAuthService>();
 
+  static const controlsRefreshId = 'review-poster-controls';
+  static const previewRefreshId = 'review-poster-preview';
+  static const locationRefreshId = 'review-poster-location';
   static const defaultTitle = 'Rate us on Google';
   static const defaultDescription = 'We value your feedback!';
   static const brandColors = <Color>[
@@ -28,6 +31,12 @@ class ReviewPosterController extends GetxController {
     Color(0xFFFED7AA),
     Color(0xFFF1F5F9),
     Color(0xFF1E293B),
+  ];
+  static const multiColorTheme = <Color>[
+    Color(0xFF179CA3),
+    Color(0xFF4F86FF),
+    Color(0xFF7C4DFF),
+    Color(0xFFFFB347),
   ];
 
   final AuthApiService _authApiService;
@@ -43,6 +52,7 @@ class ReviewPosterController extends GetxController {
   final selectedPaperSize = ReviewPosterPaperSize.a4.obs;
   final selectedTemplate = ReviewPosterTemplate.split.obs;
   final selectedBrandColorValue = Color(0xFF179CA3).toARGB32().obs;
+  final useMultiColorTheme = false.obs;
   final showFooter = true.obs;
   final titleText = defaultTitle.obs;
   final descriptionText = defaultDescription.obs;
@@ -99,7 +109,11 @@ class ReviewPosterController extends GetxController {
     return null;
   }
 
-  Color get brandColor => Color(selectedBrandColorValue.value);
+  bool get isMultiColorTheme => useMultiColorTheme.value;
+
+  Color get brandColor => isMultiColorTheme
+      ? multiColorTheme.first
+      : Color(selectedBrandColorValue.value);
 
   String get titleValue {
     final trimmed = titleController.text.trim();
@@ -231,18 +245,28 @@ class ReviewPosterController extends GetxController {
 
   void setPaperSize(ReviewPosterPaperSize paperSize) {
     selectedPaperSize.value = paperSize;
+    _refreshPosterUi();
   }
 
   void setTemplate(ReviewPosterTemplate template) {
     selectedTemplate.value = template;
+    _refreshPosterUi();
   }
 
   void setBrandColor(Color color) {
+    useMultiColorTheme.value = false;
     selectedBrandColorValue.value = color.toARGB32();
+    _refreshPosterUi();
+  }
+
+  void setMultiColorTheme() {
+    useMultiColorTheme.value = true;
+    _refreshPosterUi();
   }
 
   void setShowFooter(bool value) {
     showFooter.value = value;
+    _refreshPosterUi();
   }
 
   void clearError() {
@@ -372,14 +396,17 @@ class ReviewPosterController extends GetxController {
 
     _manualReviewUrlOverride = trimmed != _lastAutoReviewUrl;
     reviewUrlText.value = trimmed;
+    _refreshPosterUi();
   }
 
   void _handleTitleEdited() {
     titleText.value = titleValue;
+    _refreshPosterUi();
   }
 
   void _handleDescriptionEdited() {
     descriptionText.value = descriptionValue;
+    _refreshPosterUi();
   }
 
   void _syncSelectedLocation() {
@@ -414,6 +441,15 @@ class ReviewPosterController extends GetxController {
       selection: TextSelection.collapsed(offset: autoUrl.length),
     );
     _isSyncingReviewUrlController = false;
+    _refreshPosterUi();
+  }
+
+  void _refreshPosterUi() {
+    update([
+      controlsRefreshId,
+      previewRefreshId,
+      locationRefreshId,
+    ]);
   }
 
   List<BusinessLocationSummary> _sortedLocations(
