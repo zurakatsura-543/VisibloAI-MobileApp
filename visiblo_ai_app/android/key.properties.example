@@ -1,0 +1,6 @@
+# Copy this file to android/key.properties and keep the real file private.
+# Paths are resolved relative to android/app.
+storePassword=replace-with-keystore-password
+keyPassword=replace-with-key-password
+keyAlias=replace-with-key-alias
+storeFile=replace-with-path-to-release.jks

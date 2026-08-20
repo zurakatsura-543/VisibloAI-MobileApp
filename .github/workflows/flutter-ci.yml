@@ -1,0 +1,56 @@
+name: Flutter CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - production-changes
+
+concurrency:
+  group: flutter-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: visiblo_ai_app
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: >-
+          dart format --output=none --set-exit-if-changed
+          lib/main.dart
+          lib/app/app.dart
+          lib/app/widgets/connectivity_banner.dart
+          lib/core/api_client.dart
+          lib/core/app_environment.dart
+          lib/core/connectivity_service.dart
+          lib/core/production_monitoring.dart
+          test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build release app bundle
+        run: >-
+          flutter build appbundle --release
+          --dart-define=APP_ENV=production
+          --dart-define=API_BASE_URL=https://app.visibloai.com/api

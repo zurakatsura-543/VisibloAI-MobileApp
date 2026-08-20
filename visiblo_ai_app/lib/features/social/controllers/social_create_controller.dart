@@ -70,6 +70,13 @@ class SocialCreateController extends GetxController {
     loadDrafts();
   }
 
+  @override
+  void onClose() {
+    _generationCancelToken?.cancel('Controller disposed.');
+    _textRegenerationCancelToken?.cancel('Controller disposed.');
+    super.onClose();
+  }
+
   Future<void> generatePosts({
     required String topic,
     required String tone,

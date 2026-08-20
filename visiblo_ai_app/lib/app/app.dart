@@ -7,16 +7,19 @@ import 'routes/app_pages.dart';
 import 'routes/app_routes.dart';
 import 'theme/app_typography.dart';
 import 'theme/app_theme.dart';
+import 'widgets/connectivity_banner.dart';
 
 class VisibloAiApp extends StatelessWidget {
-  const VisibloAiApp({super.key});
+  const VisibloAiApp({super.key, this.initialRoute = AppRoutes.boot});
+
+  final String initialRoute;
 
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
       title: 'VisibloAI',
       debugShowCheckedModeBanner: false,
-      initialRoute: AppRoutes.boot,
+      initialRoute: initialRoute,
       initialBinding: OnboardingBinding(),
       getPages: AppPages.pages,
       theme: AppTheme.lightTheme,
@@ -36,7 +39,7 @@ class VisibloAiApp extends StatelessWidget {
             AppTypography.fontFamily;
         return DefaultTextStyle.merge(
           style: TextStyle(fontFamily: fontFamily),
-          child: child ?? const SizedBox.shrink(),
+          child: ConnectivityBanner(child: child ?? const SizedBox.shrink()),
         );
       },
     );

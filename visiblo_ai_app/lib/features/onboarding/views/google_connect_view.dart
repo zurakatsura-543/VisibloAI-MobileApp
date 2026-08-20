@@ -19,6 +19,7 @@ class _GoogleConnectViewState extends State<GoogleConnectView> {
   final OnboardingController _controller = Get.find<OnboardingController>();
   Timer? _syncTimer;
   bool _awaitingSync = false;
+  bool _syncInFlight = false;
   int _syncAttempts = 0;
   static const int _maxBackgroundSyncAttempts = 6;
 
@@ -45,6 +46,9 @@ class _GoogleConnectViewState extends State<GoogleConnectView> {
     _syncTimer?.cancel();
     _syncAttempts = 0;
     _syncTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (_syncInFlight) {
+        return;
+      }
       if (_syncAttempts >= _maxBackgroundSyncAttempts) {
         _syncTimer?.cancel();
         if (mounted) {
@@ -56,12 +60,17 @@ class _GoogleConnectViewState extends State<GoogleConnectView> {
       }
 
       _syncAttempts += 1;
-      final connected = await _controller.refreshGoogleConnectionStatus(
-        showErrorSnack: false,
-        attempts: 1,
-      );
-      if (connected) {
-        _syncTimer?.cancel();
+      _syncInFlight = true;
+      try {
+        final connected = await _controller.refreshGoogleConnectionStatus(
+          showErrorSnack: false,
+          attempts: 1,
+        );
+        if (connected) {
+          _syncTimer?.cancel();
+        }
+      } finally {
+        _syncInFlight = false;
       }
     });
   }

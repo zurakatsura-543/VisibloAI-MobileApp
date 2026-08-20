@@ -1,5 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:get/get.dart';
+
+import 'connectivity_service.dart';
+import 'app_environment.dart';
 
 class ApiClient {
   ApiClient._internal() {
@@ -30,6 +34,18 @@ class ApiClient {
             await storage.delete(key: accessTokenKey);
             await storage.delete(key: sessionCookieKey);
           }
+
+          if (await _shouldRetryAfterConnectivityChange(error)) {
+            try {
+              final request = error.requestOptions;
+              request.extra[_connectivityRetryKey] = true;
+              final response = await dio.fetch<dynamic>(request);
+              handler.resolve(response);
+              return;
+            } on DioException {
+              // Preserve the original network failure for consistent UI errors.
+            }
+          }
           handler.next(error);
         },
       ),
@@ -42,10 +58,40 @@ class ApiClient {
 
   static const accessTokenKey = 'accessToken';
   static const sessionCookieKey = 'sessionCookie';
+  static const _connectivityRetryKey = 'connectivityRetryAttempted';
 
   final storage = const FlutterSecureStorage();
-  final String baseUrl = 'https://app.visibloai.com/api';
+  final String baseUrl = AppConfig.apiBaseUrl;
   late final Dio dio;
+
+  Future<bool> _shouldRetryAfterConnectivityChange(DioException error) async {
+    final request = error.requestOptions;
+    final method = request.method.toUpperCase();
+    final isSafeMethod = method == 'GET' || method == 'HEAD';
+    final alreadyRetried = request.extra[_connectivityRetryKey] == true;
+    final isNetworkFailure =
+        error.type == DioExceptionType.connectionError ||
+        error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.receiveTimeout ||
+        error.type == DioExceptionType.sendTimeout;
+
+    if (!isSafeMethod || alreadyRetried || !isNetworkFailure) {
+      return false;
+    }
+    if (!Get.isRegistered<ConnectivityService>()) {
+      return false;
+    }
+
+    final connectivity = Get.find<ConnectivityService>();
+    if (connectivity.isOffline.value) {
+      return connectivity.waitUntilOnline();
+    }
+
+    // The network interface may already have switched while Dio still owns a
+    // stale socket. Give the new route a brief moment before one safe retry.
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    return true;
+  }
 
   bool _shouldClearStoredSession(DioException error) {
     final statusCode = error.response?.statusCode;

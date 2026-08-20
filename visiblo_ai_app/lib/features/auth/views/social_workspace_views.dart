@@ -4210,6 +4210,8 @@ class _SocialPostEditDialogState extends State<_SocialPostEditDialog> {
 
   @override
   void dispose() {
+    _activeImageCancelToken?.cancel('Edit dialog closed');
+    _activeImageCancelToken = null;
     _captionController.dispose();
     _hashtagsController.dispose();
     super.dispose();
