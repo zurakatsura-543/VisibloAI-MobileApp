@@ -9,6 +9,10 @@ class GbpPost {
     required this.subtitle,
     required this.meta,
     required this.createdAt,
+    this.publishStatus = '',
+    this.locationId,
+    this.callToAction,
+    this.ctaUrl,
     this.scheduledFor,
     this.gmbPostId,
     this.errorMessage,
@@ -21,6 +25,10 @@ class GbpPost {
   final String subtitle;
   final String meta;
   final DateTime createdAt;
+  final String publishStatus;
+  final String? locationId;
+  final String? callToAction;
+  final String? ctaUrl;
   final DateTime? scheduledFor;
   final String? gmbPostId;
   final String? errorMessage;
@@ -61,6 +69,10 @@ class GbpPost {
       subtitle: '',
       meta: '',
       createdAt: DateTime.now(),
+      publishStatus: '',
+      locationId: null,
+      callToAction: null,
+      ctaUrl: null,
       gmbPostId: null,
       errorMessage: null,
     );
@@ -105,6 +117,10 @@ class GbpPost {
       subtitle: subtitleText,
       meta: _readString(map['topicType']),
       createdAt: createdAt,
+      publishStatus: stateRaw,
+      locationId: null,
+      callToAction: null,
+      ctaUrl: null,
       gmbPostId: _readString(map['name']),
       errorMessage: null,
     );
@@ -120,15 +136,15 @@ class GbpPost {
       }
     }
 
-    final statusRaw = _readString(map['publishStatus'] ?? map['status']).toLowerCase();
-    GbpPostStatus status =
-        statusRaw == 'published' || statusRaw == 'live'
-            ? GbpPostStatus.live
-            : statusRaw == 'scheduled' || statusRaw == 'schedule'
-                ? GbpPostStatus.scheduled
-                : statusRaw == 'failed'
-                    ? GbpPostStatus.failed
-                    : GbpPostStatus.draft;
+    final publishStatusRaw = _readString(map['publishStatus'] ?? map['status']);
+    final statusRaw = publishStatusRaw.toLowerCase();
+    GbpPostStatus status = statusRaw == 'published' || statusRaw == 'live'
+        ? GbpPostStatus.live
+        : statusRaw == 'scheduled' || statusRaw == 'schedule'
+        ? GbpPostStatus.scheduled
+        : statusRaw == 'failed' || statusRaw == 'rejected'
+        ? GbpPostStatus.failed
+        : GbpPostStatus.draft;
 
     if (status == GbpPostStatus.draft && scheduledForLocal != null) {
       status = GbpPostStatus.scheduled;
@@ -152,10 +168,25 @@ class GbpPost {
       subtitle: contentRaw,
       meta: _readString(map['type'] ?? map['postType'] ?? ''),
       createdAt:
-          (DateTime.tryParse(_readString(map['createdAt'])) ?? DateTime.now()).toLocal(),
+          (DateTime.tryParse(_readString(map['createdAt'])) ?? DateTime.now())
+              .toLocal(),
+      publishStatus: publishStatusRaw.toUpperCase(),
+      locationId: _readString(map['locationId']).isNotEmpty
+          ? _readString(map['locationId'])
+          : null,
+      callToAction: _readString(map['callToAction']).isNotEmpty
+          ? _readString(map['callToAction']).toUpperCase()
+          : null,
+      ctaUrl: _readString(map['ctaUrl']).isNotEmpty
+          ? _readString(map['ctaUrl'])
+          : null,
       scheduledFor: scheduledForLocal,
-      gmbPostId: _readString(map['gmbPostId']).isNotEmpty ? _readString(map['gmbPostId']) : null,
-      errorMessage: _readString(map['errorMessage']).isNotEmpty ? _readString(map['errorMessage']) : null,
+      gmbPostId: _readString(map['gmbPostId']).isNotEmpty
+          ? _readString(map['gmbPostId'])
+          : null,
+      errorMessage: _readString(map['errorMessage']).isNotEmpty
+          ? _readString(map['errorMessage'])
+          : null,
     );
   }
 
@@ -167,6 +198,10 @@ class GbpPost {
     String? subtitle,
     String? meta,
     DateTime? createdAt,
+    String? publishStatus,
+    Object? locationId = _sentinel,
+    Object? callToAction = _sentinel,
+    Object? ctaUrl = _sentinel,
     Object? scheduledFor = _sentinel,
     Object? gmbPostId = _sentinel,
     Object? errorMessage = _sentinel,
@@ -179,6 +214,14 @@ class GbpPost {
       subtitle: subtitle ?? this.subtitle,
       meta: meta ?? this.meta,
       createdAt: createdAt ?? this.createdAt,
+      publishStatus: publishStatus ?? this.publishStatus,
+      locationId: identical(locationId, _sentinel)
+          ? this.locationId
+          : locationId as String?,
+      callToAction: identical(callToAction, _sentinel)
+          ? this.callToAction
+          : callToAction as String?,
+      ctaUrl: identical(ctaUrl, _sentinel) ? this.ctaUrl : ctaUrl as String?,
       scheduledFor: identical(scheduledFor, _sentinel)
           ? this.scheduledFor
           : scheduledFor as DateTime?,

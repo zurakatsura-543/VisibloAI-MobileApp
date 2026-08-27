@@ -24,6 +24,7 @@ import '../../features/auth/views/keyword_ranking_view.dart';
 import '../../features/auth/controllers/seo_tools_controller.dart';
 import '../../features/auth/controllers/product_mode_controller.dart';
 import '../../features/auth/views/account_detail_views.dart';
+import '../../features/auth/views/ai_content_calendar_view.dart';
 import '../../features/auth/bindings/website_manager_binding.dart';
 import '../../features/auth/views/payment_view.dart';
 import '../../features/auth/views/profile_view.dart';
@@ -41,6 +42,7 @@ import '../../features/onboarding/views/category_view.dart';
 import '../../features/onboarding/views/custom_category_view.dart';
 import '../../features/onboarding/views/forgot_password_view.dart';
 import '../../features/onboarding/views/auth_boot_view.dart';
+import '../../features/onboarding/views/ai_manager_consent_view.dart';
 import '../../features/onboarding/views/google_connect_view.dart';
 import '../../features/onboarding/views/google_oauth_webview_view.dart';
 import '../../features/onboarding/views/login_view.dart';
@@ -107,6 +109,16 @@ abstract final class AppPages {
     GetPage(
       name: AppRoutes.locationSelection,
       page: () => const LocationSelectionView(),
+      binding: OnboardingBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.aiManagerConsent,
+      page: () => const AiManagerConsentView(),
+      binding: OnboardingBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.aiContentCalendar,
+      page: () => const AiContentCalendarView(),
       binding: OnboardingBinding(),
     ),
     GetPage(

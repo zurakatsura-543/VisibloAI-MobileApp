@@ -83,6 +83,7 @@ class OnboardingController extends GetxController {
   final isLocationsLoading = false.obs;
   final isLocationActivationLoading = false.obs;
   final isProfileSwitching = false.obs;
+  final isAiManagerConsentLoading = false.obs;
   final isAddAnotherProfileMode = false.obs;
   final isAuthBootstrapping = false.obs;
   final isRegistrationLoading = false.obs;
@@ -1161,6 +1162,73 @@ class OnboardingController extends GetxController {
     } catch (error) {
       Get.snackbar(
         'Survey failed',
+        _humanizeError(error),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      isSurveyLoading.value = false;
+    }
+  }
+
+  Future<void> submitAiBusinessSetup({
+    required String locationSetup,
+    required String industryCategory,
+    required List<String> services,
+    required List<String> targetCustomers,
+    required List<String> goals,
+    required String brandVoice,
+    required String primaryLanguage,
+    required String secondaryLanguage,
+    required String postingFrequency,
+    required String approvalMode,
+  }) async {
+    if (industryCategory.trim().isEmpty ||
+        services.isEmpty ||
+        goals.isEmpty ||
+        primaryLanguage.trim().isEmpty ||
+        brandVoice.trim().isEmpty ||
+        postingFrequency.trim().isEmpty ||
+        approvalMode.trim().isEmpty) {
+      Get.snackbar(
+        'Complete AI setup',
+        'Please fill the required business details before continuing.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    isSurveyLoading.value = true;
+
+    try {
+      final aiProfile = <String, dynamic>{
+        'version': '2026-08-ai-business-setup-v1',
+        'locationSetup': locationSetup,
+        'industryCategory': industryCategory.trim(),
+        'services': services,
+        'targetCustomers': targetCustomers,
+        'goals': goals,
+        'brandVoice': brandVoice,
+        'primaryLanguage': primaryLanguage,
+        'secondaryLanguage': secondaryLanguage,
+        'postingFrequency': postingFrequency,
+        'approvalMode': approvalMode,
+        'source': 'mobile_onboarding',
+        'capturedAt': DateTime.now().toIso8601String(),
+      };
+
+      await _authApiService.submitSurvey(
+        role: 'business_owner',
+        seoExperience: 'zero',
+        orgSize: locationSetup == 'multi_location' ? '2-10' : 'solo',
+        heardFrom: 'other',
+        aiOnboardingProfile: aiProfile,
+      );
+      final remoteProfile = await _authApiService.fetchMyData();
+      await _syncCurrentUserFromRemoteProfile(remoteProfile);
+      await _navigateToSessionRoute(remoteProfile);
+    } catch (error) {
+      Get.snackbar(
+        'AI setup failed',
         _humanizeError(error),
         snackPosition: SnackPosition.BOTTOM,
       );
@@ -3345,6 +3413,79 @@ class OnboardingController extends GetxController {
     return AppRoutes.unifiedDashboard;
   }
 
+  Future<bool> _needsAiManagerConsent(AuthMeResponse remoteProfile) async {
+    if (!remoteProfile.authenticated ||
+        !remoteProfile.emailVerified ||
+        !remoteProfile.surveyDone ||
+        !remoteProfile.googleConnected ||
+        !remoteProfile.hasActiveBusinessSelection) {
+      return false;
+    }
+    if (remoteProfile.hasPaidAccess) {
+      return false;
+    }
+
+    try {
+      return !(await _authApiService.hasAcceptedAiManagerConsent(
+        businessId: remoteProfile.businessId,
+      ));
+    } catch (error) {
+      debugPrint('AI Manager consent status check failed: $error');
+      return true;
+    }
+  }
+
+  Future<void> acceptAiManagerConsentAndContinue() async {
+    if (isAiManagerConsentLoading.value) {
+      return;
+    }
+
+    final user = currentUser.value;
+    var businessId = user?.backendBusinessId.trim() ?? '';
+    var locationId = '';
+    var googleLocationId = '';
+
+    if (businessId.isEmpty) {
+      Get.snackbar(
+        'Business not selected',
+        'Please select your Google Business Profile before continuing.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    isAiManagerConsentLoading.value = true;
+    try {
+      final profile = await _authApiService.fetchMyData();
+      businessId = profile.businessId.trim().isNotEmpty
+          ? profile.businessId.trim()
+          : businessId;
+      locationId = profile.locationId.trim();
+      googleLocationId = profile.gmbLocationId.trim();
+      await _authApiService.acceptAiManagerConsent(
+        businessId: businessId,
+        locationId: locationId,
+        googleLocationId: googleLocationId,
+        consentType: 'AI_WORKSPACE_ASSISTANT',
+      );
+      await _authApiService.acceptAiManagerConsent(
+        businessId: businessId,
+        locationId: locationId,
+        googleLocationId: googleLocationId,
+        consentType: 'GBP_AI_AUTO_POST',
+      );
+      Get.offAllNamed(AppRoutes.payment);
+    } catch (error) {
+      Get.snackbar(
+        'Unable to continue',
+        error.toString().replaceFirst('Exception: ', ''),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      isAiManagerConsentLoading.value = false;
+    }
+  }
+
   Future<AuthMeResponse> _profileForSessionRoute(
     AuthMeResponse remoteProfile, {
     required bool allowAutoSwitch,
@@ -3390,6 +3531,11 @@ class OnboardingController extends GetxController {
         signUpEmailController.text,
       ]);
       pendingOtpFlow.value = 'SIGNUP';
+    }
+    if (route == AppRoutes.payment &&
+        await _needsAiManagerConsent(routeProfile)) {
+      Get.offAllNamed(AppRoutes.aiManagerConsent);
+      return;
     }
     Get.offAllNamed(route);
   }

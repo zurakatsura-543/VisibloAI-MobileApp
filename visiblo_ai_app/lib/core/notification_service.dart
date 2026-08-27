@@ -4,9 +4,10 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../app/routes/app_routes.dart';
 import 'api_client.dart';
 import '../firebase_options.dart';
 
@@ -184,15 +185,29 @@ class NotificationService extends GetxService {
         body,
         duration: const Duration(seconds: 4),
         snackPosition: SnackPosition.TOP,
+        mainButton: TextButton(
+          onPressed: () => _navigateFromNotification(message),
+          child: const Text('Review'),
+        ),
       );
     }
   }
 
   void _onNotificationTapped(RemoteMessage message) {
     debugPrint('[FCM] Notification tapped: ${message.data}');
-    // Add navigation logic here if needed, e.g.:
-    // final route = message.data['route'];
-    // if (route != null) Get.toNamed(route);
+    _navigateFromNotification(message);
+  }
+
+  void _navigateFromNotification(RemoteMessage message) {
+    final route = message.data['route']?.toString().trim() ?? '';
+    final type = message.data['type']?.toString().trim() ?? '';
+    if (route == AppRoutes.aiContentCalendar ||
+        type == 'GBP_PRE_PUBLISH' ||
+        type == 'GBP_POST_LIVE') {
+      Get.toNamed(AppRoutes.aiContentCalendar, arguments: message.data);
+    } else if (route.isNotEmpty) {
+      Get.toNamed(route, arguments: message.data);
+    }
   }
 
   @override

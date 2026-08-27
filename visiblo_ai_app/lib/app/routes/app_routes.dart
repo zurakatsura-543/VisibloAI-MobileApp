@@ -11,6 +11,8 @@ abstract final class AppRoutes {
   static const onboardingSurvey = '/onboarding-survey';
   static const googleConnect = '/google-connect';
   static const locationSelection = '/location-selection';
+  static const aiManagerConsent = '/ai-manager-consent';
+  static const aiContentCalendar = '/ai-content-calendar';
   static const businessProfile = '/business-profile';
   static const businessLocation = '/business-location';
   static const category = '/category';

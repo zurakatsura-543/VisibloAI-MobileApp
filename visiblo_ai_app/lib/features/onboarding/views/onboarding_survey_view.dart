@@ -1,13 +1,11 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../app/theme/app_colors.dart';
-import '../../../app/theme/app_typography.dart';
 import '../../../app/widgets/app_logo.dart';
+import '../../../app/widgets/app_primary_button.dart';
 import '../controllers/onboarding_controller.dart';
-import '../widgets/onboarding_intro_layout.dart';
 
 class OnboardingSurveyView extends StatefulWidget {
   const OnboardingSurveyView({super.key});
@@ -17,796 +15,527 @@ class OnboardingSurveyView extends StatefulWidget {
 }
 
 class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
-  bool _showSurveyQuestions = false;
-  int _currentQuestion = 0;
-  String? _selectedRole;
-  String? _selectedLocationType;
+  final OnboardingController _controller = Get.find<OnboardingController>();
+  final TextEditingController _categoryController = TextEditingController();
+  final TextEditingController _servicesController = TextEditingController();
 
-  void _openSurveyQuestions() {
-    setState(() {
-      _showSurveyQuestions = true;
-      _currentQuestion = 0;
-    });
-  }
-
-  void _backToIntro() {
-    setState(() {
-      _showSurveyQuestions = false;
-      _currentQuestion = 0;
-    });
-  }
-
-  void _goToNextQuestion() {
-    if (_selectedRole == null) {
-      Get.snackbar(
-        'Select your role',
-        'Please choose the option that best matches your role before continuing.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-      return;
-    }
-
-    setState(() {
-      _currentQuestion = 1;
-    });
-  }
-
-  Future<void> _submitTwoStepSurvey() async {
-    if (_selectedLocationType == null) {
-      Get.snackbar(
-        'Select your setup',
-        'Please choose whether you manage a single location or multiple locations.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-      return;
-    }
-
-    final controller = Get.find<OnboardingController>();
-    controller.selectedSurveyRole.value = _selectedRole;
-    controller.selectedSurveySeoExperience.value = 'zero';
-    controller.selectedSurveyHeardFrom.value = 'other';
-    controller.selectedSurveyOrgSize.value = _selectedLocationType == 'single'
-        ? 'solo'
-        : '2-10';
-
-    await controller.submitSurveyStep();
-  }
-
-  void _handleQuestionBack() {
-    if (_currentQuestion == 0) {
-      _backToIntro();
-      return;
-    }
-
-    setState(() {
-      _currentQuestion = 0;
-    });
-  }
+  String _locationSetup = 'single_location';
+  String _brandVoice = 'Professional';
+  String _primaryLanguage = 'English';
+  String _secondaryLanguage = 'None';
+  String _postingFrequency = '5 posts/week';
+  String _approvalMode = 'Approve calendar';
+  final Set<String> _targetCustomers = <String>{'Local customers'};
+  final Set<String> _goals = <String>{
+    'Generate enquiries',
+    'Promote services',
+    'Improve profile activity',
+  };
 
   @override
-  Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 240),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      child: _showSurveyQuestions
-          ? _SurveyQuestionFlow(
-              key: ValueKey('survey-flow-$_currentQuestion'),
-              currentQuestion: _currentQuestion,
-              selectedRole: _selectedRole,
-              selectedLocationType: _selectedLocationType,
-              onBack: _handleQuestionBack,
-              onRoleSelected: (value) {
-                setState(() {
-                  _selectedRole = value;
-                });
-              },
-              onLocationTypeSelected: (value) {
-                setState(() {
-                  _selectedLocationType = value;
-                });
-              },
-              onNext: _goToNextQuestion,
-              onDone: _submitTwoStepSurvey,
-            )
-          : _SurveyIntroScreen(
-              key: const ValueKey('survey-intro'),
-              onGetStarted: _openSurveyQuestions,
-            ),
+  void dispose() {
+    _categoryController.dispose();
+    _servicesController.dispose();
+    super.dispose();
+  }
+
+  List<String> _services() {
+    return _servicesController.text
+        .split(RegExp(r'[,;\n]'))
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+  }
+
+  Future<void> _submit() async {
+    await _controller.submitAiBusinessSetup(
+      locationSetup: _locationSetup,
+      industryCategory: _categoryController.text,
+      services: _services(),
+      targetCustomers: _targetCustomers.toList(growable: false),
+      goals: _goals.toList(growable: false),
+      brandVoice: _brandVoice,
+      primaryLanguage: _primaryLanguage,
+      secondaryLanguage: _secondaryLanguage,
+      postingFrequency: _postingFrequency,
+      approvalMode: _approvalMode,
     );
   }
-}
-
-class _SurveyIntroScreen extends StatelessWidget {
-  const _SurveyIntroScreen({super.key, required this.onGetStarted});
-
-  final VoidCallback onGetStarted;
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.find<OnboardingController>();
     return Scaffold(
+      backgroundColor: AppColors.white,
       body: SafeArea(
-        child: OnboardingIntroLayout(
-          onPressed: onGetStarted,
-          onOpenTerms: controller.openTermsDocument,
-          onOpenPrivacy: controller.openPrivacyPolicyDocument,
-        ),
-      ),
-    );
-  }
-}
-
-class _SurveyQuestionFlow extends GetView<OnboardingController> {
-  const _SurveyQuestionFlow({
-    super.key,
-    required this.currentQuestion,
-    required this.selectedRole,
-    required this.selectedLocationType,
-    required this.onBack,
-    required this.onRoleSelected,
-    required this.onLocationTypeSelected,
-    required this.onNext,
-    required this.onDone,
-  });
-
-  final int currentQuestion;
-  final String? selectedRole;
-  final String? selectedLocationType;
-  final VoidCallback onBack;
-  final ValueChanged<String> onRoleSelected;
-  final ValueChanged<String> onLocationTypeSelected;
-  final VoidCallback onNext;
-  final Future<void> Function() onDone;
-
-  bool get isFirstQuestion => currentQuestion == 0;
-
-  @override
-  Widget build(BuildContext context) {
-    final roleOptions = [
-      _SurveyOptionData(
-        value: 'business_owner',
-        title: controller.labelForSurveyRole('business_owner'),
-        icon: Icons.work_rounded,
-        colors: const [Color(0xFFFFB347), Color(0xFFFF8A34)],
-      ),
-      _SurveyOptionData(
-        value: 'agency',
-        title: controller.labelForSurveyRole('agency'),
-        icon: Icons.groups_rounded,
-        colors: const [Color(0xFF4A8DFF), Color(0xFF2E66ED)],
-      ),
-      _SurveyOptionData(
-        value: 'ceo',
-        title: controller.labelForSurveyRole('ceo'),
-        icon: Icons.person_rounded,
-        colors: const [Color(0xFFBC64FF), Color(0xFF8D58F9)],
-      ),
-      _SurveyOptionData(
-        value: 'marketing',
-        title: controller.labelForSurveyRole('marketing'),
-        icon: Icons.campaign_rounded,
-        colors: const [Color(0xFF3ED7CD), Color(0xFF39B4BD)],
-      ),
-      _SurveyOptionData(
-        value: 'other',
-        title: controller.labelForSurveyRole('other'),
-        icon: Icons.more_horiz_rounded,
-        colors: const [Color(0xFFA0A9B8), Color(0xFF7F8794)],
-      ),
-    ];
-
-    final locationOptions = [
-      const _SurveyOptionData(
-        value: 'single',
-        title: 'Single Location',
-        subtitle: 'I manage one business location.',
-        icon: Icons.storefront_rounded,
-        colors: [Color(0xFF4A8DFF), Color(0xFF2E66ED)],
-      ),
-      const _SurveyOptionData(
-        value: 'multi',
-        title: 'Multiple Locations',
-        subtitle: 'I manage more than one business location.',
-        icon: Icons.apartment_rounded,
-        colors: [Color(0xFF3ED7CD), Color(0xFF39B4BD)],
-      ),
-    ];
-
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFFFFEFF), Color(0xFFF6FBFF)],
-          ),
-        ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              const Positioned(
-                top: 180,
-                left: -46,
-                child: _BackgroundGlow(
-                  size: 144,
-                  colors: [Color(0x1239B4BD), Color(0x08305DEB)],
-                ),
-              ),
-              const Positioned(
-                top: 240,
-                right: -36,
-                child: _BackgroundGlow(
-                  size: 124,
-                  colors: [Color(0x10305DEB), Color(0x0839B4BD)],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 12, 22, 22),
-                child: Column(
-                  children: [
-                    Row(
+        child: Stack(
+          children: [
+            const Positioned(
+              top: -110,
+              right: -90,
+              child: _Glow(color: Color(0x2625C2C9), size: 240),
+            ),
+            const Positioned(
+              bottom: -130,
+              left: -110,
+              child: _Glow(color: Color(0x26245BEB), size: 260),
+            ),
+            SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(22, 14, 22, 26),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const AppLogo(iconSize: 46, centered: true),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Teach VisibloAI Your Business',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.manrope(
+                      fontSize: 28,
+                      height: 1.08,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.brandBlue,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'These details become the starting knowledge for your AI marketing manager. You can improve them later.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.manrope(
+                      fontSize: 14.5,
+                      height: 1.42,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.mutedText,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  _Section(
+                    title: 'Business Basics',
+                    child: Column(
                       children: [
-                        _BackButtonCircle(onPressed: onBack),
-                        const Spacer(),
-                        const AppLogo(iconSize: 34, centered: true),
-                        const Spacer(),
-                        const SizedBox(width: 42),
+                        _SegmentedChoice(
+                          value: _locationSetup,
+                          options: const {
+                            'single_location': 'Single location',
+                            'multi_location': 'Multiple locations',
+                          },
+                          onChanged: (value) =>
+                              setState(() => _locationSetup = value),
+                        ),
+                        const SizedBox(height: 14),
+                        _TextInput(
+                          controller: _categoryController,
+                          label: 'Industry / category',
+                          hint: 'Dentist, salon, cafe, gym, real estate...',
+                          icon: Icons.category_outlined,
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 18),
-                    _QuestionProgress(
-                      currentQuestion: currentQuestion + 1,
-                      totalQuestions: 2,
-                    ),
-                    const SizedBox(height: 22),
-                    Expanded(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 220),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        child: isFirstQuestion
-                            ? _RoleQuestionScreen(
-                                key: const ValueKey('role-question'),
-                                selectedValue: selectedRole,
-                                options: roleOptions,
-                                onSelected: onRoleSelected,
-                                onContinue: onNext,
-                              )
-                            : _LocationQuestionScreen(
-                                key: const ValueKey('location-question'),
-                                selectedValue: selectedLocationType,
-                                options: locationOptions,
-                                onSelected: onLocationTypeSelected,
-                                onDone: onDone,
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RoleQuestionScreen extends StatelessWidget {
-  const _RoleQuestionScreen({
-    super.key,
-    required this.selectedValue,
-    required this.options,
-    required this.onSelected,
-    required this.onContinue,
-  });
-
-  final String? selectedValue;
-  final List<_SurveyOptionData> options;
-  final ValueChanged<String> onSelected;
-  final VoidCallback onContinue;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                const _SurveyBanner(
-                  assetPath: 'assets/images/app-banner5a.png',
-                  height: 220,
-                  horizontalInset: -16,
-                  verticalCrop: 0.90,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'What best describes\nyour role in the business?',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.section(
-                    fontSize: 22,
-                    height: 1.18,
-                    color: AppColors.brandBlue,
-                    fontWeight: FontWeight.w800,
                   ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'This helps us personalize your experience in VisibloAI.',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.body(
-                    fontSize: 14.5,
-                    color: AppColors.mutedText,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ...options.map(
-                  (option) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _SelectionCard(
-                      data: option,
-                      isSelected: selectedValue == option.value,
-                      onTap: () => onSelected(option.value),
+                  const SizedBox(height: 14),
+                  _Section(
+                    title: 'Services To Promote',
+                    subtitle: 'Add comma-separated services or products.',
+                    child: _TextInput(
+                      controller: _servicesController,
+                      label: 'Main services / products',
+                      hint: 'Root canal, dental implants, teeth whitening',
+                      icon: Icons.sell_outlined,
+                      maxLines: 3,
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        _SurveyActionButton(
-          label: 'Next',
-          icon: Icons.arrow_forward_rounded,
-          onPressed: onContinue,
-        ),
-      ],
-    );
-  }
-}
-
-class _LocationQuestionScreen extends StatelessWidget {
-  const _LocationQuestionScreen({
-    super.key,
-    required this.selectedValue,
-    required this.options,
-    required this.onSelected,
-    required this.onDone,
-  });
-
-  final String? selectedValue;
-  final List<_SurveyOptionData> options;
-  final ValueChanged<String> onSelected;
-  final Future<void> Function() onDone;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                const _SurveyBanner(
-                  assetPath: 'assets/images/app-banner5b.png',
-                  height: 238,
-                  horizontalInset: -18,
-                  verticalCrop: 0.92,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'How many locations does\nyour business operate?',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.section(
-                    fontSize: 22,
-                    height: 1.18,
-                    color: AppColors.brandBlue,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'This helps us tailor the right tools for your business setup.',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.body(
-                    fontSize: 14.5,
-                    color: AppColors.mutedText,
-                  ),
-                ),
-                const SizedBox(height: 22),
-                ...options.map(
-                  (option) => Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: _SelectionCard(
-                      data: option,
-                      isSelected: selectedValue == option.value,
-                      onTap: () => onSelected(option.value),
-                      isLarge: true,
+                  const SizedBox(height: 14),
+                  _Section(
+                    title: 'Target Customers',
+                    child: _ChipWrap(
+                      selected: _targetCustomers,
+                      options: _customerOptions,
+                      onChanged: (value) =>
+                          setState(() => _toggle(_targetCustomers, value)),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Obx(
-          () => _SurveyActionButton(
-            label: 'Done',
-            icon: Icons.check_rounded,
-            onPressed: onDone,
-            isLoading: Get.find<OnboardingController>().isSurveyLoading.value,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _QuestionProgress extends StatelessWidget {
-  const _QuestionProgress({
-    required this.currentQuestion,
-    required this.totalQuestions,
-  });
-
-  final int currentQuestion;
-  final int totalQuestions;
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = currentQuestion / totalQuestions;
-
-    return Column(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: Stack(
-            children: [
-              Container(
-                height: 4,
-                width: double.infinity,
-                color: const Color(0xFFE6ECF6),
-              ),
-              FractionallySizedBox(
-                widthFactor: progress,
-                child: Container(
-                  height: 4,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [Color(0xFF245BEB), Color(0xFF39D0D3)],
+                  const SizedBox(height: 14),
+                  _Section(
+                    title: 'Content Goals',
+                    child: _ChipWrap(
+                      selected: _goals,
+                      options: _goalOptions,
+                      onChanged: (value) =>
+                          setState(() => _toggle(_goals, value)),
                     ),
                   ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Question $currentQuestion of $totalQuestions',
-          style: AppTypography.label(
-            fontSize: 12,
-            color: AppColors.mutedText,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SelectionCard extends StatelessWidget {
-  const _SelectionCard({
-    required this.data,
-    required this.isSelected,
-    required this.onTap,
-    this.isLarge = false,
-  });
-
-  final _SurveyOptionData data;
-  final bool isSelected;
-  final VoidCallback onTap;
-  final bool isLarge;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: EdgeInsets.symmetric(
-            horizontal: isLarge ? 14 : 16,
-            vertical: isLarge ? 14 : 13,
-          ),
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: isSelected
-                  ? const Color(0xFF3B77FF)
-                  : const Color(0xFFE4EAF4),
-              width: isSelected ? 1.6 : 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isSelected
-                    ? const Color(0x143B77FF)
-                    : const Color(0x0B144C86),
-                blurRadius: isSelected ? 18 : 14,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: isLarge ? 52 : 38,
-                height: isLarge ? 52 : 38,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: data.colors,
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x14305DEB),
-                      blurRadius: 14,
-                      offset: Offset(0, 8),
-                    ),
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  data.icon,
-                  color: AppColors.white,
-                  size: isLarge ? 28 : 19,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      data.title,
-                      style: AppTypography.button(
-                        fontSize: isLarge ? 18 : 15.2,
-                        color: AppColors.text,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (data.subtitle != null) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        data.subtitle!,
-                        style: AppTypography.body(
-                          fontSize: 13.5,
-                          color: AppColors.mutedText,
-                          height: 1.35,
-                          fontWeight: FontWeight.w500,
+                  const SizedBox(height: 14),
+                  _Section(
+                    title: 'Voice & Language',
+                    child: Column(
+                      children: [
+                        _DropdownRow(
+                          label: 'Brand voice',
+                          value: _brandVoice,
+                          options: _voiceOptions,
+                          icon: Icons.record_voice_over_outlined,
+                          onChanged: (value) =>
+                              setState(() => _brandVoice = value),
                         ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: isSelected
-                      ? const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFF2B66F6), Color(0xFF39B4BD)],
-                        )
-                      : null,
-                  color: isSelected ? null : AppColors.white,
-                  border: Border.all(
-                    color: isSelected
-                        ? Colors.transparent
-                        : const Color(0xFFD7DFEC),
-                    width: 1.4,
+                        const SizedBox(height: 12),
+                        _DropdownRow(
+                          label: 'Primary language',
+                          value: _primaryLanguage,
+                          options: _languageOptions,
+                          icon: Icons.translate_rounded,
+                          onChanged: (value) =>
+                              setState(() => _primaryLanguage = value),
+                        ),
+                        const SizedBox(height: 12),
+                        _DropdownRow(
+                          label: 'Secondary language',
+                          value: _secondaryLanguage,
+                          options: const ['None', ..._languageOptions],
+                          icon: Icons.language_rounded,
+                          onChanged: (value) =>
+                              setState(() => _secondaryLanguage = value),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                alignment: Alignment.center,
-                child: isSelected
-                    ? const Icon(
-                        Icons.circle,
-                        size: 8,
-                        color: AppColors.white,
-                      )
-                    : null,
+                  const SizedBox(height: 14),
+                  _Section(
+                    title: 'Automation Preference',
+                    child: Column(
+                      children: [
+                        _DropdownRow(
+                          label: 'Posting frequency',
+                          value: _postingFrequency,
+                          options: _frequencyOptions,
+                          icon: Icons.calendar_month_outlined,
+                          onChanged: (value) =>
+                              setState(() => _postingFrequency = value),
+                        ),
+                        const SizedBox(height: 12),
+                        _DropdownRow(
+                          label: 'Approval mode',
+                          value: _approvalMode,
+                          options: _approvalOptions,
+                          icon: Icons.fact_check_outlined,
+                          onChanged: (value) =>
+                              setState(() => _approvalMode = value),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Obx(
+                    () => AppPrimaryButton(
+                      label: 'Save AI Setup',
+                      icon: Icons.auto_awesome_rounded,
+                      isLoading: _controller.isSurveyLoading.value,
+                      onPressed: _submit,
+                      height: 58,
+                      backgroundColor: const Color(0xFF106CFF),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'VisibloAI will use this only to prepare safer posts, review replies, keywords and business suggestions.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.manrope(
+                      fontSize: 11.5,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.mutedText,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SurveyBanner extends StatelessWidget {
-  const _SurveyBanner({
-    required this.assetPath,
-    required this.height,
-    this.horizontalInset = 0,
-    this.verticalCrop = 1,
-  });
-
-  final String assetPath;
-  final double height;
-  final double horizontalInset;
-  final double verticalCrop;
-
-  @override
-  Widget build(BuildContext context) {
-    final bleed = horizontalInset < 0 ? horizontalInset.abs() * 2 : 0.0;
-    final outerPadding = horizontalInset > 0 ? horizontalInset : 0.0;
-    final visibleHeight = height * verticalCrop;
-
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: outerPadding),
-      child: SizedBox(
-        height: visibleHeight,
-        width: double.infinity,
-        child: ClipRect(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return Align(
-                alignment: Alignment.topCenter,
-                child: Image.asset(
-                  assetPath,
-                  height: height,
-                  width: constraints.maxWidth + bleed,
-                  fit: BoxFit.cover,
-                  filterQuality: FilterQuality.high,
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SurveyActionButton extends StatelessWidget {
-  const _SurveyActionButton({
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-    this.isLoading = false,
-  });
-
-  final String label;
-  final IconData icon;
-  final FutureOr<void> Function()? onPressed;
-  final bool isLoading;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 58,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [Color(0xFF245BEB), Color(0xFF39D0D3)],
-          ),
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x22305DEB),
-              blurRadius: 18,
-              offset: Offset(0, 10),
             ),
           ],
         ),
-        child: ElevatedButton(
-          onPressed: isLoading || onPressed == null
-              ? null
-              : () async {
-                  await onPressed!.call();
-                },
-          style: ElevatedButton.styleFrom(
-            elevation: 0,
-            backgroundColor: Colors.transparent,
-            disabledBackgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-          ),
-          child: isLoading
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.2,
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
-                  ),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      label,
-                      style: AppTypography.button(
-                        fontSize: 18,
-                        color: AppColors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Icon(icon, color: AppColors.white, size: 22),
-                  ],
-                ),
-        ),
       ),
     );
   }
+
+  void _toggle(Set<String> target, String value) {
+    if (target.contains(value)) {
+      if (target.length > 1) {
+        target.remove(value);
+      }
+    } else {
+      target.add(value);
+    }
+  }
 }
 
-class _BackButtonCircle extends StatelessWidget {
-  const _BackButtonCircle({required this.onPressed});
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.child, this.subtitle});
 
-  final VoidCallback onPressed;
+  final String title;
+  final String? subtitle;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.white,
-      shape: const CircleBorder(),
-      elevation: 0,
-      child: InkWell(
-        onTap: onPressed,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 42,
-          height: 42,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Color(0x14144C86),
-                blurRadius: 16,
-                offset: Offset(0, 8),
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.line),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D144C86),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.manrope(
+              fontSize: 15.5,
+              fontWeight: FontWeight.w900,
+              color: AppColors.text,
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle!,
+              style: GoogleFonts.manrope(
+                fontSize: 12.5,
+                height: 1.32,
+                fontWeight: FontWeight.w600,
+                color: AppColors.mutedText,
               ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: const Icon(
-            Icons.arrow_back_ios_new_rounded,
-            size: 18,
-            color: AppColors.brandBlue,
-          ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _TextInput extends StatelessWidget {
+  const _TextInput({
+    required this.controller,
+    required this.label,
+    required this.hint,
+    required this.icon,
+    this.maxLines = 1,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final IconData icon;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      textInputAction: maxLines > 1
+          ? TextInputAction.newline
+          : TextInputAction.next,
+      style: GoogleFonts.manrope(
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+        color: AppColors.text,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon, color: AppColors.brandBlue),
+        alignLabelWithHint: maxLines > 1,
+        filled: true,
+        fillColor: const Color(0xFFF7FAFF),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: const BorderSide(color: AppColors.line),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: const BorderSide(color: AppColors.line),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: const BorderSide(color: Color(0xFF106CFF), width: 1.4),
         ),
       ),
     );
   }
 }
 
-class _BackgroundGlow extends StatelessWidget {
-  const _BackgroundGlow({required this.size, required this.colors});
+class _SegmentedChoice extends StatelessWidget {
+  const _SegmentedChoice({
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
 
+  final String value;
+  final Map<String, String> options;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: options.entries
+          .map((entry) {
+            final selected = value == entry.key;
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: entry.key == options.keys.first ? 8 : 0,
+                  left: entry.key == options.keys.last ? 8 : 0,
+                ),
+                child: InkWell(
+                  onTap: () => onChanged(entry.key),
+                  borderRadius: BorderRadius.circular(14),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? const Color(0xFFEAF4FF)
+                          : const Color(0xFFF7FAFF),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: selected
+                            ? const Color(0xFF106CFF)
+                            : AppColors.line,
+                      ),
+                    ),
+                    child: Text(
+                      entry.value,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.manrope(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w900,
+                        color: selected
+                            ? AppColors.brandBlue
+                            : AppColors.mutedText,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          })
+          .toList(growable: false),
+    );
+  }
+}
+
+class _ChipWrap extends StatelessWidget {
+  const _ChipWrap({
+    required this.selected,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final Set<String> selected;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: options
+          .map((option) {
+            final isSelected = selected.contains(option);
+            return FilterChip(
+              label: Text(option),
+              selected: isSelected,
+              onSelected: (_) => onChanged(option),
+              checkmarkColor: AppColors.white,
+              selectedColor: const Color(0xFF106CFF),
+              backgroundColor: const Color(0xFFF7FAFF),
+              side: BorderSide(
+                color: isSelected ? const Color(0xFF106CFF) : AppColors.line,
+              ),
+              labelStyle: GoogleFonts.manrope(
+                fontSize: 12.3,
+                fontWeight: FontWeight.w800,
+                color: isSelected ? AppColors.white : AppColors.text,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+            );
+          })
+          .toList(growable: false),
+    );
+  }
+}
+
+class _DropdownRow extends StatelessWidget {
+  const _DropdownRow({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.icon,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String value;
+  final List<String> options;
+  final IconData icon;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      items: options
+          .map(
+            (option) =>
+                DropdownMenuItem<String>(value: option, child: Text(option)),
+          )
+          .toList(growable: false),
+      onChanged: (value) {
+        if (value != null) onChanged(value);
+      },
+      style: GoogleFonts.manrope(
+        fontSize: 14,
+        fontWeight: FontWeight.w800,
+        color: AppColors.text,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: AppColors.brandBlue),
+        filled: true,
+        fillColor: const Color(0xFFF7FAFF),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: const BorderSide(color: AppColors.line),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: const BorderSide(color: AppColors.line),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: const BorderSide(color: Color(0xFF106CFF), width: 1.4),
+        ),
+      ),
+    );
+  }
+}
+
+class _Glow extends StatelessWidget {
+  const _Glow({required this.color, required this.size});
+
+  final Color color;
   final double size;
-  final List<Color> colors;
 
   @override
   Widget build(BuildContext context) {
@@ -816,25 +545,71 @@ class _BackgroundGlow extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: RadialGradient(colors: colors),
+          boxShadow: [
+            BoxShadow(color: color, blurRadius: 90, spreadRadius: 36),
+          ],
         ),
       ),
     );
   }
 }
 
-class _SurveyOptionData {
-  const _SurveyOptionData({
-    required this.value,
-    required this.title,
-    required this.icon,
-    required this.colors,
-    this.subtitle,
-  });
+const _customerOptions = <String>[
+  'Local customers',
+  'Families',
+  'Working professionals',
+  'Students',
+  'Business owners',
+  'Women',
+  'Homeowners',
+  'Parents',
+];
 
-  final String value;
-  final String title;
-  final String? subtitle;
-  final IconData icon;
-  final List<Color> colors;
-}
+const _goalOptions = <String>[
+  'Generate enquiries',
+  'Promote services',
+  'Promote offers',
+  'Build trust',
+  'Educate customers',
+  'Improve profile activity',
+  'Increase calls',
+  'Increase bookings',
+  'Increase website traffic',
+  'Seasonal promotions',
+];
+
+const _voiceOptions = <String>[
+  'Professional',
+  'Friendly',
+  'Premium',
+  'Simple',
+  'Local',
+  'Educational',
+  'Sales Focused',
+];
+
+const _languageOptions = <String>[
+  'English',
+  'Hindi',
+  'Hinglish',
+  'Marathi',
+  'Gujarati',
+  'Bengali',
+  'Tamil',
+  'Telugu',
+  'Kannada',
+  'Malayalam',
+  'Punjabi',
+];
+
+const _frequencyOptions = <String>[
+  '3 posts/week',
+  '5 posts/week',
+  '7 posts/week',
+];
+
+const _approvalOptions = <String>[
+  'Review every post',
+  'Approve calendar',
+  'Full auto later',
+];

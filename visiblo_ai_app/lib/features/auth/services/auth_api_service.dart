@@ -8,6 +8,7 @@ import '../../../core/api_client.dart';
 import '../../../core/notification_service.dart';
 import '../../onboarding/models/google_business_location.dart';
 import '../models/auth_me_response.dart';
+import '../models/ai_manager_action.dart';
 import '../models/alert_center_models.dart';
 import '../models/gbp_manager_models.dart';
 import '../models/gbp_location.dart';
@@ -241,27 +242,396 @@ class AuthApiService extends GetxService {
     }
   }
 
-  Future<void> submitSurvey({
-    required String role,
-    required String seoExperience,
-    required String orgSize,
-    required String heardFrom,
+  Future<bool> hasAcceptedAiManagerConsent({String? businessId}) async {
+    try {
+      final response = await _api.get(
+        '/ai-manager/consent/status',
+        queryParameters: <String, dynamic>{
+          if (businessId != null && businessId.trim().isNotEmpty)
+            'businessId': businessId.trim(),
+        },
+      );
+      final data = _asMap(response.data);
+      final aiManager = _asMap(data['aiManager']);
+      return aiManager['accepted'] == true;
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to check AI Manager consent right now.',
+        ),
+      );
+    }
+  }
+
+  Future<void> acceptAiManagerConsent({
+    String? businessId,
+    String? locationId,
+    String? googleLocationId,
+    String consentType = 'AI_WORKSPACE_ASSISTANT',
+    String sourceApplication = 'mobile',
+    Map<String, dynamic>? metadata,
   }) async {
     try {
+      final data = <String, dynamic>{
+        'consentType': consentType,
+        'sourceApplication': sourceApplication,
+        if (businessId != null && businessId.trim().isNotEmpty)
+          'businessId': businessId.trim(),
+        if (locationId != null && locationId.trim().isNotEmpty)
+          'locationId': locationId.trim(),
+        if (googleLocationId != null && googleLocationId.trim().isNotEmpty)
+          'googleLocationId': googleLocationId.trim(),
+      };
+      if (metadata != null) {
+        data['metadata'] = metadata;
+      }
+
       await _api.post(
-        '/auth/survey',
-        data: <String, dynamic>{
-          'role': role,
-          'seoExperience': seoExperience,
-          'orgSize': orgSize,
-          'heardFrom': heardFrom,
-        },
+        '/ai-manager/consent/accept',
+        data: data,
       );
     } on DioException catch (error) {
       throw Exception(_readErrorMessage(error));
     } catch (error) {
       throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to save AI Manager consent right now.',
+        ),
+      );
+    }
+  }
+
+  Future<void> submitSurvey({
+    required String role,
+    required String seoExperience,
+    required String orgSize,
+    required String heardFrom,
+    Map<String, dynamic>? aiOnboardingProfile,
+  }) async {
+    try {
+      final data = <String, dynamic>{
+        'role': role,
+        'seoExperience': seoExperience,
+        'orgSize': orgSize,
+        'heardFrom': heardFrom,
+      };
+      if (aiOnboardingProfile != null) {
+        data['aiOnboardingProfile'] = aiOnboardingProfile;
+      }
+      await _api.post('/auth/survey', data: data);
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
         _readUnexpectedError(error, fallback: 'Unable to save the survey.'),
+      );
+    }
+  }
+
+  Future<List<AiManagerAction>> listAiManagerActions({
+    String? businessId,
+    String? status,
+  }) async {
+    try {
+      final response = await _api.get(
+        '/ai-manager/actions',
+        queryParameters: <String, dynamic>{
+          if (businessId != null && businessId.trim().isNotEmpty)
+            'businessId': businessId.trim(),
+          if (status != null && status.trim().isNotEmpty)
+            'status': status.trim(),
+        },
+      );
+      final data = _asMap(response.data);
+      final actions = data['actions'];
+      if (actions is! List) return const <AiManagerAction>[];
+      return actions
+          .whereType<Map>()
+          .map((map) => AiManagerAction.fromMap(_asMap(map)))
+          .toList(growable: false);
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to load AI actions right now.',
+        ),
+      );
+    }
+  }
+
+  Future<List<AiManagerAction>> generateAiManagerActionsNow({
+    String? businessId,
+  }) async {
+    try {
+      final response = await _api.post(
+        '/ai-manager/actions/generate-now',
+        data: <String, dynamic>{
+          if (businessId != null && businessId.trim().isNotEmpty)
+            'businessId': businessId.trim(),
+        },
+      );
+      final data = _asMap(response.data);
+      final created = data['created'];
+      if (created is! List) return const <AiManagerAction>[];
+      return created
+          .whereType<Map>()
+          .map((map) => AiManagerAction.fromMap(_asMap(map)))
+          .toList(growable: false);
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to generate AI actions right now.',
+        ),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchAiBusinessHealthReport({
+    String? businessId,
+    bool refresh = false,
+  }) async {
+    try {
+      final response = await _api.get(
+        '/ai-manager/health-report',
+        queryParameters: <String, dynamic>{
+          if (businessId != null && businessId.trim().isNotEmpty)
+            'businessId': businessId.trim(),
+          if (refresh) 'refresh': 'true',
+        },
+      );
+      return _asMap(response.data);
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to load AI business health report right now.',
+        ),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchAiWorkReport({
+    String? businessId,
+    String range = 'week',
+  }) async {
+    try {
+      final response = await _api.get(
+        '/ai-manager/work-report',
+        queryParameters: <String, dynamic>{
+          if (businessId != null && businessId.trim().isNotEmpty)
+            'businessId': businessId.trim(),
+          'range': range,
+        },
+      );
+      return _asMap(response.data);
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to load VisibloAI work report right now.',
+        ),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchAiMasterContentCalendar({
+    String? businessId,
+    DateTime? from,
+    DateTime? to,
+    String? planId,
+  }) async {
+    try {
+      final response = await _api.get(
+        '/ai-manager/content-calendar',
+        queryParameters: <String, dynamic>{
+          if (businessId != null && businessId.trim().isNotEmpty)
+            'businessId': businessId.trim(),
+          if (planId != null && planId.trim().isNotEmpty)
+            'planId': planId.trim(),
+          if (from != null) 'from': _formatDateOnly(from),
+          if (to != null) 'to': _formatDateOnly(to),
+        },
+      );
+      return _asMap(response.data);
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to load AI content calendar right now.',
+        ),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> updateAiPlatformPostDraft({
+    required String platformPostId,
+    String? businessId,
+    String? title,
+    String? caption,
+    List<String>? mediaUrls,
+    DateTime? scheduledAt,
+  }) async {
+    try {
+      final cleanBusinessId = businessId?.trim();
+      final data = <String, dynamic>{};
+      if (cleanBusinessId != null && cleanBusinessId.isNotEmpty) {
+        data['businessId'] = cleanBusinessId;
+      }
+      if (title != null) data['title'] = title;
+      if (caption != null) data['caption'] = caption;
+      if (mediaUrls != null) data['mediaUrls'] = mediaUrls;
+      if (scheduledAt != null) {
+        data['scheduledAt'] = scheduledAt.toUtc().toIso8601String();
+      }
+      final response = await _api.patch(
+        '/ai-manager/content-calendar/platform-posts/$platformPostId',
+        data: data,
+      );
+      return _asMap(response.data);
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to update this social draft right now.',
+        ),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> ensureAiCalendarSocialDrafts({
+    String? businessId,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    try {
+      final response = await _api.post(
+        '/ai-manager/content-calendar/ensure-social-drafts',
+        data: <String, dynamic>{
+          if (businessId != null && businessId.trim().isNotEmpty)
+            'businessId': businessId.trim(),
+          if (from != null) 'from': _formatDateOnly(from),
+          if (to != null) 'to': _formatDateOnly(to),
+        },
+      );
+      return _asMap(response.data);
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to prepare social calendar drafts right now.',
+        ),
+      );
+    }
+  }
+
+  Future<AiManagerAction> approveAiManagerAction({
+    required String actionId,
+    String? businessId,
+  }) {
+    return _mutateAiManagerAction(
+      actionId: actionId,
+      businessId: businessId,
+      action: 'approve',
+    );
+  }
+
+  Future<AiManagerAction> rejectAiManagerAction({
+    required String actionId,
+    String? businessId,
+    String? reason,
+  }) {
+    return _mutateAiManagerAction(
+      actionId: actionId,
+      businessId: businessId,
+      action: 'reject',
+      data: <String, dynamic>{
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      },
+    );
+  }
+
+  Future<AiManagerAction> runAiManagerAction({
+    required String actionId,
+    String? businessId,
+  }) {
+    return _mutateAiManagerAction(
+      actionId: actionId,
+      businessId: businessId,
+      action: 'run',
+    );
+  }
+
+  Future<AiManagerAction> updateAiManagerReviewReply({
+    required String actionId,
+    required String reviewId,
+    required String replyText,
+    String? businessId,
+  }) {
+    return _mutateAiManagerAction(
+      actionId: actionId,
+      businessId: businessId,
+      action: 'review-replies/$reviewId/update',
+      data: <String, dynamic>{'replyText': replyText.trim()},
+    );
+  }
+
+  Future<AiManagerAction> regenerateAiManagerReviewReply({
+    required String actionId,
+    required String reviewId,
+    String? businessId,
+  }) {
+    return _mutateAiManagerAction(
+      actionId: actionId,
+      businessId: businessId,
+      action: 'review-replies/$reviewId/regenerate',
+    );
+  }
+
+  Future<AiManagerAction> _mutateAiManagerAction({
+    required String actionId,
+    required String action,
+    String? businessId,
+    Map<String, dynamic>? data,
+  }) async {
+    try {
+      final payload = <String, dynamic>{
+        if (businessId != null && businessId.trim().isNotEmpty)
+          'businessId': businessId.trim(),
+        ...?data,
+      };
+      final response = await _api.post(
+        '/ai-manager/actions/$actionId/$action',
+        data: payload,
+      );
+      final responseData = _asMap(response.data);
+      return AiManagerAction.fromMap(_asMap(responseData['action']));
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to update this AI action right now.',
+        ),
       );
     }
   }
@@ -884,6 +1254,155 @@ class AuthApiService extends GetxService {
     }
   }
 
+  Future<GbpPost> fetchAiPostById(String postId) async {
+    try {
+      final response = await _api.get('/ai/posts/$postId');
+      return GbpPost.fromAiApiMap(
+        _cleanAiPostTextFields(_asMap(response.data)),
+      );
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to refresh post status.',
+        ),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchGbpAutomationSettings({
+    required String businessId,
+    String? locationId,
+  }) async {
+    try {
+      final response = await _api.get(
+        '/ai/automation-settings',
+        queryParameters: <String, dynamic>{
+          'businessId': businessId,
+          if (locationId != null && locationId.trim().isNotEmpty)
+            'locationId': locationId.trim(),
+        },
+      );
+      return _asMap(response.data);
+    } on DioException catch (error) {
+      if (_isMissingAutomationSettingsRoute(error)) {
+        final consentStatus = await _fetchGbpAutoPostConsentFallback(
+          businessId: businessId,
+        );
+        return <String, dynamic>{
+          'ok': true,
+          'businessId': businessId,
+          if (locationId != null && locationId.trim().isNotEmpty)
+            'locationId': locationId.trim(),
+          'consentAccepted': consentStatus['accepted'] == true,
+          'autoPostActive': true,
+          'approvalMode': 'APPROVE_CALENDAR',
+          'postingFrequency': 'GROWTH',
+          'fallback': true,
+        };
+      }
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to load Auto Post settings.',
+        ),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> updateGbpAutomationSettings({
+    required String businessId,
+    String? locationId,
+    bool? autoPostActive,
+    String? approvalMode,
+    String? postingFrequency,
+  }) async {
+    try {
+      final data = <String, dynamic>{
+        'businessId': businessId,
+        if (locationId != null && locationId.trim().isNotEmpty)
+          'locationId': locationId.trim(),
+        'sourceApplication': 'mobile',
+      };
+      if (autoPostActive != null) {
+        data['autoPostActive'] = autoPostActive;
+      }
+      if (approvalMode != null) {
+        data['approvalMode'] = approvalMode;
+      }
+      if (postingFrequency != null) {
+        data['postingFrequency'] = postingFrequency;
+      }
+
+      final response = await _api.patch(
+        '/ai/automation-settings',
+        data: data,
+      );
+      return _asMap(response.data);
+    } on DioException catch (error) {
+      if (_isMissingAutomationSettingsRoute(error)) {
+        final metadata = <String, dynamic>{
+          'autoPostActive': autoPostActive ?? true,
+          'approvalMode': approvalMode ?? 'APPROVE_CALENDAR',
+          'postingFrequency': postingFrequency ?? 'GROWTH',
+          'updatedFrom': 'mobile',
+          'updatedAt': DateTime.now().toUtc().toIso8601String(),
+        };
+        await acceptAiManagerConsent(
+          businessId: businessId,
+          locationId: locationId,
+          consentType: 'GBP_AI_AUTO_POST',
+          sourceApplication: 'mobile',
+          metadata: metadata,
+        );
+        return <String, dynamic>{
+          'ok': true,
+          'businessId': businessId,
+          if (locationId != null && locationId.trim().isNotEmpty)
+            'locationId': locationId.trim(),
+          'consentAccepted': true,
+          'autoPostActive': metadata['autoPostActive'],
+          'approvalMode': metadata['approvalMode'],
+          'postingFrequency': metadata['postingFrequency'],
+          'fallback': true,
+        };
+      }
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to update Auto Post settings.',
+        ),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> _fetchGbpAutoPostConsentFallback({
+    required String businessId,
+  }) async {
+    final response = await _api.get(
+      '/ai-manager/consent/status',
+      queryParameters: <String, dynamic>{'businessId': businessId},
+    );
+    final data = _asMap(response.data);
+    return _asMap(data['gbpAutoPost']);
+  }
+
+  bool _isMissingAutomationSettingsRoute(DioException error) {
+    final status = error.response?.statusCode;
+    final message = _readErrorMessage(error);
+    return status == 404 &&
+        (message.contains('/api/ai/automation-settings') ||
+            message.contains('/ai/automation-settings') ||
+            message.toLowerCase().contains('cannot patch') ||
+            message.toLowerCase().contains('cannot get'));
+  }
+
   Future<Map<String, dynamic>> generateAiPost({
     required String topic,
     required String tone,
@@ -1022,11 +1541,13 @@ class AuthApiService extends GetxService {
     String postId, {
     String? title,
     String? content,
+    String? publishStatus,
   }) async {
     try {
       final data = <String, dynamic>{};
       if (title != null) data['title'] = title;
       if (content != null) data['content'] = content;
+      if (publishStatus != null) data['publishStatus'] = publishStatus;
 
       final response = await _api.patch('/ai/posts/$postId', data: data);
       return _asMap(response.data);
@@ -1035,6 +1556,67 @@ class AuthApiService extends GetxService {
     } catch (error) {
       throw Exception(
         _readUnexpectedError(error, fallback: 'Unable to update post.'),
+      );
+    }
+  }
+
+  Future<GbpPost> regenerateAiPostText(String postId) async {
+    try {
+      final response = await _api.post(
+        '/ai/posts/$postId/regenerate-text',
+        options: Options(
+          receiveTimeout: const Duration(seconds: 120),
+          sendTimeout: const Duration(seconds: 120),
+        ),
+      );
+      return GbpPost.fromAiApiMap(
+        _cleanAiPostTextFields(_asMap(response.data)),
+      );
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to regenerate post text.',
+        ),
+      );
+    }
+  }
+
+  Future<GbpPost> regenerateAiPostImage(String postId) async {
+    try {
+      final response = await _api.post(
+        '/ai/posts/$postId/regenerate-image',
+        data: {'imageQuality': 'highest'},
+        options: Options(
+          receiveTimeout: const Duration(seconds: 120),
+          sendTimeout: const Duration(seconds: 120),
+        ),
+      );
+      var postData = _cleanAiPostTextFields(_asMap(response.data));
+      var post = GbpPost.fromAiApiMap(postData);
+      var attempts = 0;
+      while ((post.publishStatus.toUpperCase() == 'PENDING' ||
+              postData['status']?.toString().toUpperCase() == 'PENDING') &&
+          post.assetPath.trim().isEmpty &&
+          attempts < 20) {
+        await Future.delayed(const Duration(seconds: 3));
+        final getResponse = await _api.get('/ai/posts/$postId');
+        postData = _cleanAiPostTextFields(_asMap(getResponse.data));
+        post = GbpPost.fromAiApiMap(postData);
+        if (post.assetPath.trim().isNotEmpty ||
+            post.status == GbpPostStatus.failed) {
+          break;
+        }
+        attempts++;
+      }
+      return post;
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(error, fallback: 'Unable to generate post image.'),
       );
     }
   }
@@ -2926,5 +3508,12 @@ class AuthApiService extends GetxService {
       debugPrint('Error fetching audit: $e');
       return null;
     }
+  }
+
+  String _formatDateOnly(DateTime date) {
+    final local = date.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    return '${local.year}-$month-$day';
   }
 }
