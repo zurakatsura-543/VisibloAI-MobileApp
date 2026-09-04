@@ -15,6 +15,7 @@ class GbpPost {
     this.ctaUrl,
     this.scheduledFor,
     this.gmbPostId,
+    this.gmbSearchUrl,
     this.errorMessage,
   });
 
@@ -31,6 +32,7 @@ class GbpPost {
   final String? ctaUrl;
   final DateTime? scheduledFor;
   final String? gmbPostId;
+  final String? gmbSearchUrl;
   final String? errorMessage;
 
   bool get isNetworkAsset => assetPath.startsWith('http');
@@ -74,6 +76,7 @@ class GbpPost {
       callToAction: null,
       ctaUrl: null,
       gmbPostId: null,
+      gmbSearchUrl: null,
       errorMessage: null,
     );
   }
@@ -122,6 +125,9 @@ class GbpPost {
       callToAction: null,
       ctaUrl: null,
       gmbPostId: _readString(map['name']),
+      gmbSearchUrl: _readString(map['searchUrl']).isNotEmpty
+          ? _readString(map['searchUrl'])
+          : null,
       errorMessage: null,
     );
   }
@@ -184,6 +190,9 @@ class GbpPost {
       gmbPostId: _readString(map['gmbPostId']).isNotEmpty
           ? _readString(map['gmbPostId'])
           : null,
+      gmbSearchUrl: _readString(map['gmbSearchUrl']).isNotEmpty
+          ? _readString(map['gmbSearchUrl'])
+          : null,
       errorMessage: _readString(map['errorMessage']).isNotEmpty
           ? _readString(map['errorMessage'])
           : null,
@@ -204,6 +213,7 @@ class GbpPost {
     Object? ctaUrl = _sentinel,
     Object? scheduledFor = _sentinel,
     Object? gmbPostId = _sentinel,
+    Object? gmbSearchUrl = _sentinel,
     Object? errorMessage = _sentinel,
   }) {
     return GbpPost(
@@ -228,6 +238,9 @@ class GbpPost {
       gmbPostId: identical(gmbPostId, _sentinel)
           ? this.gmbPostId
           : gmbPostId as String?,
+      gmbSearchUrl: identical(gmbSearchUrl, _sentinel)
+          ? this.gmbSearchUrl
+          : gmbSearchUrl as String?,
       errorMessage: identical(errorMessage, _sentinel)
           ? this.errorMessage
           : errorMessage as String?,

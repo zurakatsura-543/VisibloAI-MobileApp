@@ -289,10 +289,7 @@ class AuthApiService extends GetxService {
         data['metadata'] = metadata;
       }
 
-      await _api.post(
-        '/ai-manager/consent/accept',
-        data: data,
-      );
+      await _api.post('/ai-manager/consent/accept', data: data);
     } on DioException catch (error) {
       throw Exception(_readErrorMessage(error));
     } catch (error) {
@@ -538,6 +535,39 @@ class AuthApiService extends GetxService {
         _readUnexpectedError(
           error,
           fallback: 'Unable to prepare social calendar drafts right now.',
+        ),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> convertAiCalendarSocialDrafts({
+    String? businessId,
+    DateTime? from,
+    DateTime? to,
+    List<String> platforms = const <String>['FACEBOOK', 'INSTAGRAM'],
+  }) async {
+    try {
+      final response = await _api.post(
+        '/ai-manager/content-calendar/convert-social',
+        data: <String, dynamic>{
+          if (businessId != null && businessId.trim().isNotEmpty)
+            'businessId': businessId.trim(),
+          if (from != null) 'from': _formatDateOnly(from),
+          if (to != null) 'to': _formatDateOnly(to),
+          'platforms': platforms
+              .map((platform) => platform.trim().toUpperCase())
+              .where((platform) => platform.isNotEmpty)
+              .toList(growable: false),
+        },
+      );
+      return _asMap(response.data);
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to activate social calendar drafts right now.',
         ),
       );
     }
@@ -1264,10 +1294,7 @@ class AuthApiService extends GetxService {
       throw Exception(_readErrorMessage(error));
     } catch (error) {
       throw Exception(
-        _readUnexpectedError(
-          error,
-          fallback: 'Unable to refresh post status.',
-        ),
+        _readUnexpectedError(error, fallback: 'Unable to refresh post status.'),
       );
     }
   }
@@ -1338,10 +1365,7 @@ class AuthApiService extends GetxService {
         data['postingFrequency'] = postingFrequency;
       }
 
-      final response = await _api.patch(
-        '/ai/automation-settings',
-        data: data,
-      );
+      final response = await _api.patch('/ai/automation-settings', data: data);
       return _asMap(response.data);
     } on DioException catch (error) {
       if (_isMissingAutomationSettingsRoute(error)) {

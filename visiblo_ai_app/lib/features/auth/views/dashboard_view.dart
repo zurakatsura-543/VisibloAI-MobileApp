@@ -91,6 +91,15 @@ class _DashboardContentState extends State<_DashboardContent> {
     }
   }
 
+  List<GbpPost> get _schedulablePosts => _posts
+      .where(
+        (post) =>
+            post.status == GbpPostStatus.draft ||
+            post.status == GbpPostStatus.failed ||
+            post.status == GbpPostStatus.scheduled,
+      )
+      .toList();
+
   int _countFor(_PostFilter filter) {
     switch (filter) {
       case _PostFilter.all:
@@ -369,27 +378,27 @@ class _DashboardContentState extends State<_DashboardContent> {
   }
 
   Future<void> _handleSchedulePost() async {
-    final created = await Get.to<GbpPost>(
-      () => GbpPostManualComposerView(
-        templatePost: _buildGeneratedPost(
-          user: widget.user,
-          status: GbpPostStatus.scheduled,
-        ),
-        businessName: _businessName(widget.user),
-      ),
-    );
-
-    if (created == null) {
+    final posts = _schedulablePosts;
+    if (posts.isEmpty) {
+      Get.snackbar(
+        'Generate a draft first',
+        'Create an AI post, then schedule the exact publishing time.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFF163C63),
+        colorText: Colors.white,
+      );
       return;
     }
 
-    if (created.status == GbpPostStatus.live) {
-      final draftPost = created.copyWith(status: GbpPostStatus.draft);
-      _addCreatedPost(draftPost);
-      await _handlePublishPost(draftPost);
-    } else {
-      _addCreatedPost(created);
-    }
+    final selectedPost = await showModalBottomSheet<GbpPost>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => _SchedulePostPickerSheet(posts: posts),
+    );
+
+    if (selectedPost == null) return;
+    await _handleScheduleDraftPost(selectedPost);
   }
 
   void _addCreatedPost(GbpPost created) {
@@ -617,12 +626,19 @@ class _DashboardContentState extends State<_DashboardContent> {
   }
 
   Future<void> _handleScheduleDraftPost(GbpPost post) async {
+    final now = DateTime.now();
+    final initialSchedule =
+        post.scheduledFor != null && post.scheduledFor!.isAfter(now)
+        ? post.scheduledFor!
+        : now.add(const Duration(days: 1));
     final pickedDate = await showAuthCalendarSheet(
       context: context,
-      initialDate: DateTime.now().add(const Duration(days: 1)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 30)),
-      title: 'Schedule Post',
+      initialDate: initialSchedule,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 30)),
+      title: post.status == GbpPostStatus.scheduled
+          ? 'Change Schedule'
+          : 'Schedule Post',
     );
 
     if (pickedDate == null) return;
@@ -630,7 +646,7 @@ class _DashboardContentState extends State<_DashboardContent> {
 
     final selectedTime = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.now(),
+      initialTime: TimeOfDay.fromDateTime(initialSchedule),
     );
 
     if (selectedTime == null) return;
@@ -1575,19 +1591,25 @@ class _PostCard extends StatelessWidget {
                     child: OutlinedButton.icon(
                       onPressed: onSchedule,
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                        side: const BorderSide(color: Color(0xFF39B4BD)),
+                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.brandBlue,
+                        side: const BorderSide(color: AppColors.brandBlue),
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      icon: const Icon(Icons.access_time_rounded, size: 16),
+                      icon: const Icon(
+                        Icons.access_time_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      ),
                       label: const Text(
                         'Schedule',
                         style: TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w800,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -1626,6 +1648,347 @@ class _PostCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _SchedulePostPickerSheet extends StatelessWidget {
+  const _SchedulePostPickerSheet({required this.posts});
+
+  final List<GbpPost> posts;
+
+  @override
+  Widget build(BuildContext context) {
+    final draftCount = posts
+        .where(
+          (post) =>
+              post.status == GbpPostStatus.draft ||
+              post.status == GbpPostStatus.failed,
+        )
+        .length;
+    final scheduledCount = posts
+        .where((post) => post.status == GbpPostStatus.scheduled)
+        .length;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.82,
+          ),
+          decoration: const BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD6DEE8),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 18, 12, 10),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Schedule a Google post',
+                            style: TextStyle(
+                              fontSize: 17,
+                              color: AppColors.brandBlue,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Choose a draft or update an existing schedule.',
+                            style: TextStyle(
+                              fontSize: 12.2,
+                              height: 1.35,
+                              color: AppColors.mutedText,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                      color: const Color(0xFFE45A62),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Row(
+                  children: [
+                    _ScheduleSummaryPill(
+                      label: '$draftCount drafts',
+                      color: const Color(0xFF7C63F1),
+                      background: const Color(0xFFF3EEFF),
+                    ),
+                    const SizedBox(width: 8),
+                    _ScheduleSummaryPill(
+                      label: '$scheduledCount scheduled',
+                      color: const Color(0xFFDB8A00),
+                      background: const Color(0xFFFFF3D9),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Divider(height: 1, color: Color(0xFFE8EDF3)),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
+                  itemCount: posts.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final post = posts[index];
+                    return _SchedulePostPickerTile(
+                      post: post,
+                      onTap: () => Navigator.of(context).pop(post),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SchedulePostPickerTile extends StatelessWidget {
+  const _SchedulePostPickerTile({required this.post, required this.onTap});
+
+  final GbpPost post;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isScheduled = post.status == GbpPostStatus.scheduled;
+    final statusColor = isScheduled
+        ? const Color(0xFFDB8A00)
+        : const Color(0xFF7C63F1);
+    final statusBackground = isScheduled
+        ? const Color(0xFFFFF3D9)
+        : const Color(0xFFF3EEFF);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FBFF),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _DashboardPalette.cardBorder),
+        ),
+        child: Row(
+          children: [
+            _SchedulePostThumb(post: post),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    post.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13.4,
+                      height: 1.25,
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    isScheduled
+                        ? post.scheduledLabel ?? 'Scheduled'
+                        : 'Draft ready to schedule',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11.2,
+                      color: AppColors.mutedText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusBackground,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          isScheduled ? 'Scheduled' : 'Draft',
+                          style: TextStyle(
+                            fontSize: 10.4,
+                            color: statusColor,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          post.meta.isEmpty
+                              ? 'Google Business Profile'
+                              : post.meta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 10.8,
+                            color: AppColors.brandBlue,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.brandBlue,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                isScheduled ? 'Change\ntime' : 'Schedule',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 10.6,
+                  height: 1.1,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SchedulePostThumb extends StatelessWidget {
+  const _SchedulePostThumb({required this.post});
+
+  final GbpPost post;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 58.0;
+    final placeholder = Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF2FF),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: const Icon(
+        Icons.image_outlined,
+        size: 24,
+        color: Color(0xFF90AFCC),
+      ),
+    );
+
+    if (post.assetPath.isEmpty) return placeholder;
+
+    Widget image;
+    if (post.isBase64Asset) {
+      image = Image.memory(
+        base64Decode(post.assetPath.substring(post.assetPath.indexOf(',') + 1)),
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => placeholder,
+      );
+    } else if (post.isNetworkAsset) {
+      image = Image.network(
+        post.assetPath,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => placeholder,
+      );
+    } else if (post.isFileAsset) {
+      image = Image.file(
+        File(post.assetPath),
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => placeholder,
+      );
+    } else {
+      image = Image.asset(
+        post.assetPath,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => placeholder,
+      );
+    }
+
+    return ClipRRect(borderRadius: BorderRadius.circular(13), child: image);
+  }
+}
+
+class _ScheduleSummaryPill extends StatelessWidget {
+  const _ScheduleSummaryPill({
+    required this.label,
+    required this.color,
+    required this.background,
+  });
+
+  final String label;
+  final Color color;
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          color: color,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -1899,9 +2262,9 @@ class _OutlineActionButton extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: AppColors.brandBlue,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.primary, width: 1.5),
+          border: Border.all(color: AppColors.brandBlue, width: 1.5),
         ),
         padding: const EdgeInsets.symmetric(vertical: 15),
         child: Row(
@@ -1911,12 +2274,12 @@ class _OutlineActionButton extends StatelessWidget {
               label,
               style: const TextStyle(
                 fontSize: 15,
-                color: AppColors.primary,
+                color: Colors.white,
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(width: 8),
-            Icon(icon, size: 21, color: AppColors.primary),
+            Icon(icon, size: 21, color: Colors.white),
           ],
         ),
       ),

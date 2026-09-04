@@ -704,6 +704,8 @@ class _SocialAccountsViewState extends State<SocialAccountsView> {
                   else ...[
                     _SocialConnectedAccountsSection(
                       accounts: _socialAccountsController.accounts,
+                      onReconnect: (account) =>
+                          _launchConnectFlow(account.platform),
                       onDisconnect: _handleDisconnect,
                     ),
                     const SizedBox(height: 18),
@@ -21357,10 +21359,12 @@ class _SocialAccountStatsGrid extends StatelessWidget {
 class _SocialConnectedAccountsSection extends StatelessWidget {
   const _SocialConnectedAccountsSection({
     required this.accounts,
+    required this.onReconnect,
     required this.onDisconnect,
   });
 
   final List<SocialAccount> accounts;
+  final ValueChanged<SocialAccount> onReconnect;
   final ValueChanged<SocialAccount> onDisconnect;
 
   @override
@@ -21387,6 +21391,7 @@ class _SocialConnectedAccountsSection extends StatelessWidget {
                             ? const Color(0xFF22C55E)
                             : const Color(0xFFFF6A6A),
                         syncText: _lastSyncLabel(account),
+                        onReconnect: () => onReconnect(account),
                         onDisconnect: () => onDisconnect(account),
                       ),
                     ),
@@ -21829,6 +21834,7 @@ class _ConnectedSocialAccountTile extends StatelessWidget {
     required this.status,
     required this.statusColor,
     required this.syncText,
+    required this.onReconnect,
     required this.onDisconnect,
   });
 
@@ -21839,6 +21845,7 @@ class _ConnectedSocialAccountTile extends StatelessWidget {
   final String status;
   final Color statusColor;
   final String syncText;
+  final VoidCallback onReconnect;
   final VoidCallback onDisconnect;
 
   @override
@@ -21971,14 +21978,63 @@ class _ConnectedSocialAccountTile extends StatelessWidget {
           const SizedBox(width: 2),
           PopupMenuButton<String>(
             onSelected: (value) {
+              if (value == 'reconnect') {
+                onReconnect();
+              }
               if (value == 'disconnect') {
                 onDisconnect();
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem<String>(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            itemBuilder: (context) => [
+              const PopupMenuItem<String>(
+                value: 'reconnect',
+                height: 38,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.sync_rounded,
+                      size: 18,
+                      color: Color(0xFF1267F1),
+                    ),
+                    SizedBox(width: 10),
+                    Text(
+                      'Reconnect',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(height: 4),
+              const PopupMenuItem<String>(
                 value: 'disconnect',
-                child: Text('Disconnect'),
+                height: 38,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.link_off_rounded,
+                      size: 18,
+                      color: Color(0xFFE94363),
+                    ),
+                    SizedBox(width: 10),
+                    Text(
+                      'Disconnect',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFE94363),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
             child: const Icon(

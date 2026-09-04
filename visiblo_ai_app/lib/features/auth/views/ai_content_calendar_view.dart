@@ -10,14 +10,14 @@ import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/widgets/app_logo.dart';
 import '../../onboarding/controllers/onboarding_controller.dart';
+import '../../social/controllers/social_accounts_controller.dart';
 import '../models/ai_manager_action.dart';
 import '../models/gbp_post.dart';
 import '../services/auth_api_service.dart';
 
 typedef _PostPreviewAction = Future<GbpPost?> Function(GbpPost post);
 typedef _PostRefreshAction = Future<GbpPost?> Function(String postId);
-typedef _PlatformChipTap =
-    void Function(GbpPost post, _PlatformChipData chip);
+typedef _PlatformChipTap = void Function(GbpPost post, _PlatformChipData chip);
 
 class _PlatformChipData {
   const _PlatformChipData({
@@ -29,6 +29,7 @@ class _PlatformChipData {
     this.mediaUrls = const <String>[],
     this.scheduledAt,
     this.socialPostId,
+    this.isConnected = false,
   });
 
   final String id;
@@ -39,22 +40,27 @@ class _PlatformChipData {
   final List<String> mediaUrls;
   final DateTime? scheduledAt;
   final String? socialPostId;
+  final bool isConnected;
 
   _PlatformChipData copyWith({
+    String? status,
     String? title,
     String? caption,
     List<String>? mediaUrls,
     DateTime? scheduledAt,
+    String? socialPostId,
+    bool? isConnected,
   }) {
     return _PlatformChipData(
       id: id,
       platform: platform,
-      status: status,
+      status: status ?? this.status,
       title: title ?? this.title,
       caption: caption ?? this.caption,
       mediaUrls: mediaUrls ?? this.mediaUrls,
       scheduledAt: scheduledAt ?? this.scheduledAt,
-      socialPostId: socialPostId,
+      socialPostId: socialPostId ?? this.socialPostId,
+      isConnected: isConnected ?? this.isConnected,
     );
   }
 }
@@ -71,6 +77,10 @@ class _AiContentCalendarViewState extends State<AiContentCalendarView>
   late final AuthApiService _api = Get.find<AuthApiService>();
   late final OnboardingController _controller =
       Get.find<OnboardingController>();
+  late final SocialAccountsController _socialAccountsController =
+      Get.isRegistered<SocialAccountsController>()
+      ? Get.find<SocialAccountsController>()
+      : Get.put(SocialAccountsController());
   final ImagePicker _imagePicker = ImagePicker();
 
   DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
@@ -82,7 +92,6 @@ class _AiContentCalendarViewState extends State<AiContentCalendarView>
   bool _isBuildingPlan = false;
   bool _isSavingAutomation = false;
   bool _refreshCalendarOnResume = false;
-  bool _triedSocialDraftBackfill = false;
   String? _busyPostId;
 
   @override
@@ -120,64 +129,108 @@ class _AiContentCalendarViewState extends State<AiContentCalendarView>
       final results = await Future.wait<dynamic>([
         _api.fetchAiPostsList(businessId),
         _api
-            .fetchAiMasterContentCalendar(
+            .fetchGbpAutomationSettings(
               businessId: businessId,
-              from: rangeStart,
-              to: rangeEnd,
+              locationId: locationId.isEmpty ? null : locationId,
             )
             .catchError((_) => <String, dynamic>{}),
-        _api.fetchGbpAutomationSettings(
-          businessId: businessId,
-          locationId: locationId.isEmpty ? null : locationId,
-        ).catchError((_) => <String, dynamic>{}),
+        _loadConnectedSocialPlatforms().catchError((_) => <String>{}),
       ]);
       final posts = (results[0] as List<GbpPost>);
+      final connectedPlatforms = Set<String>.from(results[2] as Set<String>);
       posts.sort((a, b) => _postDate(a).compareTo(_postDate(b)));
+
+      final calendar = await _api
+          .fetchAiMasterContentCalendar(
+            businessId: businessId,
+            from: rangeStart,
+            to: rangeEnd,
+          )
+          .catchError((_) => <String, dynamic>{});
       final platformChips = Map<String, List<_PlatformChipData>>.from(
-        _readMasterCalendarPlatformChips(
-          Map<String, dynamic>.from(results[1] as Map),
+        _applySocialConnectionState(
+          _readMasterCalendarPlatformChips(
+            Map<String, dynamic>.from(calendar as Map),
+          ),
+          connectedPlatforms,
         ),
       );
-      if (!_triedSocialDraftBackfill &&
-          posts.isNotEmpty &&
-          !_hasSocialPlatformChips(platformChips)) {
-        _triedSocialDraftBackfill = true;
-        await _api
-            .ensureAiCalendarSocialDrafts(
-              businessId: businessId,
-              from: rangeStart,
-              to: rangeEnd,
-            )
-            .catchError((_) => <String, dynamic>{});
-        final refreshedCalendar = await _api
-            .fetchAiMasterContentCalendar(
-              businessId: businessId,
-              from: rangeStart,
-              to: rangeEnd,
-            )
-            .catchError((_) => <String, dynamic>{});
-        platformChips
-          ..clear()
-          ..addAll(
-            _readMasterCalendarPlatformChips(
-              Map<String, dynamic>.from(refreshedCalendar as Map),
-            ),
-          );
-      }
       if (mounted) {
         setState(() {
           _posts = posts;
           _platformChipsByPostId = platformChips;
-          _automationSettings = Map<String, dynamic>.from(
-            results[2] as Map,
-          );
+          _automationSettings = Map<String, dynamic>.from(results[1] as Map);
         });
+      }
+      if (posts.isNotEmpty) {
+        unawaited(
+          _refreshSocialCalendarInBackground(
+            businessId: businessId,
+            rangeStart: rangeStart,
+            rangeEnd: rangeEnd,
+            connectedPlatforms: connectedPlatforms,
+          ),
+        );
       }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _refreshSocialCalendarInBackground({
+    required String businessId,
+    required DateTime rangeStart,
+    required DateTime rangeEnd,
+    required Set<String> connectedPlatforms,
+  }) async {
+    await _api
+        .ensureAiCalendarSocialDrafts(
+          businessId: businessId,
+          from: rangeStart,
+          to: rangeEnd,
+        )
+        .catchError((_) => <String, dynamic>{});
+    final convertiblePlatforms = connectedPlatforms
+        .where((platform) => platform == 'FACEBOOK' || platform == 'INSTAGRAM')
+        .toList(growable: false);
+    if (convertiblePlatforms.isNotEmpty) {
+      await _api
+          .convertAiCalendarSocialDrafts(
+            businessId: businessId,
+            from: rangeStart,
+            to: rangeEnd,
+            platforms: convertiblePlatforms,
+          )
+          .catchError((_) => <String, dynamic>{});
+    }
+    final calendar = await _api
+        .fetchAiMasterContentCalendar(
+          businessId: businessId,
+          from: rangeStart,
+          to: rangeEnd,
+        )
+        .catchError((_) => <String, dynamic>{});
+    if (!mounted) return;
+    setState(() {
+      _platformChipsByPostId = Map<String, List<_PlatformChipData>>.from(
+        _applySocialConnectionState(
+          _readMasterCalendarPlatformChips(
+            Map<String, dynamic>.from(calendar as Map),
+          ),
+          connectedPlatforms,
+        ),
+      );
+    });
+  }
+
+  Future<Set<String>> _loadConnectedSocialPlatforms() async {
+    await _socialAccountsController.loadAccounts(refresh: true);
+    return _socialAccountsController.connectedPlatforms
+        .map((platform) => platform.trim().toUpperCase())
+        .where((platform) => platform.isNotEmpty)
+        .toSet();
   }
 
   void _changeVisibleMonth(int offset) {
@@ -298,8 +351,8 @@ class _AiContentCalendarViewState extends State<AiContentCalendarView>
     await Get.to<void>(
       () => _CalendarPostPreviewSheet(
         post: post,
-        platformChips: _platformChipsByPostId[post.id] ??
-            const <_PlatformChipData>[],
+        platformChips:
+            _platformChipsByPostId[post.id] ?? const <_PlatformChipData>[],
         onEdit: _editCalendarPost,
         onRegenerateText: _regeneratePostText,
         onGenerateImage: _generatePostImage,
@@ -764,15 +817,12 @@ class _AiContentCalendarViewState extends State<AiContentCalendarView>
               _AutomationSettingsCard(
                 settings: _automationSettings,
                 isSaving: _isSavingAutomation,
-                onToggleActive: (value) => _updateAutomationSettings(
-                  autoPostActive: value,
-                ),
-                onApprovalModeChanged: (value) => _updateAutomationSettings(
-                  approvalMode: value,
-                ),
-                onFrequencyChanged: (value) => _updateAutomationSettings(
-                  postingFrequency: value,
-                ),
+                onToggleActive: (value) =>
+                    _updateAutomationSettings(autoPostActive: value),
+                onApprovalModeChanged: (value) =>
+                    _updateAutomationSettings(approvalMode: value),
+                onFrequencyChanged: (value) =>
+                    _updateAutomationSettings(postingFrequency: value),
               ),
               const SizedBox(height: 12),
               _MonthSwitcher(
@@ -781,10 +831,7 @@ class _AiContentCalendarViewState extends State<AiContentCalendarView>
                 onNext: () => _changeVisibleMonth(1),
               ),
               const SizedBox(height: 12),
-              _StatusStrip(
-                posts: monthPosts,
-                settings: _automationSettings,
-              ),
+              _StatusStrip(posts: monthPosts, settings: _automationSettings),
               const SizedBox(height: 12),
               _CalendarGrid(
                 visibleMonth: _visibleMonth,
@@ -1222,9 +1269,7 @@ class _AutomationChoiceChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 11.5,
             fontWeight: FontWeight.w900,
-            color: selected
-                ? const Color(0xFF1267F1)
-                : const Color(0xFF66728A),
+            color: selected ? const Color(0xFF1267F1) : const Color(0xFF66728A),
           ),
         ),
       ),
@@ -1424,10 +1469,10 @@ class _CalendarDayCell extends StatelessWidget {
               spacing: 2,
               runSpacing: 2,
               alignment: WrapAlignment.center,
-              children: _platformsForPosts(posts, platformChipsByPostId)
-                  .take(3)
-                  .map((chip) => _MiniPlatformChip(chip: chip))
-                  .toList(),
+              children: _platformsForPosts(
+                posts,
+                platformChipsByPostId,
+              ).take(3).map((chip) => _MiniPlatformChip(chip: chip)).toList(),
             ),
           ],
         ],
@@ -1473,8 +1518,8 @@ class _PlatformChipRow extends StatelessWidget {
           ]
         : chips;
     return Wrap(
-      spacing: 5,
-      runSpacing: 5,
+      spacing: 10,
+      runSpacing: 10,
       children: visibleChips
           .take(3)
           .map((chip) => _PlatformPill(chip: chip, onTap: onTap))
@@ -1496,25 +1541,37 @@ class _PlatformPill extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap == null ? null : () => onTap!(chip),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+          width: 46,
+          height: 42,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(999),
+            color: color.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: color.withValues(alpha: 0.22)),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              Icon(_platformIcon(chip.platform), size: 11, color: color),
-              const SizedBox(width: 4),
-              Text(
-                '${_platformLabel(chip.platform)} ${_platformStatusLabel(chip)}',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w900,
+              Center(
+                child: Icon(
+                  _platformIcon(chip.platform),
+                  size: 22,
                   color: color,
+                ),
+              ),
+              Positioned(
+                right: -1,
+                bottom: -1,
+                child: Container(
+                  width: 9,
+                  height: 9,
+                  decoration: BoxDecoration(
+                    color: _platformStatusDotColor(chip),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
                 ),
               ),
             ],
@@ -1534,22 +1591,10 @@ class _MiniPlatformChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = _platformColor(chip.platform);
     return Container(
-      width: 19,
-      height: 13,
+      width: 7,
+      height: 7,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        _platformLabel(chip.platform),
-        style: const TextStyle(
-          fontSize: 7,
-          fontWeight: FontWeight.w900,
-          color: Colors.white,
-          height: 1,
-        ),
-      ),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }
@@ -1617,7 +1662,7 @@ class _UpcomingPosts extends StatelessWidget {
             const Text(
               'Upcoming Posts',
               style: TextStyle(
-                fontSize: 17,
+                fontSize: 21,
                 fontWeight: FontWeight.w900,
                 color: Color(0xFF111B3D),
               ),
@@ -1625,12 +1670,19 @@ class _UpcomingPosts extends StatelessWidget {
             const Spacer(),
             TextButton.icon(
               onPressed: onOpenPosts,
-              icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+              icon: const Icon(Icons.edit_calendar_outlined, size: 22),
               label: const Text('Manage'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF12AFA6),
+                textStyle: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         if (visiblePosts.isEmpty)
           Container(
             width: double.infinity,
@@ -1695,8 +1747,8 @@ class _UpcomingPosts extends StatelessWidget {
           ...visiblePosts.map(
             (post) => _UpcomingPostTile(
               post: post,
-              platformChips: platformChipsByPostId[post.id] ??
-                  const <_PlatformChipData>[],
+              platformChips:
+                  platformChipsByPostId[post.id] ?? const <_PlatformChipData>[],
               onPlatformTap: (chip) => onPlatformTap(post, chip),
               onTap: () => onPostTap(post),
             ),
@@ -1707,10 +1759,7 @@ class _UpcomingPosts extends StatelessWidget {
 }
 
 class _SocialConnectRequiredCard extends StatelessWidget {
-  const _SocialConnectRequiredCard({
-    required this.counts,
-    required this.onTap,
-  });
+  const _SocialConnectRequiredCard({required this.counts, required this.onTap});
 
   final Map<String, int> counts;
   final VoidCallback onTap;
@@ -2099,7 +2148,10 @@ class _SocialPlatformDraftSheetState extends State<_SocialPlatformDraftSheet> {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => Get.toNamed(AppRoutes.socialScheduler),
-                        icon: const Icon(Icons.calendar_month_rounded, size: 17),
+                        icon: const Icon(
+                          Icons.calendar_month_rounded,
+                          size: 17,
+                        ),
                         label: const Text('Scheduler'),
                       ),
                     ),
@@ -2133,87 +2185,137 @@ class _UpcomingPostTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(12),
-          decoration: _panelDecoration(),
-          child: Row(
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE5ECF6)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0D0B2D5C),
+                blurRadius: 18,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 50,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5FF),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '${date.day}',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF111B3D),
-                      ),
-                    ),
-                    Text(
-                      _shortMonth(date.month),
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF66728A),
-                      ),
-                    ),
-                  ],
-                ),
+              AspectRatio(
+                aspectRatio: 1.9,
+                child: _PostMediaThumb(post: post, borderRadius: 14),
               ),
-              const SizedBox(width: 12),
-              _PostMediaThumb(post: post),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      post.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF111B3D),
-                      ),
+              const SizedBox(height: 14),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 58,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FBFA),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      post.status == GbpPostStatus.failed
-                          ? _failedPostSummary(post)
-                          : post.meta.isEmpty
-                          ? 'Google Business Profile'
-                          : 'Google Business Profile • ${post.meta}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF66728A),
-                        fontWeight: FontWeight.w700,
-                      ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '${date.day}',
+                          style: const TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF111B3D),
+                          ),
+                        ),
+                        Text(
+                          _shortMonth(date.month),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF66728A),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 7),
-                    _PlatformChipRow(
-                      chips: platformChips,
-                      onTap: onPlatformTap,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                post.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF111B3D),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            _StatusChip(
+                              label: _calendarBadgeLabel(post),
+                              color: _calendarStatusColor(post),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Google Business Profile',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF66728A),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                color: _postTypeColor(post.meta),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                post.status == GbpPostStatus.failed
+                                    ? _failedPostSummary(post)
+                                    : post.meta.isEmpty
+                                    ? 'post'
+                                    : post.meta,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Color(0xFF111B3D),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              _StatusChip(
-                label: _calendarBadgeLabel(post),
-                color: _calendarStatusColor(post),
-              ),
+              const SizedBox(height: 14),
+              _PlatformChipRow(chips: platformChips, onTap: onPlatformTap),
             ],
           ),
         ),
@@ -2324,8 +2426,7 @@ class _CalendarPostPreviewSheetState extends State<_CalendarPostPreviewSheet> {
 
     final date = _post.scheduledFor;
     final shouldRefresh =
-        publishStatus == 'PUBLISHING' ||
-        (date != null && !date.isAfter(_now));
+        publishStatus == 'PUBLISHING' || (date != null && !date.isAfter(_now));
     if (!shouldRefresh) return;
 
     final last = _lastStatusRefresh;
@@ -3157,7 +3258,7 @@ class _AutoPostBadge extends StatelessWidget {
   }
 }
 
-class _PostPreviewCard extends StatelessWidget {
+class _PostPreviewCard extends StatefulWidget {
   const _PostPreviewCard({
     required this.post,
     required this.platformChips,
@@ -3169,26 +3270,71 @@ class _PostPreviewCard extends StatelessWidget {
   final bool isPreparingImage;
 
   @override
+  State<_PostPreviewCard> createState() => _PostPreviewCardState();
+}
+
+class _PostPreviewCardState extends State<_PostPreviewCard> {
+  String _selectedPlatform = 'GOOGLE_BUSINESS';
+
+  @override
+  void didUpdateWidget(covariant _PostPreviewCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final platforms = _availablePreviewPlatforms(widget.platformChips);
+    if (!platforms.contains(_selectedPlatform)) {
+      _selectedPlatform = 'GOOGLE_BUSINESS';
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final date = post.scheduledFor;
+    final post = widget.post;
+    final availablePlatforms = _availablePreviewPlatforms(widget.platformChips);
+    final selectedChip = _selectedPlatform == 'GOOGLE_BUSINESS'
+        ? null
+        : _chipForPlatform(widget.platformChips, _selectedPlatform);
+    final isGoogle = selectedChip == null;
+    final mediaUrl =
+        (selectedChip?.mediaUrls.isNotEmpty == true
+            ? selectedChip!.mediaUrls.first
+            : null) ??
+        post.assetPath;
+    final title = (selectedChip?.title ?? '').trim().isNotEmpty
+        ? selectedChip!.title!.trim()
+        : isGoogle
+        ? post.title
+        : '${_platformLabel(_selectedPlatform)} version for ${post.title}';
+    final caption = (selectedChip?.caption ?? '').trim().isNotEmpty
+        ? selectedChip!.caption!.trim()
+        : isGoogle
+        ? post.subtitle
+        : post.subtitle;
+    final date = selectedChip?.scheduledAt ?? post.scheduledFor;
+    final statusLabel = selectedChip == null
+        ? _calendarBadgeLabel(post)
+        : _platformStatusLabel(selectedChip).toUpperCase();
+    final statusColor = selectedChip == null
+        ? _calendarStatusColor(post)
+        : _platformChipColor(selectedChip);
+
     return Container(
       decoration: _panelDecoration(),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: _PlatformTab(
-                  icon: Icons.storefront_rounded,
-                  label: 'Google Business Profile',
-                  active: true,
-                ),
-              ),
-              Expanded(
-                child: _SocialPlatformSummaryTab(chips: platformChips),
-              ),
-            ],
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: availablePlatforms
+                  .map(
+                    (platform) => _PlatformTab(
+                      icon: _platformIcon(platform),
+                      label: _platformLabel(platform),
+                      active: platform == _selectedPlatform,
+                      onTap: () => setState(() => _selectedPlatform = platform),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
           ),
           Container(height: 1, color: const Color(0xFFE2E8F5)),
           Padding(
@@ -3196,10 +3342,13 @@ class _PostPreviewCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _PreviewMedia(post: post, isPreparingImage: isPreparingImage),
+                _PreviewMedia(
+                  post: post.copyWith(assetPath: mediaUrl),
+                  isPreparingImage: widget.isPreparingImage && isGoogle,
+                ),
                 const SizedBox(height: 14),
                 Text(
-                  post.title,
+                  title,
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
@@ -3208,36 +3357,44 @@ class _PostPreviewCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 9),
-                _ExpandablePostText(text: post.subtitle),
+                _ExpandablePostText(text: caption),
                 const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: () => Get.snackbar(
-                    'Google CTA',
-                    '${_ctaLabel(post.callToAction)} will be attached when this post is published.',
-                    snackPosition: SnackPosition.BOTTOM,
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF0057FF),
-                    side: const BorderSide(color: Color(0xFF0057FF)),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 9,
+                if (isGoogle)
+                  OutlinedButton(
+                    onPressed: () => Get.snackbar(
+                      'Google CTA',
+                      '${_ctaLabel(post.callToAction)} will be attached when this post is published.',
+                      snackPosition: SnackPosition.BOTTOM,
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(7),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF0057FF),
+                      side: const BorderSide(color: Color(0xFF0057FF)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 9,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(7),
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    _ctaLabel(post.callToAction),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
+                    child: Text(
+                      _ctaLabel(post.callToAction),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                  ),
-                ),
+                  )
+                else
+                  _SocialPreviewNotice(chip: selectedChip),
                 const SizedBox(height: 14),
-                if (platformChips.isNotEmpty) ...[
-                  _PlatformChipRow(chips: platformChips),
+                if (widget.platformChips.isNotEmpty) ...[
+                  _PlatformChipRow(
+                    chips: widget.platformChips,
+                    onTap: (chip) => setState(
+                      () => _selectedPlatform = chip.platform.toUpperCase(),
+                    ),
+                  ),
                   const SizedBox(height: 14),
                 ],
                 const Divider(height: 1),
@@ -3249,13 +3406,7 @@ class _PostPreviewCard extends StatelessWidget {
                       flex: 7,
                       child: _PreviewMetaBlock(
                         title: 'Platform',
-                        lines: [
-                          platformChips.isEmpty
-                              ? 'GBP'
-                              : platformChips
-                                    .map((chip) => _platformLabel(chip.platform))
-                                    .join(', '),
-                        ],
+                        lines: [_platformLabel(_selectedPlatform)],
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -3284,10 +3435,7 @@ class _PostPreviewCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 7),
-                          _StatusChip(
-                            label: _calendarBadgeLabel(post),
-                            color: _calendarStatusColor(post),
-                          ),
+                          _StatusChip(label: statusLabel, color: statusColor),
                         ],
                       ),
                     ),
@@ -3364,95 +3512,104 @@ class _PlatformTab extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.active,
+    this.onTap,
   });
 
   final IconData icon;
   final String label;
   final bool active;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 13),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: active ? const Color(0xFF0057FF) : Colors.transparent,
-            width: 3,
+    return Material(
+      color: Colors.white,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          width: 142,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: active ? const Color(0xFF0057FF) : Colors.transparent,
+                width: 3,
+              ),
+            ),
           ),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            size: 18,
-            color: active ? const Color(0xFF0057FF) : const Color(0xFF8A94A8),
-          ),
-          const SizedBox(width: 7),
-          Flexible(
-            child: Text(
-              active ? label : '$label Soon',
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
                 color: active
                     ? const Color(0xFF0057FF)
                     : const Color(0xFF8A94A8),
               ),
-            ),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: active
+                        ? const Color(0xFF0057FF)
+                        : const Color(0xFF8A94A8),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _SocialPlatformSummaryTab extends StatelessWidget {
-  const _SocialPlatformSummaryTab({required this.chips});
+class _SocialPreviewNotice extends StatelessWidget {
+  const _SocialPreviewNotice({required this.chip});
 
-  final List<_PlatformChipData> chips;
+  final _PlatformChipData? chip;
 
   @override
   Widget build(BuildContext context) {
-    final socialChips = chips
-        .where((chip) {
-          final platform = chip.platform.toUpperCase();
-          return platform == 'FACEBOOK' || platform == 'INSTAGRAM';
-        })
-        .toList(growable: false);
-    final hasConnected = socialChips.any((chip) => chip.socialPostId != null);
-    final label = socialChips.isEmpty
-        ? 'Social drafts'
-        : hasConnected
-        ? 'FB/IG ready'
-        : 'Connect social';
+    final currentChip = chip;
+    final label = currentChip == null
+        ? 'Social draft'
+        : '${_platformLabel(currentChip.platform)} ${_platformStatusLabel(currentChip)}';
+    final color = currentChip == null
+        ? const Color(0xFF21A69A)
+        : _platformChipColor(currentChip);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
-      decoration: const BoxDecoration(color: Colors.white),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            hasConnected ? Icons.public_rounded : Icons.link_off_rounded,
+            currentChip == null
+                ? Icons.auto_awesome_rounded
+                : _platformIcon(currentChip.platform),
             size: 16,
-            color: hasConnected
-                ? const Color(0xFF17A964)
-                : const Color(0xFF7A8499),
+            color: color,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 7),
           Flexible(
             child: Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: hasConnected
-                    ? const Color(0xFF17A964)
-                    : const Color(0xFF7A8499),
+                color: color,
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
               ),
@@ -3836,12 +3993,14 @@ class _PublishingChecklistPanel extends StatelessWidget {
           SizedBox(height: 12),
           _RecoveryLine(
             title: 'Submitted to Google',
-            text: 'VisibloAI has sent this post through the Google Business Profile publishing API.',
+            text:
+                'VisibloAI has sent this post through the Google Business Profile publishing API.',
             color: Color(0xFF1267F1),
           ),
           _RecoveryLine(
             title: 'Waiting for final Google state',
-            text: 'The scheduler will reconcile this post as Live or Failed automatically.',
+            text:
+                'The scheduler will reconcile this post as Live or Failed automatically.',
             color: Color(0xFF22B66E),
           ),
         ],
@@ -3981,15 +4140,28 @@ class _PreviewBottomNav extends StatelessWidget {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: const [
+          children: [
             _PreviewNavItem(
               icon: Icons.grid_view_rounded,
               label: 'Dashboard',
               active: true,
+              route: AppRoutes.unifiedDashboard,
             ),
-            _PreviewNavItem(icon: Icons.article_outlined, label: 'Content'),
-            _PreviewNavItem(icon: Icons.bar_chart_rounded, label: 'Analytics'),
-            _PreviewNavItem(icon: Icons.settings_outlined, label: 'Settings'),
+            const _PreviewNavItem(
+              icon: Icons.edit_calendar_outlined,
+              label: 'Posts',
+              route: AppRoutes.gbpPosts,
+            ),
+            const _PreviewNavItem(
+              icon: Icons.bar_chart_rounded,
+              label: 'Analytics',
+              route: AppRoutes.socialAnalytics,
+            ),
+            const _PreviewNavItem(
+              icon: Icons.more_horiz_rounded,
+              label: 'More',
+              route: AppRoutes.account,
+            ),
           ],
         ),
       ),
@@ -4001,30 +4173,45 @@ class _PreviewNavItem extends StatelessWidget {
   const _PreviewNavItem({
     required this.icon,
     required this.label,
+    required this.route,
     this.active = false,
   });
 
   final IconData icon;
   final String label;
+  final String route;
   final bool active;
 
   @override
   Widget build(BuildContext context) {
     final color = active ? const Color(0xFF0057FF) : const Color(0xFF66728A);
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(icon, color: color, size: 22),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: color,
-            fontWeight: FontWeight.w800,
-          ),
+    return InkWell(
+      onTap: () {
+        if (Get.currentRoute == route) return;
+        Get.offNamed(route);
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 72,
+        height: 58,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                color: color,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -4188,19 +4375,18 @@ class _SheetActionButton extends StatelessWidget {
 }
 
 class _PostMediaThumb extends StatelessWidget {
-  const _PostMediaThumb({required this.post});
+  const _PostMediaThumb({required this.post, this.borderRadius = 8});
 
   final GbpPost post;
+  final double borderRadius;
 
   @override
   Widget build(BuildContext context) {
     final imageUrl = post.assetPath.trim();
     return Container(
-      width: 44,
-      height: 44,
       decoration: BoxDecoration(
         color: _postTypeColor(post.meta).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(color: const Color(0xFFE2E8F5)),
       ),
       clipBehavior: Clip.antiAlias,
@@ -4356,9 +4542,9 @@ Map<String, List<_PlatformChipData>> _readMasterCalendarPlatformChips(
                     .where((url) => url.isNotEmpty)
                     .toList(growable: false)
               : const <String>[],
-          scheduledAt:
-              DateTime.tryParse((chip['scheduledAt'] ?? '').toString())
-                  ?.toLocal(),
+          scheduledAt: DateTime.tryParse(
+            (chip['scheduledAt'] ?? '').toString(),
+          )?.toLocal(),
           socialPostId: (chip['socialPostId'] ?? '').toString().trim().isEmpty
               ? null
               : (chip['socialPostId'] ?? '').toString().trim(),
@@ -4369,6 +4555,39 @@ Map<String, List<_PlatformChipData>> _readMasterCalendarPlatformChips(
   }
 
   return chipsByPostId;
+}
+
+Map<String, List<_PlatformChipData>> _applySocialConnectionState(
+  Map<String, List<_PlatformChipData>> chipsByPostId,
+  Set<String> connectedPlatforms,
+) {
+  if (chipsByPostId.isEmpty) return chipsByPostId;
+
+  return chipsByPostId.map((postId, chips) {
+    return MapEntry(
+      postId,
+      chips
+          .map((chip) {
+            final platform = chip.platform.toUpperCase();
+            final isConnected = connectedPlatforms.contains(platform);
+            if (platform != 'FACEBOOK' && platform != 'INSTAGRAM') {
+              return chip;
+            }
+            return _PlatformChipData(
+              id: chip.id,
+              platform: chip.platform,
+              status: chip.status,
+              title: chip.title,
+              caption: chip.caption,
+              mediaUrls: chip.mediaUrls,
+              scheduledAt: chip.scheduledAt,
+              socialPostId: chip.socialPostId,
+              isConnected: isConnected,
+            );
+          })
+          .toList(growable: false),
+    );
+  });
 }
 
 List<_PlatformChipData> _platformsForPosts(
@@ -4401,6 +4620,31 @@ List<_PlatformChipData> _platformsForPosts(
   return chips;
 }
 
+List<String> _availablePreviewPlatforms(List<_PlatformChipData> chips) {
+  final platforms = <String>['GOOGLE_BUSINESS'];
+  for (final chip in chips) {
+    final platform = chip.platform.toUpperCase();
+    if ((platform == 'FACEBOOK' || platform == 'INSTAGRAM') &&
+        !platforms.contains(platform)) {
+      platforms.add(platform);
+    }
+  }
+  return platforms;
+}
+
+_PlatformChipData? _chipForPlatform(
+  List<_PlatformChipData> chips,
+  String platform,
+) {
+  final normalized = platform.toUpperCase();
+  for (final chip in chips) {
+    if (chip.platform.toUpperCase() == normalized) {
+      return chip;
+    }
+  }
+  return null;
+}
+
 Map<String, int> _socialConnectRequiredCounts(
   Map<String, List<_PlatformChipData>> platformChipsByPostId,
 ) {
@@ -4414,20 +4658,6 @@ Map<String, int> _socialConnectRequiredCounts(
     }
   }
   return counts;
-}
-
-bool _hasSocialPlatformChips(
-  Map<String, List<_PlatformChipData>> platformChipsByPostId,
-) {
-  for (final chips in platformChipsByPostId.values) {
-    for (final chip in chips) {
-      final platform = chip.platform.toUpperCase();
-      if (platform == 'FACEBOOK' || platform == 'INSTAGRAM') {
-        return true;
-      }
-    }
-  }
-  return false;
 }
 
 String _platformLabel(String platform) {
@@ -4462,18 +4692,34 @@ Color _platformChipColor(_PlatformChipData chip) {
   return _platformColor(chip.platform);
 }
 
+Color _platformStatusDotColor(_PlatformChipData chip) {
+  final statusLabel = _platformStatusLabel(chip);
+  if (statusLabel == 'live') return const Color(0xFF1267F1);
+  if (statusLabel == 'failed') return const Color(0xFFE94363);
+  if (statusLabel == 'connect required') return const Color(0xFFFF8A1F);
+  if (statusLabel == 'review' || statusLabel == 'draft') {
+    return const Color(0xFFFF8A1F);
+  }
+  return const Color(0xFF16B89E);
+}
+
 String _platformStatusLabel(_PlatformChipData chip) {
   final platform = chip.platform.toUpperCase();
   final status = chip.status.toUpperCase();
   final isSocial = platform == 'FACEBOOK' || platform == 'INSTAGRAM';
 
-  if (isSocial && chip.socialPostId == null) {
+  if (isSocial && !chip.isConnected && chip.socialPostId == null) {
     return 'connect required';
   }
   if (status == 'SCHEDULED') return 'scheduled';
   if (status == 'PUBLISHED' || status == 'LIVE') return 'live';
   if (status == 'PUBLISHING') return 'publishing';
-  if (status == 'FAILED') return isSocial ? 'connect required' : 'failed';
+  if (status == 'FAILED') {
+    return isSocial && !chip.isConnected ? 'connect required' : 'failed';
+  }
+  if (isSocial && chip.isConnected && chip.socialPostId == null) {
+    return chip.scheduledAt == null ? 'draft' : 'ready';
+  }
   if (status == 'PENDING_APPROVAL') return 'review';
   return 'planned';
 }
@@ -4501,13 +4747,32 @@ Color _calendarStatusColor(GbpPost post) {
 }
 
 String? _googlePostViewUrl(GbpPost post) {
+  final searchUrl = post.gmbSearchUrl?.trim() ?? '';
+  if (searchUrl.startsWith('http://') || searchUrl.startsWith('https://')) {
+    return searchUrl;
+  }
+
   final postName = post.gmbPostId?.trim() ?? '';
+  final locationId = _extractGbpLocationId(post.locationId ?? postName);
+  if (locationId != null) {
+    return 'https://business.google.com/u/0/posts/l/$locationId';
+  }
+
   if (postName.isEmpty && post.title.trim().isEmpty) return null;
   final query = [
+    'Google Business Profile posts',
     post.title.trim(),
-    'Google Business Profile',
   ].where((part) => part.isNotEmpty).join(' ');
   return 'https://www.google.com/search?q=${Uri.encodeComponent(query)}';
+}
+
+String? _extractGbpLocationId(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty) return null;
+  final match = RegExp(r'locations/([^/]+)').firstMatch(value);
+  if (match != null) return match.group(1);
+  if (!value.contains('/') && RegExp(r'^\d+$').hasMatch(value)) return value;
+  return null;
 }
 
 Future<void> _openExternalUrl(String url) async {
