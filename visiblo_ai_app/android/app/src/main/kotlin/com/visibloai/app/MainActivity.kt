@@ -1,4 +1,4 @@
-package com.example.visiblo_ai_app
+package com.visibloai.app
 
 import io.flutter.embedding.android.FlutterActivity
 

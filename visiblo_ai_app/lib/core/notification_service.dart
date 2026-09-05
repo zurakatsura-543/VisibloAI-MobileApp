@@ -25,15 +25,24 @@ Future<void> _firebaseBackgroundMessageHandler(RemoteMessage message) async {
 }
 
 class NotificationService extends GetxService {
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final Dio _api = ApiClient().dio;
+  FirebaseMessaging? _fcm;
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
   StreamSubscription<RemoteMessage>? _openedAppSubscription;
   StreamSubscription<String>? _tokenRefreshSubscription;
   Future<void>? _registrationInFlight;
   String? _lastRegisteredToken;
+  bool _firebaseAvailable = false;
 
-  Future<NotificationService> init() async {
+  Future<NotificationService> init({required bool firebaseAvailable}) async {
+    _firebaseAvailable = firebaseAvailable;
+    if (!_firebaseAvailable) {
+      return this;
+    }
+
+    final fcm = FirebaseMessaging.instance;
+    _fcm = fcm;
+
     // Register background handler first
     FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundMessageHandler);
 
@@ -51,7 +60,7 @@ class NotificationService extends GetxService {
     );
 
     // Handle notification tap when app was terminated
-    final initialMessage = await _fcm.getInitialMessage();
+    final initialMessage = await fcm.getInitialMessage();
     if (initialMessage != null) {
       _onNotificationTapped(initialMessage);
     }
@@ -61,6 +70,10 @@ class NotificationService extends GetxService {
 
   /// Call this after every successful login / session restore.
   Future<void> registerDeviceToken() async {
+    if (!_firebaseAvailable || _fcm == null) {
+      return;
+    }
+
     final pendingRegistration = _registrationInFlight;
     if (pendingRegistration != null) {
       return pendingRegistration;
@@ -76,10 +89,15 @@ class NotificationService extends GetxService {
   }
 
   Future<void> _registerDeviceToken() async {
+    final fcm = _fcm;
+    if (fcm == null) {
+      return;
+    }
+
     try {
       // On iOS, we need the APNS token before FCM can give us one
       if (Platform.isIOS) {
-        final apnsToken = await _fcm.getAPNSToken();
+        final apnsToken = await fcm.getAPNSToken();
         if (apnsToken == null) {
           debugPrint(
             '[FCM] APNS token not available yet, skipping registration.',
@@ -88,7 +106,7 @@ class NotificationService extends GetxService {
         }
       }
 
-      final token = await _fcm.getToken();
+      final token = await fcm.getToken();
       if (token == null || token.trim().isEmpty) {
         debugPrint('[FCM] FCM token is null, skipping registration.');
         return;
@@ -114,9 +132,7 @@ class NotificationService extends GetxService {
       debugPrint('[FCM] Device token registered successfully.');
 
       // Install exactly one refresh listener for the lifetime of this service.
-      _tokenRefreshSubscription ??= _fcm.onTokenRefresh.listen((
-        newToken,
-      ) async {
+      _tokenRefreshSubscription ??= fcm.onTokenRefresh.listen((newToken) async {
         debugPrint('[FCM] Token refreshed, re-registering…');
         try {
           await _api.post(
@@ -140,8 +156,12 @@ class NotificationService extends GetxService {
 
   /// Call this on logout so the device stops receiving notifications.
   Future<void> unregisterDeviceToken() async {
+    if (!_firebaseAvailable || _fcm == null) {
+      return;
+    }
+
     try {
-      final token = await _fcm.getToken();
+      final token = await _fcm?.getToken();
       if (token == null || token.trim().isEmpty) return;
 
       await _api.delete(
@@ -165,7 +185,12 @@ class NotificationService extends GetxService {
   // ─── Private Helpers ───────────────────────────────────────────────────────
 
   Future<void> _requestPermissions() async {
-    final settings = await _fcm.requestPermission(
+    final fcm = _fcm;
+    if (fcm == null) {
+      return;
+    }
+
+    final settings = await fcm.requestPermission(
       alert: true,
       badge: true,
       sound: true,

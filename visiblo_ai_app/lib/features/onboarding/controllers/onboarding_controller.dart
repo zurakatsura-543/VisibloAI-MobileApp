@@ -29,7 +29,7 @@ import '../../auth/models/audit_models.dart';
 class OnboardingController extends GetxController {
   static const _googleWebClientId =
       '1095834856322-ileb3qlbe6b3omb3cgqeim1so48i5k03.apps.googleusercontent.com';
-  static const _androidPackageName = 'com.example.visiblo_ai_app';
+  static const _androidPackageName = 'com.visibloai.app';
   static const _androidDebugSha1 =
       '1B:69:F6:E9:E0:F4:A8:B0:91:18:A8:DE:46:51:B2:6E:DC:9A:A1:D7';
 

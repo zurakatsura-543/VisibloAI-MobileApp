@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:1095834856322:android:5b5732d6321353a55dfd9b",
         "android_client_info": {
-          "package_name": "com.example.visiblo_ai_app"
+          "package_name": "com.visibloai.app"
         }
       },
       "oauth_client": [
@@ -17,7 +17,7 @@
           "client_id": "1095834856322-pgdacj1luu4sjf5t3nampu2vlgmmh7lf.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.example.visiblo_ai_app",
+            "package_name": "com.visibloai.app",
             "certificate_hash": "1b69f6e9e0f4a8b09118a8de4651b26edc9aa1d7"
           }
         },

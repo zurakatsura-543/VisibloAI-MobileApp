@@ -20,10 +20,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions are not configured for iOS. '
-          'Add GoogleService-Info.plist and run flutterfire configure.',
-        );
+        return ios;
       case TargetPlatform.macOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions are not configured for macOS. '
@@ -52,5 +49,19 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1095834856322',
     projectId: 'aimbeat-visibloai',
     storageBucket: 'aimbeat-visibloai.firebasestorage.app',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyAQrfDaOTl5vkk9fi0fQaylPDiisif9IVk',
+    appId: '1:1095834856322:ios:c719171ae774590f5dfd9b',
+    messagingSenderId: '1095834856322',
+    projectId: 'aimbeat-visibloai',
+    databaseURL: 'https://aimbeat-visibloai-default-rtdb.firebaseio.com',
+    storageBucket: 'aimbeat-visibloai.firebasestorage.app',
+    iosBundleId: 'com.solverix.visibloai',
+    androidClientId:
+        '1095834856322-dat5652v9ukp6aqevpi4801t7bbh1a2l.apps.googleusercontent.com',
+    iosClientId:
+        '1095834856322-eh8lrocdo63vnluft4j30vnck5qho8me.apps.googleusercontent.com',
   );
 }

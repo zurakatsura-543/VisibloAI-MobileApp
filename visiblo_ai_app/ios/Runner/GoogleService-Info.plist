@@ -15,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.example.visibloAiApp</string>
+	<string>com.solverix.visibloai</string>
 	<key>PROJECT_ID</key>
 	<string>aimbeat-visibloai</string>
 	<key>STORAGE_BUCKET</key>
