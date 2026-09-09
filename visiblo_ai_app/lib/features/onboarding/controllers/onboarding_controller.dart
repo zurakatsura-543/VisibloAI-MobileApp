@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
@@ -78,6 +79,7 @@ class OnboardingController extends GetxController {
   final obscureConfirmResetPassword = true.obs;
   final isSurveyLoading = false.obs;
   final isGoogleSignInLoading = false.obs;
+  final isAppleSignInLoading = false.obs;
   final isGoogleConnectLaunching = false.obs;
   final isGoogleConnectRefreshing = false.obs;
   final isLocationsLoading = false.obs;
@@ -643,6 +645,98 @@ class OnboardingController extends GetxController {
       );
     } finally {
       isGoogleSignInLoading.value = false;
+    }
+  }
+
+  Future<void> continueWithApple() async {
+    if (isAppleSignInLoading.value) {
+      return;
+    }
+
+    isAppleSignInLoading.value = true;
+
+    try {
+      debugPrint('Apple sign-in: starting button flow');
+
+      final isAvailable = await SignInWithApple.isAvailable();
+      if (!isAvailable) {
+        throw Exception(
+          'Sign in with Apple is not supported on this device or platform version.',
+        );
+      }
+
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final identityToken = credential.identityToken?.trim() ?? '';
+      final authorizationCode = credential.authorizationCode.trim();
+
+      if (identityToken.isEmpty || authorizationCode.isEmpty) {
+        throw Exception(
+          'Apple did not return a valid authentication credential. Please try again.',
+        );
+      }
+
+      final appleEmail = credential.email?.trim().toLowerCase();
+      final givenName = credential.givenName?.trim();
+      final familyName = credential.familyName?.trim();
+      final userIdentifier = credential.userIdentifier?.trim();
+
+      final fullName = [givenName ?? '', familyName ?? '']
+          .join(' ')
+          .trim();
+
+      debugPrint('Apple sign-in: credential received, contacting backend');
+      final remoteProfile = await _authApiService.loginWithAppleMobile(
+        identityToken: identityToken,
+        authorizationCode: authorizationCode,
+        email: appleEmail,
+        givenName: givenName,
+        familyName: familyName,
+        userIdentifier: userIdentifier,
+      );
+
+      final activeEmail = (appleEmail != null && appleEmail.isNotEmpty)
+          ? appleEmail
+          : (remoteProfile.email.isNotEmpty ? remoteProfile.email : '');
+
+      if (activeEmail.isNotEmpty) {
+        loginEmailController.text = activeEmail;
+        forgotPasswordEmailController.text = activeEmail;
+        signUpEmailController.text = activeEmail;
+      }
+      if (fullName.isNotEmpty) {
+        fullNameController.text = fullName;
+      }
+
+      await _syncCurrentUserFromRemoteProfile(
+        remoteProfile,
+        email: activeEmail,
+        fallbackFullName: fullNameController.text.trim(),
+      );
+      await _navigateToSessionRoute(remoteProfile);
+    } catch (error, stackTrace) {
+      debugPrint('Apple sign-in error: $error');
+      if (error is SignInWithAppleAuthorizationException &&
+          error.code == AuthorizationErrorCode.canceled) {
+        debugPrint('User canceled Sign in with Apple');
+        return;
+      }
+      debugPrintStack(
+        label: 'Apple sign-in stack trace',
+        stackTrace: stackTrace,
+      );
+      Get.snackbar(
+        'Apple sign-in failed',
+        error.toString().replaceAll('Exception: ', ''),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      isAppleSignInLoading.value = false;
     }
   }
 

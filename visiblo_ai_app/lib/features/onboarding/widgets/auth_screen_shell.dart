@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_typography.dart';
@@ -291,6 +292,47 @@ class AuthGoogleButton extends StatelessWidget {
                 ],
               ),
       ),
+    );
+  }
+}
+
+class AuthAppleButton extends StatelessWidget {
+  const AuthAppleButton({
+    super.key,
+    required this.onPressed,
+    required this.isLoading,
+  });
+
+  final VoidCallback onPressed;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 56,
+      child: isLoading
+          ? Container(
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+            )
+          : SignInWithAppleButton(
+              onPressed: onPressed,
+              style: SignInWithAppleButtonStyle.black,
+              borderRadius: BorderRadius.circular(16),
+              height: 56,
+              text: 'Sign in with Apple',
+            ),
     );
   }
 }

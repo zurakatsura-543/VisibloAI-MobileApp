@@ -214,6 +214,45 @@ class AuthApiService extends GetxService {
     }
   }
 
+  Future<AuthMeResponse> loginWithAppleMobile({
+    required String identityToken,
+    required String authorizationCode,
+    String? email,
+    String? givenName,
+    String? familyName,
+    String? userIdentifier,
+  }) async {
+    try {
+      debugPrint('Sending native Apple login request...');
+      final response = await _api.post(
+        '/auth/apple/mobile',
+        data: <String, dynamic>{
+          'identityToken': identityToken.trim(),
+          'authorizationCode': authorizationCode.trim(),
+          if (email != null && email.trim().isNotEmpty) 'email': email.trim().toLowerCase(),
+          if (givenName != null && givenName.trim().isNotEmpty) 'givenName': givenName.trim(),
+          if (familyName != null && familyName.trim().isNotEmpty) 'familyName': familyName.trim(),
+          if (userIdentifier != null && userIdentifier.trim().isNotEmpty) 'userIdentifier': userIdentifier.trim(),
+        },
+      );
+
+      await _persistAccessToken(response.data);
+      Get.find<NotificationService>().registerDeviceToken();
+      return fetchMyData();
+    } on DioException catch (error) {
+      await clearSession();
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      await clearSession();
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to finish Sign in with Apple right now.',
+        ),
+      );
+    }
+  }
+
   Future<AuthMeResponse> fetchMyData() async {
     try {
       debugPrint('Fetching /auth/me data...');
@@ -2512,6 +2551,39 @@ class AuthApiService extends GetxService {
         _readUnexpectedError(
           error,
           fallback: 'Unable to verify AutoPay right now.',
+        ),
+      );
+    }
+  }
+
+  Future<void> verifyAppleInAppPurchase({
+    required String productId,
+    required String transactionId,
+    required String receiptData,
+    required String plan,
+    required String billingCycle,
+    String? businessId,
+  }) async {
+    try {
+      await _api.post(
+        '/billing/verify-apple-iap',
+        data: <String, dynamic>{
+          'productId': productId.trim(),
+          'transactionId': transactionId.trim(),
+          'receiptData': receiptData.trim(),
+          'plan': plan.trim().toUpperCase(),
+          'billingCycle': normalizeBillingCycle(billingCycle),
+          if (businessId != null && businessId.trim().isNotEmpty)
+            'businessId': businessId.trim(),
+        },
+      );
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to verify Apple purchase with backend right now.',
         ),
       );
     }

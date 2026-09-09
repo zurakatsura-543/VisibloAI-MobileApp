@@ -206,6 +206,15 @@ class SignUpView extends GetView<OnboardingController> {
                 onPressed: controller.continueWithGoogle,
               ),
             ),
+            if (Theme.of(context).platform == TargetPlatform.iOS) ...[
+              const SizedBox(height: 12),
+              Obx(
+                () => AuthAppleButton(
+                  isLoading: controller.isAppleSignInLoading.value,
+                  onPressed: controller.continueWithApple,
+                ),
+              ),
+            ],
             const SizedBox(height: 18),
             AuthBottomLink(
               prompt: 'Already have an account? ',

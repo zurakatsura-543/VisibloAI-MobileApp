@@ -742,8 +742,9 @@ class _ExpiredPaymentModeSelector extends StatelessWidget {
             child: _ExpiredModeCard(
               icon: Icons.verified_user_outlined,
               title: 'Enable AutoPay',
-              subtitle:
-                  'Creates a Razorpay subscription mandate for recurring charges.',
+              subtitle: Theme.of(context).platform == TargetPlatform.iOS
+                  ? 'Apple auto-renewing subscription.'
+                  : 'Creates a Razorpay subscription mandate for recurring charges.',
               selected: selectedMode == 'AUTOPAY',
               enabled: true,
               onTap: () => controller.setBillingMode('AUTOPAY'),
@@ -1406,7 +1407,7 @@ class _ExpiredRestoreButton extends StatelessWidget {
 class _ExpiredTrustRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    const items = <({IconData icon, String label, Color color})>[
+    final items = <({IconData icon, String label, Color color})>[
       (
         icon: Icons.verified_user_outlined,
         label: 'Secure checkout',
@@ -1414,7 +1415,9 @@ class _ExpiredTrustRow extends StatelessWidget {
       ),
       (
         icon: Icons.shield_outlined,
-        label: 'Razorpay verified',
+        label: Theme.of(context).platform == TargetPlatform.iOS
+            ? 'App Store verified'
+            : 'Razorpay verified',
         color: Color(0xFF2C7BFF),
       ),
       (
@@ -3037,7 +3040,9 @@ class _UpgradePlansCardState extends State<_UpgradePlansCard> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Review all three plans, expand the full feature list, and complete payment securely with Razorpay.',
+            Theme.of(context).platform == TargetPlatform.iOS
+                ? 'Choose a subscription plan to continue with Visiblo AI.'
+                : 'Review all three plans, expand the full feature list, and complete payment securely with Razorpay.',
             style: AppTypography.body(
               fontSize: 12.8,
               color: AppColors.mutedText,
@@ -3045,6 +3050,23 @@ class _UpgradePlansCardState extends State<_UpgradePlansCard> {
           ),
           const SizedBox(height: 14),
           _BillingCycleToggle(controller: widget.controller),
+          if (Theme.of(context).platform == TargetPlatform.iOS) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: widget.controller.restoreApplePurchases,
+                icon: const Icon(Icons.restore_rounded, size: 16),
+                label: Text(
+                  'Restore Purchases',
+                  style: AppTypography.button(
+                    fontSize: 13,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           Column(
             children: [
@@ -3326,32 +3348,40 @@ class _PlanOfferCard extends StatelessWidget {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    RichText(
-                      text: TextSpan(
-                        style: AppTypography.card(
-                          fontSize: 16,
-                          color: AppColors.brandBlue,
-                          fontWeight: FontWeight.w700,
+                    Builder(builder: (context) {
+                      final localizedIapPrice =
+                          controller.getLocalizedPriceForPlan(plan.code);
+                      final displayPrice = localizedIapPrice.isNotEmpty
+                          ? localizedIapPrice
+                          : _formatInr(price);
+                      return RichText(
+                        text: TextSpan(
+                          style: AppTypography.card(
+                            fontSize: 16,
+                            color: AppColors.brandBlue,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          children: [
+                            TextSpan(
+                              text: displayPrice,
+                              style: AppTypography.card(
+                                fontSize: 24,
+                                color: AppColors.brandBlue,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (localizedIapPrice.isEmpty)
+                              TextSpan(
+                                text: '/mo',
+                                style: AppTypography.body(
+                                  fontSize: 13,
+                                  color: AppColors.mutedText,
+                                ),
+                              ),
+                          ],
                         ),
-                        children: [
-                          TextSpan(
-                            text: _formatInr(price),
-                            style: AppTypography.card(
-                              fontSize: 24,
-                              color: AppColors.brandBlue,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          TextSpan(
-                            text: '/mo',
-                            style: AppTypography.body(
-                              fontSize: 13,
-                              color: AppColors.mutedText,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                      );
+                    }),
                     if (isYearly)
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -3538,7 +3568,9 @@ class _SecurePaymentCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Choose manual checkout or AutoPay, then complete billing with Razorpay.',
+                          Theme.of(context).platform == TargetPlatform.iOS
+                              ? 'Select a plan to start your Apple In-App Subscription.'
+                              : 'Choose manual checkout or AutoPay, then complete billing with Razorpay.',
                           style: AppTypography.body(
                             fontSize: 12.4,
                             color: AppColors.mutedText,
@@ -3579,11 +3611,13 @@ class _SecurePaymentCard extends StatelessWidget {
                   border: Border.all(color: const Color(0xFFDCE6F1)),
                 ),
                 child: Text(
-                  controller.selectedBillingMode.value == 'AUTOPAY'
-                      ? controller.canResumeAutopay
-                            ? 'Resume recurring billing for this business. Razorpay will ask for a fresh mandate authorization.'
-                            : 'Set up a recurring Razorpay mandate so renewals happen automatically until the owner cancels it.'
-                      : 'Use a one-time Razorpay checkout for this billing cycle. This is best when the owner does not want recurring deductions yet.',
+                  Theme.of(context).platform == TargetPlatform.iOS
+                      ? 'Subscriptions renew automatically through Apple StoreKit until cancelled in your Apple ID settings.'
+                      : controller.selectedBillingMode.value == 'AUTOPAY'
+                          ? controller.canResumeAutopay
+                              ? 'Resume recurring billing for this business. Razorpay will ask for a fresh mandate authorization.'
+                              : 'Set up a recurring Razorpay mandate so renewals happen automatically until the owner cancels it.'
+                          : 'Use a one-time Razorpay checkout for this billing cycle. This is best when the owner does not want recurring deductions yet.',
                   style: AppTypography.body(
                     fontSize: 12.6,
                     color: AppColors.mutedText,
@@ -3770,9 +3804,11 @@ class _SecurePaymentCard extends StatelessWidget {
               Text(
                 controller.couponResult.value?.skipPayment == true
                     ? 'This action will activate the selected plan immediately using the validated coupon.'
-                    : controller.selectedBillingMode.value == 'AUTOPAY'
-                    ? 'AutoPay is only a mandate setup here. The backend still controls renewal status, warnings, and cancellation rules per activated business.'
-                    : 'Razorpay checkout stays real. The charged amount comes from the backend order created at tap time.',
+                    : Theme.of(context).platform == TargetPlatform.iOS
+                        ? 'Purchases are handled securely by Apple StoreKit.'
+                        : controller.selectedBillingMode.value == 'AUTOPAY'
+                            ? 'AutoPay is only a mandate setup here. The backend still controls renewal status, warnings, and cancellation rules per activated business.'
+                            : 'Razorpay checkout stays real. The charged amount comes from the backend order created at tap time.',
                 style: AppTypography.body(
                   fontSize: 12.2,
                   color: AppColors.mutedText,
@@ -3904,7 +3940,9 @@ class _PaymentHistoryCard extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     child: Text(
-                      'No billing records yet. Your successful Razorpay payments and invoices will appear here.',
+                      Theme.of(context).platform == TargetPlatform.iOS
+                          ? 'No billing records yet. Your active subscription details and history will appear here.'
+                          : 'No billing records yet. Your successful Razorpay payments and invoices will appear here.',
                       style: AppTypography.body(
                         fontSize: 13.2,
                         color: AppColors.mutedText,

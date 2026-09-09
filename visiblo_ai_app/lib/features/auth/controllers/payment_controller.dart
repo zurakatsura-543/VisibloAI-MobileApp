@@ -8,8 +8,11 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../app/routes/app_routes.dart';
 import '../../../app/services/local_auth_service.dart';
+import '../services/apple_iap_service.dart';
 import '../../onboarding/controllers/onboarding_controller.dart';
 import '../models/auth_me_response.dart';
 import '../models/payment_models.dart';
@@ -74,6 +77,7 @@ class PaymentController extends GetxController {
     syncBillingTargetFromRouteArguments();
     couponCodeController.addListener(_handleCouponChanged);
     _setupRazorpay();
+    _setupAppleIap();
     unawaited(loadInitialData());
   }
 
@@ -557,6 +561,18 @@ class PaymentController extends GetxController {
     if (isVerifyingPayment.value) {
       return 'Verifying payment...';
     }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      if (checkoutPlanCode.value == selectedPlan.code) {
+        return 'Connecting to App Store...';
+      }
+      if (couponResult.value?.skipPayment == true) {
+        return 'Apply free coupon';
+      }
+      if (selectedPlan.code == activePlanCode && hasActiveSubscription) {
+        return 'Renew Plan with Apple';
+      }
+      return 'Subscribe with Apple';
+    }
     if (checkoutPlanCode.value == selectedPlan.code) {
       return selectedBillingMode.value == 'AUTOPAY'
           ? 'Opening AutoPay...'
@@ -907,6 +923,28 @@ class PaymentController extends GetxController {
       return;
     }
 
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final plan = selectedPlan;
+      checkoutPlanCode.value = plan.code;
+      errorMessage.value = null;
+      infoMessage.value = 'Starting Apple subscription checkout...';
+      try {
+        final initiated = await AppleIapService().purchasePlan(
+          plan: plan.code,
+          billingCycle: selectedBillingCycle.value,
+        );
+        if (!initiated) {
+          errorMessage.value = AppleIapService().lastError.value ??
+              'Could not start Apple In-App Purchase.';
+        }
+      } catch (e) {
+        errorMessage.value = 'Apple purchase error: $e';
+      } finally {
+        checkoutPlanCode.value = null;
+      }
+      return;
+    }
+
     if (selectedBillingMode.value == 'AUTOPAY') {
       await _startAutopayCheckout();
       return;
@@ -1049,6 +1087,55 @@ class PaymentController extends GetxController {
     razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
     _razorpay = razorpay;
+  }
+
+  void _setupAppleIap() {
+    if (defaultTargetPlatform != TargetPlatform.iOS) {
+      return;
+    }
+    AppleIapService().initialize(
+      onPurchaseSuccess: (purchaseDetails) async {
+        await refreshData();
+        infoMessage.value =
+            'Visiblo AI subscription activated via Apple In-App Purchase!';
+      },
+    );
+  }
+
+  String getLocalizedPriceForPlan(String planCode) {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final price = AppleIapService().getLocalizedPrice(
+        plan: planCode,
+        billingCycle: selectedBillingCycle.value,
+      );
+      if (price != null && price.isNotEmpty) {
+        return price;
+      }
+    }
+    return '';
+  }
+
+  Future<void> restoreApplePurchases() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+    errorMessage.value = null;
+    infoMessage.value = 'Restoring Apple purchases...';
+    try {
+      await AppleIapService().restorePurchases();
+      await refreshData();
+      infoMessage.value = 'Purchases restored successfully.';
+    } catch (error) {
+      errorMessage.value = 'Failed to restore purchases: $error';
+    }
+  }
+
+  Future<void> manageAppleSubscription() async {
+    const url = 'https://apps.apple.com/account/subscriptions';
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      errorMessage.value = 'Unable to open Apple Subscription Settings.';
+    }
   }
 
   Future<void> _applyFreeCoupon() async {

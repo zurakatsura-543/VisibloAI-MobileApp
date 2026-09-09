@@ -97,7 +97,7 @@ class AccountView extends GetView<AccountSettingsController> {
                 borderRadius: BorderRadius.circular(22),
               ),
               title: Text(
-                'Delete business profile',
+                'Delete Account',
                 style: AppTypography.card(
                   fontSize: 20,
                   color: AppColors.brandBlue,
@@ -108,7 +108,7 @@ class AccountView extends GetView<AccountSettingsController> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '⚠️ This will remove the current Google Business Profile from your VisibloAI workspace.',
+                    '⚠️ Account deletion is permanent. This will delete your Visiblo AI account, profile, and associated workspace data.',
                     style: AppTypography.body(
                       fontSize: 13.5,
                       color: AppColors.brandBlue,
@@ -118,7 +118,7 @@ class AccountView extends GetView<AccountSettingsController> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'For safety, we will send a 6-digit OTP to your email before anything is deleted.',
+                    'For security, a 6-digit OTP will be sent to your registered email address before account data is permanently deleted.',
                     style: AppTypography.body(
                       fontSize: 13.2,
                       color: AppColors.mutedText,
@@ -1432,7 +1432,7 @@ class _DeleteAccountCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Delete business profile',
+                  'Delete Account',
                   style: AppTypography.button(
                     fontSize: 14.2,
                     color: AppColors.brandBlue,
@@ -1441,7 +1441,7 @@ class _DeleteAccountCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '⚠️ Remove "$businessName" from VisibloAI only after OTP verification by email.',
+                  '⚠️ Permanently delete your account and data after email OTP confirmation.',
                   style: AppTypography.body(
                     fontSize: 11.2,
                     color: const Color(0xFF7E8798),
