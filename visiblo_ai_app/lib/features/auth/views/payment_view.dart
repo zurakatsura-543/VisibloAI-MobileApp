@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1466,6 +1467,7 @@ class _ExpiredPlanActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isIos = Theme.of(context).platform == TargetPlatform.iOS;
     return Row(
       children: [
         Expanded(
@@ -1488,27 +1490,29 @@ class _ExpiredPlanActions extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: _openPricingComparison,
-            icon: const Icon(Icons.chevron_right_rounded, size: 20),
-            label: const Text('Compare all features'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.brandBlue,
-              side: const BorderSide(color: Color(0xFFD8E2EC)),
-              backgroundColor: const Color(0xFFF8FAFD),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              textStyle: GoogleFonts.manrope(
-                fontSize: 12.8,
-                fontWeight: FontWeight.w900,
+        if (!isIos) ...[
+          const SizedBox(width: 10),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _openPricingComparison,
+              icon: const Icon(Icons.chevron_right_rounded, size: 20),
+              label: const Text('Compare all features'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.brandBlue,
+                side: const BorderSide(color: Color(0xFFD8E2EC)),
+                backgroundColor: const Color(0xFFF8FAFD),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                textStyle: GoogleFonts.manrope(
+                  fontSize: 12.8,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -1526,6 +1530,9 @@ void _showExpiredPlanPicker(
 }
 
 Future<void> _openPricingComparison() async {
+  if (defaultTargetPlatform == TargetPlatform.iOS) {
+    return;
+  }
   final uri = Uri.parse('https://www.visibloai.com/pricing');
   final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
   if (!opened) {
