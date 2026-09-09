@@ -75,6 +75,37 @@ android/app/*.keystore
 
 Keep two encrypted backups of the upload key and credentials.
 
+## Android Play publishing
+
+This project is configured for Gradle Play Publisher. The default publishing
+track is `internal`, and the Play upload uses Android App Bundles.
+
+Prerequisites:
+
+1. The app must already exist in Play Console for `com.example.visiblo_ai_app`.
+2. `android/key.properties` must point to the Play upload keystore.
+3. A Play Console service account must have release access for this app.
+4. Provide credentials either as `ANDROID_PUBLISHER_CREDENTIALS` or as the
+   ignored file `android/play-service-account.json`.
+
+Build a signed bundle:
+
+```bash
+flutter build appbundle --release \
+  --dart-define=APP_ENV=production \
+  --dart-define=API_BASE_URL=https://app.visibloai.com/api
+```
+
+Publish to internal testing:
+
+```bash
+cd android
+./gradlew publishBundle -PplayTrack=internal
+```
+
+Use `-PplayTrack=production` only after internal testing, device checks, and
+Crashlytics/App Check monitoring look healthy.
+
 ## Firebase production checklist
 
 Firebase client configuration files and API keys identify the Firebase project;
