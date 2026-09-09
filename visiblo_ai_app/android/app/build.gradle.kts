@@ -1,10 +1,12 @@
 import java.io.FileInputStream
 import java.util.Properties
+import com.github.triplet.gradle.androidpublisher.ReleaseStatus
 
 plugins {
     id("com.android.application")
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
+    id("com.github.triplet.play")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
@@ -70,4 +72,16 @@ android {
 
 flutter {
     source = "../.."
+}
+
+play {
+    val localCredentials = rootProject.file("play-service-account.json")
+
+    if (localCredentials.exists()) {
+        serviceAccountCredentials.set(localCredentials)
+    }
+
+    defaultToAppBundles.set(true)
+    track.set(providers.gradleProperty("playTrack").orElse("internal"))
+    releaseStatus.set(ReleaseStatus.COMPLETED)
 }
