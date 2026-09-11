@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_typography.dart';
@@ -256,7 +255,7 @@ class AuthGoogleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 56,
+      height: 52,
       child: OutlinedButton(
         onPressed: isLoading ? null : onPressed,
         style: OutlinedButton.styleFrom(
@@ -268,25 +267,25 @@ class AuthGoogleButton extends StatelessWidget {
         ),
         child: isLoading
             ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.2),
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   SvgPicture.asset(
                     'assets/icons/google_logo.svg',
-                    width: 21,
-                    height: 21,
+                    width: 20,
+                    height: 20,
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Text(
                     'Continue with Google',
                     style: AppTypography.button(
                       fontSize: 16,
                       color: AppColors.brandBlue,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],
@@ -309,30 +308,45 @@ class AuthAppleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 56,
-      child: isLoading
-          ? Container(
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const SizedBox(
-                width: 22,
-                height: 22,
+      height: 52,
+      child: OutlinedButton(
+        onPressed: isLoading ? null : onPressed,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: Colors.black,
+          side: const BorderSide(color: Colors.black),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
+                  strokeWidth: 2,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.apple,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Sign in with Apple',
+                    style: AppTypography.button(
+                      fontSize: 16,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
               ),
-            )
-          : SignInWithAppleButton(
-              onPressed: onPressed,
-              style: SignInWithAppleButtonStyle.black,
-              borderRadius: BorderRadius.circular(16),
-              height: 56,
-              text: 'Sign in with Apple',
-            ),
+      ),
     );
   }
 }

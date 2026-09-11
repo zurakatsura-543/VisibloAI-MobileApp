@@ -738,19 +738,6 @@ class _ExpiredPaymentModeSelector extends StatelessWidget {
               onTap: () => controller.setBillingMode('MANUAL'),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _ExpiredModeCard(
-              icon: Icons.verified_user_outlined,
-              title: 'Enable AutoPay',
-              subtitle: Theme.of(context).platform == TargetPlatform.iOS
-                  ? 'Apple auto-renewing subscription.'
-                  : 'Creates a Razorpay subscription mandate for recurring charges.',
-              selected: selectedMode == 'AUTOPAY',
-              enabled: true,
-              onTap: () => controller.setBillingMode('AUTOPAY'),
-            ),
-          ),
         ],
       );
     });
@@ -3588,27 +3575,7 @@ class _SecurePaymentCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _PaymentMethodChip(
-                    label: 'Manual pay',
-                    selected: controller.selectedBillingMode.value == 'MANUAL',
-                    onTap: controller.supportsManualCheckout
-                        ? () => controller.setBillingMode('MANUAL')
-                        : null,
-                  ),
-                  _PaymentMethodChip(
-                    label: 'AutoPay',
-                    selected: controller.selectedBillingMode.value == 'AUTOPAY',
-                    onTap: controller.supportsAutopayCheckout
-                        ? () => controller.setBillingMode('AUTOPAY')
-                        : null,
-                  ),
-                ],
-              ),
+
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),

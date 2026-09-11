@@ -732,7 +732,7 @@ class OnboardingController extends GetxController {
       );
       Get.snackbar(
         'Apple sign-in failed',
-        error.toString().replaceAll('Exception: ', ''),
+        _humanizeAppleSignInError(error),
         snackPosition: SnackPosition.BOTTOM,
       );
     } finally {
@@ -3300,6 +3300,46 @@ class OnboardingController extends GetxController {
           'SHA1 $_androidDebugSha1, and web OAuth client $_googleWebClientId '
           'all belong to the same Firebase project.';
     }
+    return message;
+  }
+
+  String _humanizeAppleSignInError(Object error) {
+    if (error is SignInWithAppleAuthorizationException) {
+      final String rawMsg = error.message;
+      final bool isError1000 = rawMsg.contains('1000') ||
+          rawMsg.contains('AuthorizationError error 1000');
+
+      if (isError1000) {
+        return 'Apple sign-in was canceled or is unavailable on this simulator. '
+            'Please ensure you are signed into an Apple ID in device settings.';
+      }
+
+      switch (error.code) {
+        case AuthorizationErrorCode.canceled:
+          return 'Apple sign-in was canceled.';
+        case AuthorizationErrorCode.unknown:
+          return 'Apple sign-in could not be completed. Please try again.';
+        case AuthorizationErrorCode.failed:
+          return 'Apple sign-in failed. Please try again.';
+        case AuthorizationErrorCode.invalidResponse:
+          return 'Received an invalid response from Apple. Please try again.';
+        case AuthorizationErrorCode.notHandled:
+          return 'Apple sign-in request was not handled. Please try again.';
+        case AuthorizationErrorCode.notInteractive:
+          return 'Apple sign-in requires user interaction. Please try again.';
+      }
+    }
+
+    if (error is SignInWithAppleCredentialsException) {
+      return 'Apple sign-in credentials error: ${error.message}';
+    }
+
+    final message = _humanizeError(error).trim();
+    if (message.contains('SignInWithAppleAuthorizationException') ||
+        message.contains('AuthorizationError error 1000')) {
+      return 'Apple sign-in could not be completed. Please check your Apple ID settings and try again.';
+    }
+
     return message;
   }
 

@@ -382,9 +382,20 @@ class _PhoneNumberField extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  country.flag,
-                  style: const TextStyle(fontSize: 18),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEBF4FD),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    country.isoCode,
+                    style: AppTypography.body(
+                      fontSize: 12,
+                      color: AppColors.brandBlue,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -439,9 +450,20 @@ class _PhoneNumberField extends StatelessWidget {
               return ListTile(
                 onTap: () => Navigator.of(context).pop(item),
                 contentPadding: EdgeInsets.zero,
-                leading: Text(
-                  item.flag,
-                  style: const TextStyle(fontSize: 22),
+                leading: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEBF4FD),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    item.isoCode,
+                    style: AppTypography.body(
+                      fontSize: 13,
+                      color: AppColors.brandBlue,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
                 title: Text(
                   item.name,
