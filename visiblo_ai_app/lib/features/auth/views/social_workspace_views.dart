@@ -5653,7 +5653,7 @@ class _CalendarMonthGrid extends StatelessWidget {
             itemCount: days.length,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 7,
-              childAspectRatio: 1.08,
+              childAspectRatio: 0.88,
             ),
             itemBuilder: (context, index) {
               final day = days[index];
@@ -5962,13 +5962,21 @@ class _CalendarDayCell extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-            if (events.isNotEmpty) ...[
-              const Spacer(),
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: Wrap(spacing: 2, runSpacing: 2, children: events),
+            if (events.isNotEmpty)
+              Expanded(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Wrap(
+                      spacing: 2,
+                      runSpacing: 2,
+                      alignment: WrapAlignment.center,
+                      children: events,
+                    ),
+                  ),
+                ),
               ),
-            ],
           ],
         ),
       ),
