@@ -923,12 +923,12 @@ class _SocialMediaTopBannerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCompact = MediaQuery.sizeOf(context).width < 390;
-    final socialLabelSize = isCompact ? 13.8 : 14.4;
-    final headlineSize = isCompact ? 12.4 : 15.2;
+    final socialLabelSize = isCompact ? 13.0 : 14.0;
+    final headlineSize = isCompact ? 12.0 : 14.0;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 2, 14, 3),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(_homeCardRadius(28)),
@@ -941,114 +941,91 @@ class _SocialMediaTopBannerCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: AspectRatio(
-          aspectRatio: 3.95,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              isCompact ? 8 : 14,
-              isCompact ? 4 : 6,
-              isCompact ? 8 : 18,
-              isCompact ? 4 : 6,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 9,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  flex: 9,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 1),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 2),
-                        Padding(
-                          padding: const EdgeInsets.only(left: 4),
-                          child: Text(
-                            'Social media',
-                            maxLines: 1,
-                            style: TextStyle(
-                              color: AppColors.primary,
-                              fontSize: socialLabelSize,
-                              height: 1.0,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.1,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Padding(
-                          padding: const EdgeInsets.only(left: 2),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Image.asset(
-                                'assets/images/facebook.png',
-                                width: isCompact ? 26 : 30,
-                                height: isCompact ? 26 : 30,
-                                fit: BoxFit.contain,
-                              ),
-                              SizedBox(width: isCompact ? 5 : 6),
-                              Image.asset(
-                                'assets/images/instagram.png',
-                                width: isCompact ? 26 : 30,
-                                height: isCompact ? 26 : 30,
-                                fit: BoxFit.contain,
-                              ),
-                              SizedBox(width: isCompact ? 5 : 6),
-                              Image.asset(
-                                'assets/images/link.png',
-                                width: isCompact ? 26 : 30,
-                                height: isCompact ? 26 : 30,
-                                fit: BoxFit.contain,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Text(
+                    'Social media',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: socialLabelSize,
+                      height: 1.1,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.1,
                     ),
                   ),
                 ),
-                SizedBox(width: isCompact ? 12 : 18),
-                Expanded(
-                  flex: 11,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 8, right: 0),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AppLogo(iconSize: isCompact ? 32 : 42),
-                          SizedBox(height: isCompact ? 4 : 10),
-                          Text(
-                            'AI-powered content for\nyour social platforms',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              color: AppColors.brandBlue,
-                              fontSize: headlineSize,
-                              height: 1.0,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.08,
-                            ),
-                          ),
-                        ],
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.only(left: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Image.asset(
+                        'assets/images/facebook.png',
+                        width: isCompact ? 24 : 28,
+                        height: isCompact ? 24 : 28,
+                        fit: BoxFit.contain,
                       ),
-                    ),
+                      SizedBox(width: isCompact ? 5 : 6),
+                      Image.asset(
+                        'assets/images/instagram.png',
+                        width: isCompact ? 24 : 28,
+                        height: isCompact ? 24 : 28,
+                        fit: BoxFit.contain,
+                      ),
+                      SizedBox(width: isCompact ? 5 : 6),
+                      Image.asset(
+                        'assets/images/link.png',
+                        width: isCompact ? 24 : 28,
+                        height: isCompact ? 24 : 28,
+                        fit: BoxFit.contain,
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-        ),
+          SizedBox(width: isCompact ? 10 : 16),
+          Expanded(
+            flex: 11,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AppLogo(iconSize: isCompact ? 28 : 34),
+                const SizedBox(height: 4),
+                Text(
+                  'AI-powered content for\nyour social platforms',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: AppColors.brandBlue,
+                    fontSize: headlineSize,
+                    height: 1.15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.08,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
