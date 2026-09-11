@@ -294,21 +294,6 @@ class _TrialUnlockView extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (controller.errorMessage.value != null) ...[
-                  const SizedBox(height: 14),
-                  _FeedbackBanner(
-                    message: controller.errorMessage.value!,
-                    isError: true,
-                    onDismiss: controller.clearError,
-                  ),
-                ],
-                if (controller.infoMessage.value != null) ...[
-                  const SizedBox(height: 14),
-                  _FeedbackBanner(
-                    message: controller.infoMessage.value!,
-                    onDismiss: controller.clearInfo,
-                  ),
-                ],
               ],
             ),
           );
@@ -451,21 +436,6 @@ class _ExpiredRenewalView extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                if (controller.errorMessage.value != null) ...[
-                  const SizedBox(height: 14),
-                  _FeedbackBanner(
-                    message: controller.errorMessage.value!,
-                    isError: true,
-                    onDismiss: controller.clearError,
-                  ),
-                ],
-                if (controller.infoMessage.value != null) ...[
-                  const SizedBox(height: 14),
-                  _FeedbackBanner(
-                    message: controller.infoMessage.value!,
-                    onDismiss: controller.clearInfo,
-                  ),
-                ],
               ],
             ),
           );
@@ -2298,21 +2268,6 @@ class _PaymentContentState extends State<_PaymentContent> {
                       onBillingHistoryTap: _scrollToBillingHistory,
                     ),
                     const SizedBox(height: 12),
-                    if (widget.controller.errorMessage.value != null) ...[
-                      _FeedbackBanner(
-                        message: widget.controller.errorMessage.value!,
-                        isError: true,
-                        onDismiss: widget.controller.clearError,
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    if (widget.controller.infoMessage.value != null) ...[
-                      _FeedbackBanner(
-                        message: widget.controller.infoMessage.value!,
-                        onDismiss: widget.controller.clearInfo,
-                      ),
-                      const SizedBox(height: 12),
-                    ],
                     if (widget.controller.billingWarnings.isNotEmpty) ...[
                       _BillingWarningsCard(controller: widget.controller),
                       const SizedBox(height: 12),

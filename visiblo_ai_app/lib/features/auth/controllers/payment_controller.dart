@@ -78,6 +78,36 @@ class PaymentController extends GetxController {
     couponCodeController.addListener(_handleCouponChanged);
     _setupRazorpay();
     _setupAppleIap();
+    ever<String?>(errorMessage, (msg) {
+      if (msg != null && msg.trim().isNotEmpty) {
+        Get.snackbar(
+          'Payment Notice',
+          msg,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFFFFF1F1),
+          colorText: const Color(0xFF991B1B),
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          borderRadius: 14,
+          icon: const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626)),
+          duration: const Duration(seconds: 5),
+        );
+      }
+    });
+    ever<String?>(infoMessage, (msg) {
+      if (msg != null && msg.trim().isNotEmpty) {
+        Get.snackbar(
+          'Payment Status',
+          msg,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFFEFFAF6),
+          colorText: const Color(0xFF065F46),
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          borderRadius: 14,
+          icon: const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF059669)),
+          duration: const Duration(seconds: 4),
+        );
+      }
+    });
     unawaited(loadInitialData());
   }
 
