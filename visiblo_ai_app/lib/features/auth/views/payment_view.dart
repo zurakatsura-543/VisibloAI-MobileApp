@@ -1487,15 +1487,12 @@ void _showExpiredPlanPicker(
 }
 
 Future<void> _openPricingComparison() async {
-  if (defaultTargetPlatform == TargetPlatform.iOS) {
-    return;
-  }
   final uri = Uri.parse('https://www.visibloai.com/pricing');
   final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
   if (!opened) {
     Get.snackbar(
-      'Unable to open pricing',
-      'Please visit www.visibloai.com/pricing to compare all features.',
+      'Unable to open web pricing',
+      'Please visit www.visibloai.com/pricing in your web browser to check plans.',
       snackPosition: SnackPosition.BOTTOM,
     );
   }
@@ -2995,6 +2992,7 @@ class _UpgradePlansCardState extends State<_UpgradePlansCard> {
           ),
           const SizedBox(height: 14),
           _BillingCycleToggle(controller: widget.controller),
+          /*
           if (Theme.of(context).platform == TargetPlatform.iOS) ...[
             const SizedBox(height: 8),
             Align(
@@ -3012,6 +3010,7 @@ class _UpgradePlansCardState extends State<_UpgradePlansCard> {
               ),
             ),
           ],
+          */
           const SizedBox(height: 14),
           Column(
             children: [
@@ -3037,6 +3036,94 @@ class _UpgradePlansCardState extends State<_UpgradePlansCard> {
                   const SizedBox(height: 12),
               ],
             ],
+          ),
+          if (Theme.of(context).platform != TargetPlatform.iOS) ...[
+            const SizedBox(height: 16),
+            const _WebBillingBannerCard(),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WebBillingBannerCard extends StatelessWidget {
+  const _WebBillingBannerCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F9FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFC3DDFF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007AFF).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.language_rounded,
+                  color: Color(0xFF007AFF),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Visiblo Web SaaS Portal',
+                      style: GoogleFonts.manrope(
+                        fontSize: 14,
+                        color: const Color(0xFF0F2746),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Subscribe directly on the Visiblo web portal to access all features with instant multi-device sync.',
+                      style: GoogleFonts.manrope(
+                        fontSize: 12,
+                        color: const Color(0xFF5A6E85),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _openPricingComparison,
+              icon: const Icon(Icons.open_in_browser_rounded, size: 18),
+              label: const Text('Visit Visiblo Web Portal'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF007AFF),
+                side: const BorderSide(color: Color(0xFF007AFF)),
+                backgroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                textStyle: GoogleFonts.manrope(
+                  fontSize: 12.8,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           ),
         ],
       ),

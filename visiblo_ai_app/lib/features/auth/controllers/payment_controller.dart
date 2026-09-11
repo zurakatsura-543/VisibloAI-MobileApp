@@ -953,6 +953,7 @@ class PaymentController extends GetxController {
       return;
     }
 
+    // Native Apple In-App Purchase for iOS
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       final plan = selectedPlan;
       checkoutPlanCode.value = plan.code;
@@ -975,11 +976,23 @@ class PaymentController extends GetxController {
       return;
     }
 
-    if (selectedBillingMode.value == 'AUTOPAY') {
-      await _startAutopayCheckout();
-      return;
+    // Web SaaS checkout for non-iOS platforms
+    try {
+      final uri = Uri.parse('https://www.visibloai.com/pricing');
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened) {
+        errorMessage.value =
+            'Could not open website. Please visit www.visibloai.com/pricing in your web browser.';
+      }
+    } catch (e) {
+      errorMessage.value = 'Could not open web pricing page: $e';
     }
 
+    /*
+    // =========================================================================
+    // NATIVE / RAZORPAY / IAP CHECKOUT (COMMENTED OUT FOR WEB-FIRST BILLING)
+    // UNCOMMENT IF NATIVE IN-APP PURCHASES ARE RE-ENABLED
+    // =========================================================================
     if (couponResult.value?.skipPayment == true) {
       await _applyFreeCoupon();
       return;
@@ -1061,6 +1074,7 @@ class PaymentController extends GetxController {
         checkoutPlanCode.value = null;
       }
     }
+    */
   }
 
   void clearError() {

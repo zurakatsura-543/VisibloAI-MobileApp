@@ -108,7 +108,7 @@ class AccountView extends GetView<AccountSettingsController> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '⚠️ Account deletion is permanent. This will delete your Visiblo AI account, profile, and associated workspace data.',
+                    'Account deletion is permanent. This will delete your Visiblo AI account, profile, and associated workspace data.',
                     style: AppTypography.body(
                       fontSize: 13.5,
                       color: AppColors.brandBlue,
@@ -163,7 +163,7 @@ class AccountView extends GetView<AccountSettingsController> {
     }
 
     try {
-      await controller.requestBusinessDeleteOtp();
+      await controller.requestUserAccountDeleteOtp();
     } catch (_) {
       return;
     }
@@ -191,7 +191,7 @@ class AccountView extends GetView<AccountSettingsController> {
                   borderRadius: BorderRadius.circular(22),
                 ),
                 title: Text(
-                  'Verify deletion OTP',
+                  'Verify Account Deletion OTP',
                   style: AppTypography.card(
                     fontSize: 20,
                     color: AppColors.brandBlue,
@@ -202,7 +202,7 @@ class AccountView extends GetView<AccountSettingsController> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Enter the 6-digit OTP sent to your account email to delete this business profile safely.',
+                      'Enter the 6-digit OTP sent to your registered email to permanently delete your Visiblo AI account.',
                       style: AppTypography.body(
                         fontSize: 13.2,
                         color: AppColors.mutedText,
@@ -262,7 +262,7 @@ class AccountView extends GetView<AccountSettingsController> {
                             });
                             try {
                               final deleted = await controller
-                                  .confirmBusinessDelete(otp);
+                                  .confirmUserAccountDelete(otp);
                               if (deleted && dialogContext.mounted) {
                                 Navigator.of(dialogContext).pop();
                               }
@@ -1441,7 +1441,7 @@ class _DeleteAccountCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '⚠️ Permanently delete your account and data after email OTP confirmation.',
+                  'Permanently delete your account and data after email OTP confirmation.',
                   style: AppTypography.body(
                     fontSize: 11.2,
                     color: const Color(0xFF7E8798),
