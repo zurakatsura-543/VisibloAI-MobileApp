@@ -2278,14 +2278,10 @@ class _PaymentContentState extends State<_PaymentContent> {
                     const SizedBox(height: 12),
                     _UpgradePlansCard(controller: widget.controller),
                     const SizedBox(height: 12),
-                    _SecurePaymentCard(controller: widget.controller),
-                    const SizedBox(height: 12),
                     Container(
                       key: _billingHistoryKey,
                       child: _PaymentHistoryCard(controller: widget.controller),
                     ),
-                    const SizedBox(height: 12),
-                    _AutoRenewCard(controller: widget.controller),
                   ],
                 ),
               ),
@@ -2966,7 +2962,7 @@ class _UpgradePlansCardState extends State<_UpgradePlansCard> {
   @override
   void initState() {
     super.initState();
-    _expandedPlanCodes.add(widget.controller.selectedPlan.code);
+    // Details are hidden by default for all plans
   }
 
   @override
@@ -3399,32 +3395,63 @@ class _PlanOfferCard extends StatelessWidget {
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => controller.selectPlan(plan.code),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: isActive
-                          ? Colors.white
-                          : (isSelected ? AppColors.brandBlue : accentColor),
-                      foregroundColor: isActive
-                          ? AppColors.brandBlue
-                          : Colors.white,
-                      side: isActive
-                          ? const BorderSide(color: Color(0xFFD7E2EC))
-                          : BorderSide.none,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                  child: Obx(() {
+                    final isPlanLoading = controller.isCheckoutBusy &&
+                        controller.checkoutPlanCode.value == plan.code;
+                    final isThisPlanSelected =
+                        controller.selectedPlan.code == plan.code;
+
+                    return FilledButton(
+                      onPressed: isActive || isPlanLoading
+                          ? null
+                          : () async {
+                              controller.selectPlan(plan.code);
+                              await controller.checkoutSelectedPlan();
+                            },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: isActive
+                            ? Colors.white
+                            : (isThisPlanSelected
+                                ? AppColors.brandBlue
+                                : accentColor),
+                        foregroundColor:
+                            isActive ? AppColors.brandBlue : Colors.white,
+                        disabledBackgroundColor: isActive
+                            ? Colors.white
+                            : (isThisPlanSelected
+                                ? AppColors.brandBlue.withValues(alpha: 0.6)
+                                : accentColor.withValues(alpha: 0.6)),
+                        disabledForegroundColor:
+                            isActive ? AppColors.brandBlue : Colors.white70,
+                        side: isActive
+                            ? const BorderSide(color: Color(0xFFD7E2EC))
+                            : BorderSide.none,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      isActive ? 'Current Plan' : 'Select Plan',
-                      style: AppTypography.button(
-                        fontSize: 13.4,
-                        color: isActive ? AppColors.brandBlue : Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
+                      child: isPlanLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              isActive ? 'Current Plan' : 'Subscribe to this plan',
+                              style: AppTypography.button(
+                                fontSize: 13.8,
+                                color: isActive
+                                    ? AppColors.brandBlue
+                                    : Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                    );
+                  }),
                 ),
               ],
             ),
