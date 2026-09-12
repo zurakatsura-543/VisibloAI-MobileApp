@@ -3631,9 +3631,7 @@ class _SecurePaymentCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          Theme.of(context).platform == TargetPlatform.iOS
-                              ? 'Select a plan to start your Apple In-App Subscription.'
-                              : 'Choose manual checkout or AutoPay, then complete billing with Razorpay.',
+                          'Select a plan to subscribe on our website.',
                           style: AppTypography.body(
                             fontSize: 12.4,
                             color: AppColors.mutedText,
@@ -3654,13 +3652,7 @@ class _SecurePaymentCard extends StatelessWidget {
                   border: Border.all(color: const Color(0xFFDCE6F1)),
                 ),
                 child: Text(
-                  Theme.of(context).platform == TargetPlatform.iOS
-                      ? 'Subscriptions renew automatically through Apple StoreKit until cancelled in your Apple ID settings.'
-                      : controller.selectedBillingMode.value == 'AUTOPAY'
-                          ? controller.canResumeAutopay
-                              ? 'Resume recurring billing for this business. Razorpay will ask for a fresh mandate authorization.'
-                              : 'Set up a recurring Razorpay mandate so renewals happen automatically until the owner cancels it.'
-                          : 'Use a one-time Razorpay checkout for this billing cycle. This is best when the owner does not want recurring deductions yet.',
+                  'Subscriptions are managed on our website at www.visibloai.com/pricing to avoid in-app platform fees.',
                   style: AppTypography.body(
                     fontSize: 12.6,
                     color: AppColors.mutedText,
@@ -3847,11 +3839,7 @@ class _SecurePaymentCard extends StatelessWidget {
               Text(
                 controller.couponResult.value?.skipPayment == true
                     ? 'This action will activate the selected plan immediately using the validated coupon.'
-                    : Theme.of(context).platform == TargetPlatform.iOS
-                        ? 'Purchases are handled securely by Apple StoreKit.'
-                        : controller.selectedBillingMode.value == 'AUTOPAY'
-                            ? 'AutoPay is only a mandate setup here. The backend still controls renewal status, warnings, and cancellation rules per activated business.'
-                            : 'Razorpay checkout stays real. The charged amount comes from the backend order created at tap time.',
+                    : 'You will be redirected to www.visibloai.com/pricing to complete your subscription.',
                 style: AppTypography.body(
                   fontSize: 12.2,
                   color: AppColors.mutedText,

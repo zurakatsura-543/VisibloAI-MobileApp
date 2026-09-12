@@ -593,15 +593,12 @@ class PaymentController extends GetxController {
     }
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       if (checkoutPlanCode.value == selectedPlan.code) {
-        return 'Connecting to App Store...';
+        return 'Opening Website...';
       }
       if (couponResult.value?.skipPayment == true) {
         return 'Apply free coupon';
       }
-      if (selectedPlan.code == activePlanCode && hasActiveSubscription) {
-        return 'Renew Plan with Apple';
-      }
-      return 'Subscribe with Apple';
+      return 'Subscribe on Website';
     }
     if (checkoutPlanCode.value == selectedPlan.code) {
       return selectedBillingMode.value == 'AUTOPAY'
@@ -953,23 +950,22 @@ class PaymentController extends GetxController {
       return;
     }
 
-    // Native Apple In-App Purchase for iOS
+    // Web SaaS checkout for iOS & all platforms to avoid platform fees
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       final plan = selectedPlan;
       checkoutPlanCode.value = plan.code;
       errorMessage.value = null;
-      infoMessage.value = 'Starting Apple subscription checkout...';
+      infoMessage.value = 'Opening website subscription page...';
+
       try {
-        final initiated = await AppleIapService().purchasePlan(
-          plan: plan.code,
-          billingCycle: selectedBillingCycle.value,
-        );
-        if (!initiated) {
-          errorMessage.value = AppleIapService().lastError.value ??
-              'Could not start Apple In-App Purchase.';
+        final uri = Uri.parse('https://www.visibloai.com/pricing');
+        final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!opened) {
+          errorMessage.value =
+              'Could not open website. Please visit www.visibloai.com/pricing in your web browser.';
         }
       } catch (e) {
-        errorMessage.value = 'Apple purchase error: $e';
+        errorMessage.value = 'Could not open web pricing page: $e';
       } finally {
         checkoutPlanCode.value = null;
       }
