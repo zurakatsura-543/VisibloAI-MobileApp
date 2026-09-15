@@ -292,6 +292,8 @@ class AuthInputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
@@ -299,25 +301,25 @@ class AuthInputField extends StatelessWidget {
       validator: validator,
       textInputAction: textInputAction,
       style: AppTypography.body(
-        fontSize: 16,
+        fontSize: isTablet ? 17.5 : 16.0,
         color: AppColors.brandBlue,
         fontWeight: FontWeight.w500,
       ),
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: AppTypography.body(
-          fontSize: 15.5,
+          fontSize: isTablet ? 17.0 : 15.5,
           color: const Color(0xFF7E8BA2),
           fontWeight: FontWeight.w500,
         ),
         filled: true,
         fillColor: AppColors.white,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 18,
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: isTablet ? 20 : 18,
+          vertical: isTablet ? 20 : 18,
         ),
-        prefixIcon: Icon(icon, size: 22, color: AppColors.brandBlue),
-        prefixIconConstraints: const BoxConstraints(minWidth: 50),
+        prefixIcon: Icon(icon, size: isTablet ? 24 : 22, color: AppColors.brandBlue),
+        prefixIconConstraints: BoxConstraints(minWidth: isTablet ? 54 : 50),
         suffixIcon: suffixIcon,
         enabledBorder: _border(),
         focusedBorder: _border(color: const Color(0xFF8ADBE4)),
@@ -350,8 +352,10 @@ class AuthPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     return Container(
-      height: 58,
+      height: isTablet ? 62 : 58,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
@@ -389,7 +393,7 @@ class AuthPrimaryButton extends StatelessWidget {
             : Text(
                 label,
                 style: AppTypography.button(
-                  fontSize: 17,
+                  fontSize: isTablet ? 18.5 : 17.0,
                   color: AppColors.white,
                   fontWeight: FontWeight.w600,
                 ),
@@ -411,8 +415,10 @@ class AuthGoogleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     return SizedBox(
-      height: 52,
+      height: isTablet ? 56 : 52,
       child: OutlinedButton(
         onPressed: isLoading ? null : onPressed,
         style: OutlinedButton.styleFrom(
@@ -433,16 +439,16 @@ class AuthGoogleButton extends StatelessWidget {
                 children: [
                   SvgPicture.asset(
                     'assets/icons/google_logo.svg',
-                    width: 20,
-                    height: 20,
+                    width: isTablet ? 22 : 20,
+                    height: isTablet ? 22 : 20,
                   ),
                   const SizedBox(width: 10),
                   Text(
                     'Continue with Google',
                     style: AppTypography.button(
-                      fontSize: 16,
+                      fontSize: isTablet ? 17.0 : 16.0,
                       color: AppColors.brandBlue,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -464,8 +470,10 @@ class AuthAppleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     return SizedBox(
-      height: 52,
+      height: isTablet ? 56 : 52,
       child: OutlinedButton(
         onPressed: isLoading ? null : onPressed,
         style: OutlinedButton.styleFrom(
@@ -487,18 +495,18 @@ class AuthAppleButton extends StatelessWidget {
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.apple,
-                    size: 20,
+                    size: isTablet ? 22 : 20,
                     color: Colors.white,
                   ),
                   const SizedBox(width: 10),
                   Text(
                     'Sign in with Apple',
                     style: AppTypography.button(
-                      fontSize: 16,
+                      fontSize: isTablet ? 17.0 : 16.0,
                       color: Colors.white,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -513,6 +521,8 @@ class AuthOrDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     return Row(
       children: [
         const Expanded(child: Divider(color: Color(0xFFD9E5F0))),
@@ -521,7 +531,7 @@ class AuthOrDivider extends StatelessWidget {
           child: Text(
             'or',
             style: AppTypography.body(
-              fontSize: 15,
+              fontSize: isTablet ? 16.5 : 15.0,
               color: AppColors.mutedText,
               fontWeight: FontWeight.w500,
             ),
@@ -545,13 +555,15 @@ class AuthAgreementRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     final bodyStyle = AppTypography.body(
-      fontSize: 14.2,
+      fontSize: isTablet ? 15.5 : 14.2,
       color: const Color(0xFF5D6A83),
       fontWeight: FontWeight.w500,
     );
     final linkStyle = AppTypography.body(
-      fontSize: 14.2,
+      fontSize: isTablet ? 15.5 : 14.2,
       color: AppColors.primary,
       fontWeight: FontWeight.w500,
     );
@@ -559,11 +571,11 @@ class AuthAgreementRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 1.5),
+        Padding(
+          padding: const EdgeInsets.only(top: 1.5),
           child: Icon(
             Icons.check_box_rounded,
-            size: 21,
+            size: isTablet ? 23 : 21,
             color: AppColors.primary,
           ),
         ),
@@ -608,6 +620,8 @@ class AuthBottomLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     return Center(
       child: Wrap(
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -615,7 +629,7 @@ class AuthBottomLink extends StatelessWidget {
           Text(
             prompt,
             style: AppTypography.body(
-              fontSize: 15.5,
+              fontSize: isTablet ? 17.0 : 15.5,
               color: const Color(0xFF6A758C),
               fontWeight: FontWeight.w500,
             ),
@@ -625,7 +639,7 @@ class AuthBottomLink extends StatelessWidget {
             child: Text(
               action,
               style: AppTypography.body(
-                fontSize: 15.5,
+                fontSize: isTablet ? 17.0 : 15.5,
                 color: AppColors.primary,
                 fontWeight: FontWeight.w600,
               ),

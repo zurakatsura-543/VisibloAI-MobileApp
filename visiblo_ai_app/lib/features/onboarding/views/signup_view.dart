@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_responsive.dart';
 import '../../../app/theme/app_typography.dart';
 import '../controllers/onboarding_controller.dart';
 import '../widgets/auth_screen_shell.dart';
@@ -460,6 +461,8 @@ class _PhoneNumberField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -467,8 +470,8 @@ class _PhoneNumberField extends StatelessWidget {
           onTap: () => _showCountryPicker(context),
           borderRadius: BorderRadius.circular(16),
           child: Container(
-            height: 58,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            height: isTablet ? 62 : 58,
+            padding: EdgeInsets.symmetric(horizontal: isTablet ? 14 : 12),
             decoration: BoxDecoration(
               color: AppColors.white,
               borderRadius: BorderRadius.circular(16),
@@ -486,7 +489,7 @@ class _PhoneNumberField extends StatelessWidget {
                   child: Text(
                     country.isoCode,
                     style: AppTypography.body(
-                      fontSize: 12,
+                      fontSize: isTablet ? 13.5 : 12.0,
                       color: AppColors.brandBlue,
                       fontWeight: FontWeight.w700,
                     ),
@@ -496,7 +499,7 @@ class _PhoneNumberField extends StatelessWidget {
                 Text(
                   country.dialCode,
                   style: AppTypography.body(
-                    fontSize: 14.4,
+                    fontSize: isTablet ? 16.0 : 14.4,
                     color: AppColors.brandBlue,
                     fontWeight: FontWeight.w600,
                   ),

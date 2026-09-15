@@ -55,13 +55,13 @@ class OnboardingIntroLayout extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const AppLogo(iconSize: 64, fontSize: 32, centered: true),
+                    const AppLogo(iconSize: 68, fontSize: 36, centered: true),
                     const SizedBox(height: 20),
                     RichText(
                       textAlign: TextAlign.center,
                       text: TextSpan(
                         style: GoogleFonts.plusJakartaSans(
-                          fontSize: 32,
+                          fontSize: 34,
                           height: 1.15,
                           fontWeight: FontWeight.w800,
                           color: AppColors.brandBlue,
@@ -75,13 +75,13 @@ class OnboardingIntroLayout extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     Text(
                       'Generate social media posts in seconds, schedule them automatically, and publish across multiple platforms from one place.',
                       textAlign: TextAlign.center,
                       style: AppTypography.body(
-                        fontSize: 15,
-                        height: 1.35,
+                        fontSize: 16.5,
+                        height: 1.4,
                         color: AppColors.mutedText,
                         fontWeight: FontWeight.w500,
                       ),
@@ -104,9 +104,9 @@ class OnboardingIntroLayout extends StatelessWidget {
                 flex: 5,
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 460),
+                    constraints: const BoxConstraints(maxWidth: 480),
                     child: Container(
-                      padding: const EdgeInsets.all(28),
+                      padding: const EdgeInsets.all(32),
                       decoration: BoxDecoration(
                         color: AppColors.white,
                         borderRadius: BorderRadius.circular(28),
@@ -125,12 +125,12 @@ class OnboardingIntroLayout extends StatelessWidget {
                           Text(
                             'All-In-One AI Platform',
                             style: GoogleFonts.plusJakartaSans(
-                              fontSize: 20,
+                              fontSize: 22,
                               fontWeight: FontWeight.w700,
                               color: AppColors.brandBlue,
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 20),
                           const _FeatureCard(
                             title: 'AI Post Creation',
                             subtitle: 'Create captions and creatives quickly.',
@@ -138,12 +138,13 @@ class OnboardingIntroLayout extends StatelessWidget {
                             colors: [Color(0xFF1E4ED8), Color(0xFF1A66F3)],
                             isFirst: true,
                             isLast: false,
+                            isTablet: true,
                           ),
                           const Divider(
                             height: 1,
                             thickness: 1,
                             color: Color(0xFFE3EBF5),
-                            indent: 59,
+                            indent: 64,
                           ),
                           const _FeatureCard(
                             title: 'Auto Scheduling',
@@ -152,12 +153,13 @@ class OnboardingIntroLayout extends StatelessWidget {
                             colors: [Color(0xFF2BC7D5), Color(0xFF39B4BD)],
                             isFirst: false,
                             isLast: false,
+                            isTablet: true,
                           ),
                           const Divider(
                             height: 1,
                             thickness: 1,
                             color: Color(0xFFE3EBF5),
-                            indent: 59,
+                            indent: 64,
                           ),
                           const _FeatureCard(
                             title: 'Multi-Platform Publishing',
@@ -166,8 +168,9 @@ class OnboardingIntroLayout extends StatelessWidget {
                             colors: [Color(0xFF1E4ED8), Color(0xFF1A66F3)],
                             isFirst: false,
                             isLast: true,
+                            isTablet: true,
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 28),
                           DecoratedBox(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(18),
@@ -188,13 +191,13 @@ class OnboardingIntroLayout extends StatelessWidget {
                               label: buttonLabel,
                               onPressed: onPressed,
                               icon: Icons.arrow_forward_rounded,
-                              iconSize: 22,
-                              height: 56,
+                              iconSize: 24,
+                              height: 60,
                               backgroundColor: Colors.transparent,
                               disabledBackgroundColor: Colors.transparent,
                               labelStyle: AppTypography.button(
                                 color: AppColors.white,
-                                fontSize: 17,
+                                fontSize: 18.5,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -215,11 +218,11 @@ class OnboardingIntroLayout extends StatelessWidget {
   Widget _buildTabletPortrait(BuildContext context) {
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
           child: Container(
-            padding: const EdgeInsets.all(32),
+            padding: const EdgeInsets.all(36),
             decoration: BoxDecoration(
               color: AppColors.white,
               borderRadius: BorderRadius.circular(28),
@@ -235,13 +238,13 @@ class OnboardingIntroLayout extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const AppLogo(iconSize: 60, fontSize: 32, centered: true),
-                const SizedBox(height: 16),
+                const AppLogo(iconSize: 64, fontSize: 34, centered: true),
+                const SizedBox(height: 18),
                 RichText(
                   textAlign: TextAlign.center,
                   text: TextSpan(
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 28,
+                      fontSize: 32,
                       height: 1.15,
                       fontWeight: FontWeight.w800,
                       color: AppColors.brandBlue,
@@ -255,20 +258,20 @@ class OnboardingIntroLayout extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Text(
                   'Generate social media posts in seconds, schedule them automatically, and publish across multiple platforms from one place.',
                   textAlign: TextAlign.center,
                   style: AppTypography.body(
-                    fontSize: 14.5,
-                    height: 1.35,
+                    fontSize: 16,
+                    height: 1.4,
                     color: AppColors.mutedText,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
                 SizedBox(
-                  height: 200,
+                  height: 220,
                   child: Image.asset(
                     'assets/images/banner1.png',
                     fit: BoxFit.contain,
@@ -276,7 +279,7 @@ class OnboardingIntroLayout extends StatelessWidget {
                     filterQuality: FilterQuality.high,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFFF7FAFE),
@@ -293,12 +296,13 @@ class OnboardingIntroLayout extends StatelessWidget {
                         colors: [Color(0xFF1E4ED8), Color(0xFF1A66F3)],
                         isFirst: true,
                         isLast: false,
+                        isTablet: true,
                       ),
                       const Divider(
                         height: 1,
                         thickness: 1,
                         color: Color(0xFFE3EBF5),
-                        indent: 59,
+                        indent: 64,
                       ),
                       const _FeatureCard(
                         title: 'Auto Scheduling',
@@ -307,12 +311,13 @@ class OnboardingIntroLayout extends StatelessWidget {
                         colors: [Color(0xFF2BC7D5), Color(0xFF39B4BD)],
                         isFirst: false,
                         isLast: false,
+                        isTablet: true,
                       ),
                       const Divider(
                         height: 1,
                         thickness: 1,
                         color: Color(0xFFE3EBF5),
-                        indent: 59,
+                        indent: 64,
                       ),
                       const _FeatureCard(
                         title: 'Multi-Platform Publishing',
@@ -321,11 +326,12 @@ class OnboardingIntroLayout extends StatelessWidget {
                         colors: [Color(0xFF1E4ED8), Color(0xFF1A66F3)],
                         isFirst: false,
                         isLast: true,
+                        isTablet: true,
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
                 DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(18),
@@ -346,13 +352,13 @@ class OnboardingIntroLayout extends StatelessWidget {
                     label: buttonLabel,
                     onPressed: onPressed,
                     icon: Icons.arrow_forward_rounded,
-                    iconSize: 22,
-                    height: 56,
+                    iconSize: 24,
+                    height: 60,
                     backgroundColor: Colors.transparent,
                     disabledBackgroundColor: Colors.transparent,
                     labelStyle: AppTypography.button(
                       color: AppColors.white,
-                      fontSize: 17,
+                      fontSize: 18.5,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -527,6 +533,7 @@ class _FeatureCard extends StatelessWidget {
     required this.colors,
     this.isFirst = false,
     this.isLast = false,
+    this.isTablet = false,
   });
 
   final String title;
@@ -535,28 +542,29 @@ class _FeatureCard extends StatelessWidget {
   final List<Color> colors;
   final bool isFirst;
   final bool isLast;
+  final bool isTablet;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(
-        left: 13,
-        right: 13,
-        top: isFirst ? 10 : 10,
-        bottom: isLast ? 10 : 10,
+        left: isTablet ? 16 : 13,
+        right: isTablet ? 16 : 13,
+        top: isFirst ? (isTablet ? 14 : 10) : (isTablet ? 12 : 10),
+        bottom: isLast ? (isTablet ? 14 : 10) : (isTablet ? 12 : 10),
       ),
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: isTablet ? 48 : 40,
+            height: isTablet ? 48 : 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(colors: colors),
             ),
-            child: Icon(icon, color: AppColors.white, size: 20),
+            child: Icon(icon, color: AppColors.white, size: isTablet ? 24 : 20),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: isTablet ? 14 : 10),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -568,7 +576,7 @@ class _FeatureCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
                     color: AppColors.brandBlue,
-                    fontSize: 14.6,
+                    fontSize: isTablet ? 16.5 : 14.6,
                     height: 1.3,
                     fontWeight: FontWeight.w700,
                   ),
@@ -578,7 +586,7 @@ class _FeatureCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12.1,
+                    fontSize: isTablet ? 13.8 : 12.1,
                     color: AppColors.mutedText,
                     height: 1.3,
                     fontWeight: FontWeight.w500,
@@ -588,10 +596,10 @@ class _FeatureCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          const Icon(
+          Icon(
             Icons.chevron_right_rounded,
             color: AppColors.primary,
-            size: 20,
+            size: isTablet ? 24 : 20,
           ),
         ],
       ),
