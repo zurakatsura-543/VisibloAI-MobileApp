@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
@@ -27,9 +28,44 @@ class ApiClient {
           if (sessionCookie != null && sessionCookie.trim().isNotEmpty) {
             options.headers['Cookie'] = sessionCookie;
           }
+
+          final fullPath = '${options.baseUrl}${options.path}';
+          debugPrint('🐛 ----------------------------------------------------');
+          debugPrint('🐛 [API Request] ➔ ${options.method.toUpperCase()} $fullPath');
+          if (options.queryParameters.isNotEmpty) {
+            debugPrint('🐛   Query Params: ${options.queryParameters}');
+          }
+          if (options.data != null) {
+            debugPrint('🐛   Payload: ${options.data}');
+          }
+          debugPrint('🐛 ----------------------------------------------------');
+
           handler.next(options);
         },
+        onResponse: (response, handler) async {
+          final req = response.requestOptions;
+          final fullPath = '${req.baseUrl}${req.path}';
+          debugPrint('🐛 [API Response] ✔ ${response.statusCode} OK ➔ ${req.method.toUpperCase()} $fullPath');
+          if (response.data != null) {
+            debugPrint('🐛   Response Data: ${response.data}');
+          }
+          debugPrint('🐛 ----------------------------------------------------');
+
+          handler.next(response);
+        },
         onError: (error, handler) async {
+          final req = error.requestOptions;
+          final fullPath = '${req.baseUrl}${req.path}';
+          final status = error.response?.statusCode ?? 'NETWORK_ERROR';
+          debugPrint('🐛 [API Error] ❌ $status ➔ ${req.method.toUpperCase()} $fullPath');
+          if (error.message != null) {
+            debugPrint('🐛   Message: ${error.message}');
+          }
+          if (error.response?.data != null) {
+            debugPrint('🐛   Response Body: ${error.response?.data}');
+          }
+          debugPrint('🐛 ----------------------------------------------------');
+
           if (_shouldClearStoredSession(error)) {
             await storage.delete(key: accessTokenKey);
             await storage.delete(key: sessionCookieKey);

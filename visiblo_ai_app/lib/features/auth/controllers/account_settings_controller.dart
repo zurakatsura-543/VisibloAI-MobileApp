@@ -466,6 +466,59 @@ class AccountSettingsController extends GetxController {
     }
   }
 
+  Future<String> requestUserAccountDeleteOtp() async {
+    isDeleteOtpSending.value = true;
+    errorMessage.value = null;
+
+    try {
+      final response = await _authApiService.requestUserAccountDeleteOtp();
+      final message =
+          (response['message'] as String?)?.trim() ??
+          'Account deletion OTP sent to your email address.';
+      infoMessage.value = message;
+      return message;
+    } catch (error) {
+      final message = _humanizeError(
+        error,
+        fallback: 'Unable to send account deletion OTP.',
+      );
+      errorMessage.value = message;
+      rethrow;
+    } finally {
+      isDeleteOtpSending.value = false;
+    }
+  }
+
+  Future<bool> confirmUserAccountDelete(String otp) async {
+    if (isDeleteConfirming.value) {
+      return false;
+    }
+
+    isDeleteConfirming.value = true;
+    errorMessage.value = null;
+
+    try {
+      await _authApiService.confirmUserAccountDelete(otp: otp);
+      await _localAuthService.logout();
+      Get.offAllNamed(AppRoutes.signUp);
+      Get.snackbar(
+        'Account Deleted',
+        'Your Visiblo AI account and personal data have been permanently deleted.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return true;
+    } catch (error) {
+      final message = _humanizeError(
+        error,
+        fallback: 'Unable to delete your account right now.',
+      );
+      errorMessage.value = message;
+      rethrow;
+    } finally {
+      isDeleteConfirming.value = false;
+    }
+  }
+
   void openBilling() {
     Get.toNamed(AppRoutes.accountPackageBilling);
   }

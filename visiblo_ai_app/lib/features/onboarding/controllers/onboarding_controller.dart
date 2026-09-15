@@ -30,6 +30,8 @@ import '../../auth/models/audit_models.dart';
 class OnboardingController extends GetxController {
   static const _googleWebClientId =
       '1095834856322-ileb3qlbe6b3omb3cgqeim1so48i5k03.apps.googleusercontent.com';
+  static const _googleIosClientId =
+      '1095834856322-eh8lrocdo63vnluft4j30vnck5qho8me.apps.googleusercontent.com';
   static const _androidPackageName = 'com.visibloai.app';
   static const _androidDebugSha1 =
       '1B:69:F6:E9:E0:F4:A8:B0:91:18:A8:DE:46:51:B2:6E:DC:9A:A1:D7';
@@ -501,7 +503,10 @@ class OnboardingController extends GetxController {
       return _googleSignIn.initialize();
     }
 
-    return _googleSignIn.initialize(serverClientId: _googleWebClientId);
+    return _googleSignIn.initialize(
+      clientId: _googleIosClientId,
+      serverClientId: _googleWebClientId,
+    );
   }
 
   void toggleLoginPassword() {
@@ -579,15 +584,21 @@ class OnboardingController extends GetxController {
   }
 
   Future<void> continueWithGoogle() async {
+    debugPrint('====================================================');
+    debugPrint('🌐 [Google Sign-In] Button clicked!');
+    debugPrint('====================================================');
+
     if (isGoogleSignInLoading.value) {
+      debugPrint('🌐 [Google Sign-In] Already loading, ignoring tap.');
       return;
     }
 
     isGoogleSignInLoading.value = true;
 
     try {
+      debugPrint('🌐 [Google Sign-In] Waiting for _googleSignInReady...');
       await _googleSignInReady;
-      debugPrint('Google sign-in: starting button flow');
+      debugPrint('🌐 [Google Sign-In] Starting Google authentication...');
 
       if (!_googleSignIn.supportsAuthenticate()) {
         throw Exception(
@@ -603,7 +614,7 @@ class OnboardingController extends GetxController {
         ),
       );
 
-      debugPrint('Google sign-in: account selected for ${account.email}');
+      debugPrint('🌐 [Google Sign-In] Account selected: ${account.email}');
       final authentication = account.authentication;
       final idToken = authentication.idToken?.trim() ?? '';
       if (idToken.isEmpty) {
@@ -614,10 +625,12 @@ class OnboardingController extends GetxController {
       _logGoogleIdTokenSummary(idToken);
 
       final normalizedEmail = account.email.trim().toLowerCase();
-      debugPrint('Google sign-in: ID token received, contacting backend');
+      debugPrint('🌐 [Google Sign-In] ID token received, contacting backend...');
       final remoteProfile = await _authApiService.loginWithGoogleMobile(
         idToken: idToken,
       );
+
+      debugPrint('🌐 [Google Sign-In] Backend auth success! User ID: ${remoteProfile.userId}');
 
       loginEmailController.text = normalizedEmail;
       forgotPasswordEmailController.text = normalizedEmail;
@@ -633,7 +646,9 @@ class OnboardingController extends GetxController {
       );
       await _navigateToSessionRoute(remoteProfile);
     } catch (error, stackTrace) {
-      debugPrint('Google sign-in error: $error');
+      debugPrint('❌ [Google Sign-In Error]');
+      debugPrint('   - Exception Type: ${error.runtimeType}');
+      debugPrint('   - Exception Message: $error');
       debugPrintStack(
         label: 'Google sign-in stack trace',
         stackTrace: stackTrace,
@@ -649,28 +664,42 @@ class OnboardingController extends GetxController {
   }
 
   Future<void> continueWithApple() async {
+    debugPrint('====================================================');
+    debugPrint('🍏 [Apple Sign-In] Button clicked!');
+    debugPrint('====================================================');
+
     if (isAppleSignInLoading.value) {
+      debugPrint('🍏 [Apple Sign-In] Already loading, ignoring tap.');
       return;
     }
 
     isAppleSignInLoading.value = true;
 
     try {
-      debugPrint('Apple sign-in: starting button flow');
-
+      debugPrint('🍏 [Apple Sign-In] Checking SignInWithApple.isAvailable()...');
       final isAvailable = await SignInWithApple.isAvailable();
+      debugPrint('🍏 [Apple Sign-In] SignInWithApple.isAvailable() = $isAvailable');
       if (!isAvailable) {
         throw Exception(
           'Sign in with Apple is not supported on this device or platform version.',
         );
       }
 
+      debugPrint('🍏 [Apple Sign-In] Requesting getAppleIDCredential from iOS...');
       final credential = await SignInWithApple.getAppleIDCredential(
         scopes: const [
           AppleIDAuthorizationScopes.email,
           AppleIDAuthorizationScopes.fullName,
         ],
       );
+
+      debugPrint('🍏 [Apple Sign-In] Credential received successfully!');
+      debugPrint('   - userIdentifier: ${credential.userIdentifier}');
+      debugPrint('   - email: ${credential.email}');
+      debugPrint('   - givenName: ${credential.givenName}');
+      debugPrint('   - familyName: ${credential.familyName}');
+      debugPrint('   - authorizationCode length: ${credential.authorizationCode.length}');
+      debugPrint('   - identityToken length: ${credential.identityToken?.length ?? 0}');
 
       final identityToken = credential.identityToken?.trim() ?? '';
       final authorizationCode = credential.authorizationCode.trim();
@@ -688,7 +717,7 @@ class OnboardingController extends GetxController {
 
       final fullName = [givenName ?? '', familyName ?? ''].join(' ').trim();
 
-      debugPrint('Apple sign-in: credential received, contacting backend');
+      debugPrint('🍏 [Apple Sign-In] Contacting backend auth service...');
       final remoteProfile = await _authApiService.loginWithAppleMobile(
         identityToken: identityToken,
         authorizationCode: authorizationCode.isEmpty ? null : authorizationCode,
@@ -697,11 +726,16 @@ class OnboardingController extends GetxController {
         appleUserId: userIdentifier,
       );
 
-      final normalizedEmail = remoteProfile.email.trim().toLowerCase();
-      if (normalizedEmail.isNotEmpty) {
-        loginEmailController.text = normalizedEmail;
-        forgotPasswordEmailController.text = normalizedEmail;
-        signUpEmailController.text = normalizedEmail;
+      debugPrint('🍏 [Apple Sign-In] Backend auth success! User ID: ${remoteProfile.userId}');
+
+      final activeEmail = (appleEmail != null && appleEmail.isNotEmpty)
+          ? appleEmail
+          : (remoteProfile.email.isNotEmpty ? remoteProfile.email : '');
+
+      if (activeEmail.isNotEmpty) {
+        loginEmailController.text = activeEmail;
+        forgotPasswordEmailController.text = activeEmail;
+        signUpEmailController.text = activeEmail;
       }
       if (fullName.isNotEmpty) {
         fullNameController.text = fullName;
@@ -709,15 +743,23 @@ class OnboardingController extends GetxController {
 
       await _syncCurrentUserFromRemoteProfile(
         remoteProfile,
-        email: normalizedEmail,
+        email: activeEmail,
         fallbackFullName: fullNameController.text.trim(),
       );
       await _navigateToSessionRoute(remoteProfile);
     } catch (error, stackTrace) {
-      debugPrint('Apple sign-in error: $error');
+      debugPrint('❌ [Apple Sign-In Error]');
+      debugPrint('   - Exception Type: ${error.runtimeType}');
+      debugPrint('   - Exception Message: $error');
+
+      if (error is SignInWithAppleAuthorizationException) {
+        debugPrint('   - Apple Exception Code: ${error.code}');
+        debugPrint('   - Apple Exception Message: ${error.message}');
+      }
+
       if (error is SignInWithAppleAuthorizationException &&
           error.code == AuthorizationErrorCode.canceled) {
-        debugPrint('User canceled Sign in with Apple');
+        debugPrint('🍏 [Apple Sign-In] User canceled the sign-in sheet.');
         return;
       }
       debugPrintStack(
@@ -726,7 +768,7 @@ class OnboardingController extends GetxController {
       );
       Get.snackbar(
         'Apple sign-in failed',
-        error.toString().replaceAll('Exception: ', ''),
+        _humanizeAppleSignInError(error),
         snackPosition: SnackPosition.BOTTOM,
       );
     } finally {
@@ -3294,6 +3336,48 @@ class OnboardingController extends GetxController {
           'SHA1 $_androidDebugSha1, and web OAuth client $_googleWebClientId '
           'all belong to the same Firebase project.';
     }
+    return message;
+  }
+
+  String _humanizeAppleSignInError(Object error) {
+    if (error is SignInWithAppleAuthorizationException) {
+      final String rawMsg = error.message;
+      final bool isError1000 = rawMsg.contains('1000') ||
+          rawMsg.contains('AuthorizationError error 1000');
+
+      if (isError1000) {
+        return 'Apple sign-in was canceled or is unavailable on this simulator. '
+            'Please ensure you are signed into an Apple ID in device settings.';
+      }
+
+      switch (error.code) {
+        case AuthorizationErrorCode.canceled:
+          return 'Apple sign-in was canceled.';
+        case AuthorizationErrorCode.unknown:
+          return 'Apple sign-in could not be completed. Please try again.';
+        case AuthorizationErrorCode.failed:
+          return 'Apple sign-in failed. Please try again.';
+        case AuthorizationErrorCode.invalidResponse:
+          return 'Received an invalid response from Apple. Please try again.';
+        case AuthorizationErrorCode.notHandled:
+          return 'Apple sign-in request was not handled. Please try again.';
+        case AuthorizationErrorCode.notInteractive:
+          return 'Apple sign-in requires user interaction. Please try again.';
+        default:
+          return 'Apple sign-in failed (${error.code}). Please try again.';
+      }
+    }
+
+    if (error is SignInWithAppleCredentialsException) {
+      return 'Apple sign-in credentials error: ${error.message}';
+    }
+
+    final message = _humanizeError(error).trim();
+    if (message.contains('SignInWithAppleAuthorizationException') ||
+        message.contains('AuthorizationError error 1000')) {
+      return 'Apple sign-in could not be completed. Please check your Apple ID settings and try again.';
+    }
+
     return message;
   }
 

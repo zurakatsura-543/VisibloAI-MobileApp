@@ -293,21 +293,6 @@ class _TrialUnlockView extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (controller.errorMessage.value != null) ...[
-                  const SizedBox(height: 14),
-                  _FeedbackBanner(
-                    message: controller.errorMessage.value!,
-                    isError: true,
-                    onDismiss: controller.clearError,
-                  ),
-                ],
-                if (controller.infoMessage.value != null) ...[
-                  const SizedBox(height: 14),
-                  _FeedbackBanner(
-                    message: controller.infoMessage.value!,
-                    onDismiss: controller.clearInfo,
-                  ),
-                ],
               ],
             ),
           );
@@ -450,21 +435,6 @@ class _ExpiredRenewalView extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                if (controller.errorMessage.value != null) ...[
-                  const SizedBox(height: 14),
-                  _FeedbackBanner(
-                    message: controller.errorMessage.value!,
-                    isError: true,
-                    onDismiss: controller.clearError,
-                  ),
-                ],
-                if (controller.infoMessage.value != null) ...[
-                  const SizedBox(height: 14),
-                  _FeedbackBanner(
-                    message: controller.infoMessage.value!,
-                    onDismiss: controller.clearInfo,
-                  ),
-                ],
               ],
             ),
           );
@@ -735,19 +705,6 @@ class _ExpiredPaymentModeSelector extends StatelessWidget {
               selected: selectedMode == 'MANUAL',
               enabled: true,
               onTap: () => controller.setBillingMode('MANUAL'),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _ExpiredModeCard(
-              icon: Icons.verified_user_outlined,
-              title: 'Enable AutoPay',
-              subtitle: Theme.of(context).platform == TargetPlatform.iOS
-                  ? 'Apple auto-renewing subscription.'
-                  : 'Creates a Razorpay subscription mandate for recurring charges.',
-              selected: selectedMode == 'AUTOPAY',
-              enabled: true,
-              onTap: () => controller.setBillingMode('AUTOPAY'),
             ),
           ),
         ],
@@ -1466,6 +1423,7 @@ class _ExpiredPlanActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isIos = Theme.of(context).platform == TargetPlatform.iOS;
     return Row(
       children: [
         Expanded(
@@ -1488,27 +1446,29 @@ class _ExpiredPlanActions extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: _openPricingComparison,
-            icon: const Icon(Icons.chevron_right_rounded, size: 20),
-            label: const Text('Compare all features'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.brandBlue,
-              side: const BorderSide(color: Color(0xFFD8E2EC)),
-              backgroundColor: const Color(0xFFF8FAFD),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              textStyle: GoogleFonts.manrope(
-                fontSize: 12.8,
-                fontWeight: FontWeight.w900,
+        if (!isIos) ...[
+          const SizedBox(width: 10),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _openPricingComparison,
+              icon: const Icon(Icons.chevron_right_rounded, size: 20),
+              label: const Text('Compare all features'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.brandBlue,
+                side: const BorderSide(color: Color(0xFFD8E2EC)),
+                backgroundColor: const Color(0xFFF8FAFD),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                textStyle: GoogleFonts.manrope(
+                  fontSize: 12.8,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -1530,8 +1490,8 @@ Future<void> _openPricingComparison() async {
   final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
   if (!opened) {
     Get.snackbar(
-      'Unable to open pricing',
-      'Please visit www.visibloai.com/pricing to compare all features.',
+      'Unable to open web pricing',
+      'Please visit www.visibloai.com/pricing in your web browser to check plans.',
       snackPosition: SnackPosition.BOTTOM,
     );
   }
@@ -2304,21 +2264,6 @@ class _PaymentContentState extends State<_PaymentContent> {
                       onBillingHistoryTap: _scrollToBillingHistory,
                     ),
                     const SizedBox(height: 12),
-                    if (widget.controller.errorMessage.value != null) ...[
-                      _FeedbackBanner(
-                        message: widget.controller.errorMessage.value!,
-                        isError: true,
-                        onDismiss: widget.controller.clearError,
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    if (widget.controller.infoMessage.value != null) ...[
-                      _FeedbackBanner(
-                        message: widget.controller.infoMessage.value!,
-                        onDismiss: widget.controller.clearInfo,
-                      ),
-                      const SizedBox(height: 12),
-                    ],
                     if (widget.controller.billingWarnings.isNotEmpty) ...[
                       _BillingWarningsCard(controller: widget.controller),
                       const SizedBox(height: 12),
@@ -2329,22 +2274,12 @@ class _PaymentContentState extends State<_PaymentContent> {
                     ],
                     _ActiveSubscriptionCard(controller: widget.controller),
                     const SizedBox(height: 12),
-                    if (widget.controller.isIosAppStoreBuild) ...[
-                      _IosAccountAccessCard(controller: widget.controller),
-                    ] else ...[
-                      _UpgradePlansCard(controller: widget.controller),
-                      const SizedBox(height: 12),
-                      _SecurePaymentCard(controller: widget.controller),
-                    ],
+                    _UpgradePlansCard(controller: widget.controller),
                     const SizedBox(height: 12),
                     Container(
                       key: _billingHistoryKey,
                       child: _PaymentHistoryCard(controller: widget.controller),
                     ),
-                    if (!widget.controller.isIosAppStoreBuild) ...[
-                      const SizedBox(height: 12),
-                      _AutoRenewCard(controller: widget.controller),
-                    ],
                   ],
                 ),
               ),
@@ -3106,7 +3041,7 @@ class _UpgradePlansCardState extends State<_UpgradePlansCard> {
   @override
   void initState() {
     super.initState();
-    _expandedPlanCodes.add(widget.controller.selectedPlan.code);
+    // Details are hidden by default for all plans
   }
 
   @override
@@ -3139,6 +3074,7 @@ class _UpgradePlansCardState extends State<_UpgradePlansCard> {
           ),
           const SizedBox(height: 14),
           _BillingCycleToggle(controller: widget.controller),
+          /*
           if (Theme.of(context).platform == TargetPlatform.iOS) ...[
             const SizedBox(height: 8),
             Align(
@@ -3156,6 +3092,7 @@ class _UpgradePlansCardState extends State<_UpgradePlansCard> {
               ),
             ),
           ],
+          */
           const SizedBox(height: 14),
           Column(
             children: [
@@ -3185,6 +3122,94 @@ class _UpgradePlansCardState extends State<_UpgradePlansCard> {
                   const SizedBox(height: 12),
               ],
             ],
+          ),
+          if (Theme.of(context).platform != TargetPlatform.iOS) ...[
+            const SizedBox(height: 16),
+            const _WebBillingBannerCard(),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WebBillingBannerCard extends StatelessWidget {
+  const _WebBillingBannerCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F9FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFC3DDFF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007AFF).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.language_rounded,
+                  color: Color(0xFF007AFF),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Visiblo Web SaaS Portal',
+                      style: GoogleFonts.manrope(
+                        fontSize: 14,
+                        color: const Color(0xFF0F2746),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Subscribe directly on the Visiblo web portal to access all features with instant multi-device sync.',
+                      style: GoogleFonts.manrope(
+                        fontSize: 12,
+                        color: const Color(0xFF5A6E85),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _openPricingComparison,
+              icon: const Icon(Icons.open_in_browser_rounded, size: 18),
+              label: const Text('Visit Visiblo Web Portal'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF007AFF),
+                side: const BorderSide(color: Color(0xFF007AFF)),
+                backgroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                textStyle: GoogleFonts.manrope(
+                  fontSize: 12.8,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -3546,32 +3571,63 @@ class _PlanOfferCard extends StatelessWidget {
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => controller.selectPlan(plan.code),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: isActive
-                          ? Colors.white
-                          : (isSelected ? AppColors.brandBlue : accentColor),
-                      foregroundColor: isActive
-                          ? AppColors.brandBlue
-                          : Colors.white,
-                      side: isActive
-                          ? const BorderSide(color: Color(0xFFD7E2EC))
-                          : BorderSide.none,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                  child: Obx(() {
+                    final isPlanLoading = controller.isCheckoutBusy &&
+                        controller.checkoutPlanCode.value == plan.code;
+                    final isThisPlanSelected =
+                        controller.selectedPlan.code == plan.code;
+
+                    return FilledButton(
+                      onPressed: isActive || isPlanLoading
+                          ? null
+                          : () async {
+                              controller.selectPlan(plan.code);
+                              await controller.checkoutSelectedPlan();
+                            },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: isActive
+                            ? Colors.white
+                            : (isThisPlanSelected
+                                ? AppColors.brandBlue
+                                : accentColor),
+                        foregroundColor:
+                            isActive ? AppColors.brandBlue : Colors.white,
+                        disabledBackgroundColor: isActive
+                            ? Colors.white
+                            : (isThisPlanSelected
+                                ? AppColors.brandBlue.withValues(alpha: 0.6)
+                                : accentColor.withValues(alpha: 0.6)),
+                        disabledForegroundColor:
+                            isActive ? AppColors.brandBlue : Colors.white70,
+                        side: isActive
+                            ? const BorderSide(color: Color(0xFFD7E2EC))
+                            : BorderSide.none,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      isActive ? 'Current Plan' : 'Select Plan',
-                      style: AppTypography.button(
-                        fontSize: 13.4,
-                        color: isActive ? AppColors.brandBlue : Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
+                      child: isPlanLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              isActive ? 'Current Plan' : 'Subscribe to this plan',
+                              style: AppTypography.button(
+                                fontSize: 13.8,
+                                color: isActive
+                                    ? AppColors.brandBlue
+                                    : Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                    );
+                  }),
                 ),
               ],
             ),
@@ -3664,9 +3720,7 @@ class _SecurePaymentCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          Theme.of(context).platform == TargetPlatform.iOS
-                              ? 'Select a plan to start your Apple In-App Subscription.'
-                              : 'Choose manual checkout or AutoPay, then complete billing with Razorpay.',
+                          'Select a plan to subscribe on our website.',
                           style: AppTypography.body(
                             fontSize: 12.4,
                             color: AppColors.mutedText,
@@ -3677,27 +3731,7 @@ class _SecurePaymentCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _PaymentMethodChip(
-                    label: 'Manual pay',
-                    selected: controller.selectedBillingMode.value == 'MANUAL',
-                    onTap: controller.supportsManualCheckout
-                        ? () => controller.setBillingMode('MANUAL')
-                        : null,
-                  ),
-                  _PaymentMethodChip(
-                    label: 'AutoPay',
-                    selected: controller.selectedBillingMode.value == 'AUTOPAY',
-                    onTap: controller.supportsAutopayCheckout
-                        ? () => controller.setBillingMode('AUTOPAY')
-                        : null,
-                  ),
-                ],
-              ),
+
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -3707,13 +3741,7 @@ class _SecurePaymentCard extends StatelessWidget {
                   border: Border.all(color: const Color(0xFFDCE6F1)),
                 ),
                 child: Text(
-                  Theme.of(context).platform == TargetPlatform.iOS
-                      ? 'Subscriptions renew automatically through Apple StoreKit until cancelled in your Apple ID settings.'
-                      : controller.selectedBillingMode.value == 'AUTOPAY'
-                      ? controller.canResumeAutopay
-                            ? 'Resume recurring billing for this business. Razorpay will ask for a fresh mandate authorization.'
-                            : 'Set up a recurring Razorpay mandate so renewals happen automatically until the owner cancels it.'
-                      : 'Use a one-time Razorpay checkout for this billing cycle. This is best when the owner does not want recurring deductions yet.',
+                  'Subscriptions are managed on our website at www.visibloai.com/pricing to avoid in-app platform fees.',
                   style: AppTypography.body(
                     fontSize: 12.6,
                     color: AppColors.mutedText,
@@ -3900,11 +3928,7 @@ class _SecurePaymentCard extends StatelessWidget {
               Text(
                 controller.couponResult.value?.skipPayment == true
                     ? 'This action will activate the selected plan immediately using the validated coupon.'
-                    : Theme.of(context).platform == TargetPlatform.iOS
-                    ? 'Purchases are handled securely by Apple StoreKit.'
-                    : controller.selectedBillingMode.value == 'AUTOPAY'
-                    ? 'AutoPay is only a mandate setup here. The backend still controls renewal status, warnings, and cancellation rules per activated business.'
-                    : 'Razorpay checkout stays real. The charged amount comes from the backend order created at tap time.',
+                    : 'You will be redirected to www.visibloai.com/pricing to complete your subscription.',
                 style: AppTypography.body(
                   fontSize: 12.2,
                   color: AppColors.mutedText,

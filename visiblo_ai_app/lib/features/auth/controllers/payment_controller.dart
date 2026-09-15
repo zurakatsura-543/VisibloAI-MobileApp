@@ -78,6 +78,36 @@ class PaymentController extends GetxController {
     couponCodeController.addListener(_handleCouponChanged);
     _setupRazorpay();
     _setupAppleIap();
+    ever<String?>(errorMessage, (msg) {
+      if (msg != null && msg.trim().isNotEmpty) {
+        Get.snackbar(
+          'Payment Notice',
+          msg,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFFFFF1F1),
+          colorText: const Color(0xFF991B1B),
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          borderRadius: 14,
+          icon: const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626)),
+          duration: const Duration(seconds: 5),
+        );
+      }
+    });
+    ever<String?>(infoMessage, (msg) {
+      if (msg != null && msg.trim().isNotEmpty) {
+        Get.snackbar(
+          'Payment Status',
+          msg,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFFEFFAF6),
+          colorText: const Color(0xFF065F46),
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          borderRadius: 14,
+          icon: const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF059669)),
+          duration: const Duration(seconds: 4),
+        );
+      }
+    });
     unawaited(loadInitialData());
   }
 
@@ -564,15 +594,12 @@ class PaymentController extends GetxController {
     }
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       if (checkoutPlanCode.value == selectedPlan.code) {
-        return 'Connecting to App Store...';
+        return 'Opening Website...';
       }
       if (couponResult.value?.skipPayment == true) {
         return 'Apply free coupon';
       }
-      if (selectedPlan.code == activePlanCode && hasActiveSubscription) {
-        return 'Renew Plan with Apple';
-      }
-      return 'Subscribe with Apple';
+      return 'Subscribe on Website';
     }
     if (checkoutPlanCode.value == selectedPlan.code) {
       return selectedBillingMode.value == 'AUTOPAY'
@@ -928,34 +955,45 @@ class PaymentController extends GetxController {
       return;
     }
 
+    // Web SaaS checkout for iOS & all platforms to avoid platform fees
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       final plan = selectedPlan;
       checkoutPlanCode.value = plan.code;
       errorMessage.value = null;
-      infoMessage.value = 'Starting Apple subscription checkout...';
+      infoMessage.value = 'Opening website subscription page...';
+
       try {
-        final initiated = await AppleIapService().purchasePlan(
-          plan: plan.code,
-          billingCycle: selectedBillingCycle.value,
-        );
-        if (!initiated) {
+        final uri = Uri.parse('https://www.visibloai.com/pricing');
+        final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!opened) {
           errorMessage.value =
-              AppleIapService().lastError.value ??
-              'Could not start Apple In-App Purchase.';
+              'Could not open website. Please visit www.visibloai.com/pricing in your web browser.';
         }
       } catch (e) {
-        errorMessage.value = 'Apple purchase error: $e';
+        errorMessage.value = 'Could not open web pricing page: $e';
       } finally {
         checkoutPlanCode.value = null;
       }
       return;
     }
 
-    if (selectedBillingMode.value == 'AUTOPAY') {
-      await _startAutopayCheckout();
-      return;
+    // Web SaaS checkout for non-iOS platforms
+    try {
+      final uri = Uri.parse('https://www.visibloai.com/pricing');
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened) {
+        errorMessage.value =
+            'Could not open website. Please visit www.visibloai.com/pricing in your web browser.';
+      }
+    } catch (e) {
+      errorMessage.value = 'Could not open web pricing page: $e';
     }
 
+    /*
+    // =========================================================================
+    // NATIVE / RAZORPAY / IAP CHECKOUT (COMMENTED OUT FOR WEB-FIRST BILLING)
+    // UNCOMMENT IF NATIVE IN-APP PURCHASES ARE RE-ENABLED
+    // =========================================================================
     if (couponResult.value?.skipPayment == true) {
       await _applyFreeCoupon();
       return;
@@ -1038,6 +1076,7 @@ class PaymentController extends GetxController {
         checkoutPlanCode.value = null;
       }
     }
+    */
   }
 
   void clearError() {

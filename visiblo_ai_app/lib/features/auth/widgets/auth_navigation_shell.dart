@@ -3,7 +3,9 @@ import 'package:get/get.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_responsive.dart';
 import '../../../app/theme/app_typography.dart';
+import '../../../app/widgets/app_logo.dart';
 import '../controllers/product_mode_controller.dart';
 
 enum AuthTab {
@@ -37,12 +39,128 @@ class AuthNavigationShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
+    if (isTablet) {
+      return Scaffold(
+        backgroundColor: backgroundColor,
+        floatingActionButton: floatingActionButton,
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+        body: Row(
+          children: [
+            _AuthTabletSideNav(currentTab: currentTab),
+            const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE8E8EE)),
+            Expanded(
+              child: SafeArea(
+                child: child,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: backgroundColor,
       bottomNavigationBar: AuthBottomNavigationBar(currentTab: currentTab),
       floatingActionButton: floatingActionButton,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: SafeArea(child: child),
+    );
+  }
+}
+
+class _AuthTabletSideNav extends StatelessWidget {
+  const _AuthTabletSideNav({required this.currentTab});
+
+  final AuthTab currentTab;
+
+  @override
+  Widget build(BuildContext context) {
+    final productModeController = Get.isRegistered<ProductModeController>()
+        ? Get.find<ProductModeController>()
+        : Get.put(ProductModeController(), permanent: true);
+    final isSocialShell =
+        productModeController.isSocialMedia || currentTab._isSocialTab;
+
+    final items = isSocialShell
+        ? [
+            (tab: AuthTab.socialDashboard, label: 'Dashboard', icon: Icons.dashboard_outlined),
+            (tab: AuthTab.socialAccounts, label: 'Accounts', icon: Icons.groups_outlined),
+            (tab: AuthTab.socialPosts, label: 'Posts', icon: Icons.task_alt_rounded),
+            (tab: AuthTab.socialCalendar, label: 'Calendar', icon: Icons.calendar_month_outlined),
+            (tab: AuthTab.socialAnalytics, label: 'Analytics', icon: Icons.bar_chart_rounded),
+          ]
+        : [
+            (tab: AuthTab.home, label: 'Home', icon: Icons.home_outlined),
+            (tab: AuthTab.audit, label: 'Audit', icon: Icons.insert_chart_outlined_rounded),
+            (tab: AuthTab.reports, label: 'Reports', icon: Icons.pie_chart_outline_rounded),
+            (tab: AuthTab.payment, label: 'Payment', icon: Icons.account_balance_wallet_outlined),
+            (tab: AuthTab.account, label: 'Account', icon: Icons.person_outline_rounded),
+          ];
+
+    return Container(
+      width: 230,
+      color: AppColors.white,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: AppLogo(iconSize: 42, centered: false),
+            ),
+            const SizedBox(height: 28),
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final isSelected = item.tab == currentTab;
+                  return InkWell(
+                    onTap: () => _NavItem(
+                      tab: item.tab,
+                      currentTab: currentTab,
+                      label: item.label,
+                      icon: item.icon,
+                    )._navigate(item.tab),
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.brandBlue.withValues(alpha: 0.1) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            item.icon,
+                            size: 24,
+                            color: isSelected ? AppColors.brandBlue : const Color(0xFF5A6473),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              item.label,
+                              style: AppTypography.button(
+                                fontSize: 15,
+                                color: isSelected ? AppColors.brandBlue : const Color(0xFF5A6473),
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

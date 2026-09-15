@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_responsive.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../onboarding/controllers/onboarding_controller.dart';
 import '../models/report_models.dart';
@@ -89,13 +90,17 @@ class _ReportsContentState extends State<_ReportsContent> {
       return NotificationListener<ScrollNotification>(
         onNotification: _handleScrollNotification,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(8, 10, 8, 18),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+          padding: EdgeInsets.fromLTRB(
+            context.responsiveHorizontalPadding,
+            10,
+            context.responsiveHorizontalPadding,
+            18,
+          ),
+          child: ResponsiveCenter(
+            useHorizontalPadding: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                   _buildHeader(context),
                   const SizedBox(height: 10),
                   _buildActivitySection(activityCards),
@@ -109,8 +114,7 @@ class _ReportsContentState extends State<_ReportsContent> {
               ),
             ),
           ),
-        ),
-      );
+        );
     });
   }
 

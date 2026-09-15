@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_responsive.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../onboarding/controllers/onboarding_controller.dart';
 import 'audit_module_detail_views.dart';
@@ -337,10 +338,17 @@ class _AuditExperienceState extends State<_AuditExperience> {
 
       return SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: AuthViewSpacing.pagePadding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        padding: EdgeInsets.fromLTRB(
+          context.responsiveHorizontalPadding,
+          AuthViewSpacing.pageTop,
+          context.responsiveHorizontalPadding,
+          AuthViewSpacing.pageBottom,
+        ),
+        child: ResponsiveCenter(
+          useHorizontalPadding: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Row(
               children: [
                 const AuthShellBackButton(),
@@ -442,9 +450,10 @@ class _AuditExperienceState extends State<_AuditExperience> {
             ],
           ],
         ),
-      );
-    });
-  }
+      ),
+    );
+  });
+}
 }
 
 class _AuditHeroCard extends StatelessWidget {

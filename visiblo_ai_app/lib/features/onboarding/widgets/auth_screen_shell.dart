@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../app/widgets/app_logo.dart';
+
+import '../../../app/theme/app_responsive.dart';
 
 class AuthScreenShell extends StatelessWidget {
   const AuthScreenShell({
@@ -30,6 +31,135 @@ class AuthScreenShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final width = MediaQuery.sizeOf(context).width;
+    final isTabletLandscape = width >= 768 && context.isLandscape;
+    final isTabletPortrait = width >= 600 && !context.isLandscape;
+
+    if (isTabletLandscape) {
+      return Scaffold(
+        backgroundColor: AppColors.white,
+        body: Row(
+          children: [
+            // Left Hero Banner Column
+            Expanded(
+              flex: 5,
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFFEAF8FA),
+                      Color(0xFFD6F2F5),
+                      Color(0xFFC7ECF2),
+                    ],
+                  ),
+                ),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const AppLogo(iconSize: 72, fontSize: 34, centered: true),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Grow Your Business with AI',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.section(
+                            fontSize: 32,
+                            color: AppColors.brandBlue,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Automate reviews, AI content, local SEO & customer interactions in one place.',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.body(
+                            fontSize: 16.5,
+                            color: AppColors.mutedText,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Expanded(
+                          child: Center(
+                            child: Image.asset(
+                              bannerAssetPath,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Right Auth Form Column
+            Expanded(
+              flex: 6,
+              child: Scaffold(
+                backgroundColor: AppColors.white,
+                body: SafeArea(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(40, 24, 40, bottomInset + 24),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 540),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (showBackButton)
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: IconButton(
+                                  onPressed: onBack,
+                                  icon: const Icon(
+                                    Icons.arrow_back_rounded,
+                                    color: AppColors.text,
+                                    size: 26,
+                                  ),
+                                ),
+                              ),
+                            Text(
+                              title,
+                              textAlign: TextAlign.center,
+                              style: AppTypography.section(
+                                fontSize: 32,
+                                color: AppColors.brandBlue,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              subtitle,
+                              textAlign: TextAlign.center,
+                              style: AppTypography.body(
+                                fontSize: 16,
+                                color: AppColors.mutedText,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            child,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Tablet Portrait layout
+    final formMaxWidth = isTabletPortrait ? 620.0 : 430.0;
+    final verticalPadding = isTabletPortrait ? 32.0 : 6.0;
 
     return Scaffold(
       backgroundColor: AppColors.white,
@@ -37,72 +167,96 @@ class AuthScreenShell extends StatelessWidget {
         children: [
           const _AuthBackground(),
           SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(22, 6, 22, bottomInset + 20),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 430),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(
-                        height: 42,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: showBackButton
-                              ? IconButton(
-                                  onPressed: onBack,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints.tightFor(
-                                    width: 42,
-                                    height: 42,
-                                  ),
-                                  icon: const Icon(
-                                    Icons.arrow_back_rounded,
-                                    color: AppColors.text,
-                                    size: 24,
-                                  ),
-                                )
-                              : const SizedBox(width: 42, height: 42),
-                        ),
+            child: Center(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  context.responsiveHorizontalPadding,
+                  verticalPadding,
+                  context.responsiveHorizontalPadding,
+                  bottomInset + 24,
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: formMaxWidth),
+                    child: Container(
+                      padding: isTabletPortrait
+                          ? const EdgeInsets.all(36)
+                          : EdgeInsets.zero,
+                      decoration: isTabletPortrait
+                          ? BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(28),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x120F2746),
+                                  blurRadius: 28,
+                                  offset: Offset(0, 10),
+                                ),
+                              ],
+                              border: Border.all(color: const Color(0xFFE8EEF5)),
+                            )
+                          : null,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(
+                            height: 42,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: showBackButton
+                                  ? IconButton(
+                                      onPressed: onBack,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints.tightFor(
+                                        width: 42,
+                                        height: 42,
+                                      ),
+                                      icon: const Icon(
+                                        Icons.arrow_back_rounded,
+                                        color: AppColors.text,
+                                        size: 24,
+                                      ),
+                                    )
+                                  : const SizedBox(width: 42, height: 42),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Center(child: AppLogo(iconSize: 60, fontSize: 30, centered: true)),
+                          const SizedBox(height: 14),
+                          Text(
+                            title,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.section(
+                              fontSize: isTabletPortrait ? 30 : 26,
+                              height: 1.12,
+                              color: AppColors.brandBlue,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            subtitle,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.body(
+                              fontSize: isTabletPortrait ? 16.5 : 15.5,
+                              color: AppColors.mutedText,
+                              height: 1.45,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Center(
+                            child: Image.asset(
+                              bannerAssetPath,
+                              height: isTabletPortrait ? bannerHeight * 0.85 : bannerHeight,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          child,
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      const Center(
-                        child: AppLogo(iconSize: 58, centered: true),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: AppTypography.section(
-                          fontSize: 26,
-                          height: 1.12,
-                          color: AppColors.brandBlue,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        subtitle,
-                        textAlign: TextAlign.center,
-                        style: AppTypography.body(
-                          fontSize: 15.5,
-                          color: AppColors.mutedText,
-                          height: 1.45,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Center(
-                        child: Image.asset(
-                          bannerAssetPath,
-                          height: bannerHeight,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      child,
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -138,6 +292,8 @@ class AuthInputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
@@ -145,25 +301,25 @@ class AuthInputField extends StatelessWidget {
       validator: validator,
       textInputAction: textInputAction,
       style: AppTypography.body(
-        fontSize: 16,
+        fontSize: isTablet ? 17.5 : 16.0,
         color: AppColors.brandBlue,
         fontWeight: FontWeight.w500,
       ),
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: AppTypography.body(
-          fontSize: 15.5,
+          fontSize: isTablet ? 17.0 : 15.5,
           color: const Color(0xFF7E8BA2),
           fontWeight: FontWeight.w500,
         ),
         filled: true,
         fillColor: AppColors.white,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 18,
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: isTablet ? 20 : 18,
+          vertical: isTablet ? 20 : 18,
         ),
-        prefixIcon: Icon(icon, size: 22, color: AppColors.brandBlue),
-        prefixIconConstraints: const BoxConstraints(minWidth: 50),
+        prefixIcon: Icon(icon, size: isTablet ? 24 : 22, color: AppColors.brandBlue),
+        prefixIconConstraints: BoxConstraints(minWidth: isTablet ? 54 : 50),
         suffixIcon: suffixIcon,
         enabledBorder: _border(),
         focusedBorder: _border(color: const Color(0xFF8ADBE4)),
@@ -196,8 +352,10 @@ class AuthPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     return Container(
-      height: 58,
+      height: isTablet ? 62 : 58,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
@@ -235,7 +393,7 @@ class AuthPrimaryButton extends StatelessWidget {
             : Text(
                 label,
                 style: AppTypography.button(
-                  fontSize: 17,
+                  fontSize: isTablet ? 18.5 : 17.0,
                   color: AppColors.white,
                   fontWeight: FontWeight.w600,
                 ),
@@ -257,8 +415,10 @@ class AuthGoogleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     return SizedBox(
-      height: 56,
+      height: isTablet ? 56 : 52,
       child: OutlinedButton(
         onPressed: isLoading ? null : onPressed,
         style: OutlinedButton.styleFrom(
@@ -270,23 +430,23 @@ class AuthGoogleButton extends StatelessWidget {
         ),
         child: isLoading
             ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.2),
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   SvgPicture.asset(
                     'assets/icons/google_logo.svg',
-                    width: 21,
-                    height: 21,
+                    width: isTablet ? 22 : 20,
+                    height: isTablet ? 22 : 20,
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Text(
                     'Continue with Google',
                     style: AppTypography.button(
-                      fontSize: 16,
+                      fontSize: isTablet ? 17.0 : 16.0,
                       color: AppColors.brandBlue,
                       fontWeight: FontWeight.w500,
                     ),
@@ -310,31 +470,48 @@ class AuthAppleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     return SizedBox(
-      height: 56,
-      child: isLoading
-          ? Container(
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const SizedBox(
-                width: 22,
-                height: 22,
+      height: isTablet ? 56 : 52,
+      child: OutlinedButton(
+        onPressed: isLoading ? null : onPressed,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: Colors.black,
+          side: const BorderSide(color: Colors.black),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
+                  strokeWidth: 2,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.apple,
+                    size: isTablet ? 22 : 20,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Sign in with Apple',
+                    style: AppTypography.button(
+                      fontSize: isTablet ? 17.0 : 16.0,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
-            )
-          : SignInWithAppleButton(
-              onPressed: onPressed,
-              style: SignInWithAppleButtonStyle.black,
-              borderRadius: BorderRadius.circular(16),
-              height: 56,
-              text: 'Sign in with Apple',
-            ),
+      ),
     );
   }
 }
@@ -344,6 +521,8 @@ class AuthOrDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     return Row(
       children: [
         const Expanded(child: Divider(color: Color(0xFFD9E5F0))),
@@ -352,7 +531,7 @@ class AuthOrDivider extends StatelessWidget {
           child: Text(
             'or',
             style: AppTypography.body(
-              fontSize: 15,
+              fontSize: isTablet ? 16.5 : 15.0,
               color: AppColors.mutedText,
               fontWeight: FontWeight.w500,
             ),
@@ -376,13 +555,15 @@ class AuthAgreementRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     final bodyStyle = AppTypography.body(
-      fontSize: 14.2,
+      fontSize: isTablet ? 15.5 : 14.2,
       color: const Color(0xFF5D6A83),
       fontWeight: FontWeight.w500,
     );
     final linkStyle = AppTypography.body(
-      fontSize: 14.2,
+      fontSize: isTablet ? 15.5 : 14.2,
       color: AppColors.primary,
       fontWeight: FontWeight.w500,
     );
@@ -390,11 +571,11 @@ class AuthAgreementRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 1.5),
+        Padding(
+          padding: const EdgeInsets.only(top: 1.5),
           child: Icon(
             Icons.check_box_rounded,
-            size: 21,
+            size: isTablet ? 23 : 21,
             color: AppColors.primary,
           ),
         ),
@@ -439,6 +620,8 @@ class AuthBottomLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = context.isTabletOrLarger;
+
     return Center(
       child: Wrap(
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -446,7 +629,7 @@ class AuthBottomLink extends StatelessWidget {
           Text(
             prompt,
             style: AppTypography.body(
-              fontSize: 15.5,
+              fontSize: isTablet ? 17.0 : 15.5,
               color: const Color(0xFF6A758C),
               fontWeight: FontWeight.w500,
             ),
@@ -456,7 +639,7 @@ class AuthBottomLink extends StatelessWidget {
             child: Text(
               action,
               style: AppTypography.body(
-                fontSize: 15.5,
+                fontSize: isTablet ? 17.0 : 15.5,
                 color: AppColors.primary,
                 fontWeight: FontWeight.w600,
               ),

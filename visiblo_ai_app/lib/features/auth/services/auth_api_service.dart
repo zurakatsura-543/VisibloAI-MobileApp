@@ -968,6 +968,58 @@ class AuthApiService extends GetxService {
     }
   }
 
+  Future<Map<String, dynamic>> requestUserAccountDeleteOtp() async {
+    try {
+      final response = await _api.post('/auth/request-account-delete-otp');
+      return _asMap(response.data);
+    } on DioException catch (error) {
+      // Fallback to business delete OTP if server has not migrated endpoint yet
+      if (error.response?.statusCode == 404) {
+        return requestBusinessDeleteOtp();
+      }
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to send account deletion OTP right now.',
+        ),
+      );
+    }
+  }
+
+  Future<void> confirmUserAccountDelete({required String otp}) async {
+    try {
+      try {
+        await _api.post(
+          '/auth/confirm-account-delete',
+          data: <String, dynamic>{'otp': otp.trim()},
+        );
+      } on DioException catch (error) {
+        if (error.response?.statusCode == 404) {
+          // Fallback to legacy endpoint if backend migration is pending
+          await _api.post(
+            '/auth/confirm-business-delete',
+            data: <String, dynamic>{'otp': otp.trim()},
+          );
+        } else {
+          rethrow;
+        }
+      }
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to delete your account right now.',
+        ),
+      );
+    } finally {
+      await clearSession();
+    }
+  }
+
   Future<void> logoutBackend() async {
     try {
       await Get.find<NotificationService>().unregisterDeviceToken();
