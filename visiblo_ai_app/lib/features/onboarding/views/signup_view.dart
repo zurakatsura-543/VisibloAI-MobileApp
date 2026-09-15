@@ -19,10 +19,11 @@ class SignUpView extends GetView<OnboardingController> {
       subtitle: 'Start your business growth journey with AI.',
       child: Form(
         key: controller.signUpFormKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AuthInputField(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isTablet = constraints.maxWidth >= 520;
+
+            final fullNameField = AuthInputField(
               hintText: 'Full name',
               controller: controller.fullNameController,
               icon: Icons.person_outline_rounded,
@@ -31,18 +32,18 @@ class SignUpView extends GetView<OnboardingController> {
                 value,
                 fieldName: 'Full name',
               ),
-            ),
-            const SizedBox(height: 14),
-            AuthInputField(
+            );
+
+            final emailField = AuthInputField(
               hintText: 'Email address',
               controller: controller.signUpEmailController,
               icon: Icons.mail_outline_rounded,
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
               validator: controller.validateEmail,
-            ),
-            const SizedBox(height: 14),
-            Obx(
+            );
+
+            final phoneField = Obx(
               () => _PhoneNumberField(
                 country: _supportedPhoneCountries.firstWhere(
                   (country) =>
@@ -68,9 +69,9 @@ class SignUpView extends GetView<OnboardingController> {
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
-            Obx(
+            );
+
+            final passwordField = Obx(
               () => AuthInputField(
                 hintText: 'Password',
                 controller: controller.signUpPasswordController,
@@ -89,9 +90,30 @@ class SignUpView extends GetView<OnboardingController> {
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
-            ValueListenableBuilder<TextEditingValue>(
+            );
+
+            final confirmPasswordField = Obx(
+              () => AuthInputField(
+                hintText: 'Confirm password',
+                controller: controller.signUpConfirmPasswordController,
+                icon: Icons.lock_outline_rounded,
+                obscureText: controller.obscureSignUpConfirmPassword.value,
+                textInputAction: TextInputAction.done,
+                validator: controller.validateSignUpConfirmPassword,
+                suffixIcon: IconButton(
+                  onPressed: controller.toggleSignUpConfirmPassword,
+                  icon: Icon(
+                    controller.obscureSignUpConfirmPassword.value
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    color: AppColors.brandBlue,
+                    size: 22,
+                  ),
+                ),
+              ),
+            );
+
+            final passwordRulesWidget = ValueListenableBuilder<TextEditingValue>(
               valueListenable: controller.signUpPasswordController,
               builder: (context, value, _) {
                 final password = value.text;
@@ -107,16 +129,31 @@ class SignUpView extends GetView<OnboardingController> {
                         style: AppTypography.label(color: AppColors.mutedText),
                       ),
                       const SizedBox(height: 8),
-                      ...rules.map(
-                        (rule) => Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: _PasswordRuleRow(
-                            label: rule.label,
-                            satisfied: rule.satisfied,
-                            idle: true,
+                      if (isTablet)
+                        Wrap(
+                          spacing: 16,
+                          runSpacing: 6,
+                          children: rules
+                              .map(
+                                (rule) => _PasswordRuleRow(
+                                  label: rule.label,
+                                  satisfied: rule.satisfied,
+                                  idle: true,
+                                ),
+                              )
+                              .toList(),
+                        )
+                      else
+                        ...rules.map(
+                          (rule) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: _PasswordRuleRow(
+                              label: rule.label,
+                              satisfied: rule.satisfied,
+                              idle: true,
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   );
                 }
@@ -150,89 +187,147 @@ class SignUpView extends GetView<OnboardingController> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    ...rules.map(
-                      (rule) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: _PasswordRuleRow(
-                          label: rule.label,
-                          satisfied: rule.satisfied,
+                    if (isTablet)
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 6,
+                        children: rules
+                            .map(
+                              (rule) => _PasswordRuleRow(
+                                label: rule.label,
+                                satisfied: rule.satisfied,
+                              ),
+                            )
+                            .toList(),
+                      )
+                    else
+                      ...rules.map(
+                        (rule) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: _PasswordRuleRow(
+                            label: rule.label,
+                            satisfied: rule.satisfied,
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 );
               },
-            ),
-            const SizedBox(height: 14),
-            Obx(
-              () => AuthInputField(
-                hintText: 'Confirm password',
-                controller: controller.signUpConfirmPasswordController,
-                icon: Icons.lock_outline_rounded,
-                obscureText: controller.obscureSignUpConfirmPassword.value,
-                textInputAction: TextInputAction.done,
-                validator: controller.validateSignUpConfirmPassword,
-                suffixIcon: IconButton(
-                  onPressed: controller.toggleSignUpConfirmPassword,
-                  icon: Icon(
-                    controller.obscureSignUpConfirmPassword.value
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    color: AppColors.brandBlue,
-                    size: 22,
+            );
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (isTablet) ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: fullNameField),
+                      const SizedBox(width: 14),
+                      Expanded(child: emailField),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  phoneField,
+                  const SizedBox(height: 14),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: passwordField),
+                      const SizedBox(width: 14),
+                      Expanded(child: confirmPasswordField),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  passwordRulesWidget,
+                ] else ...[
+                  fullNameField,
+                  const SizedBox(height: 14),
+                  emailField,
+                  const SizedBox(height: 14),
+                  phoneField,
+                  const SizedBox(height: 14),
+                  passwordField,
+                  const SizedBox(height: 10),
+                  passwordRulesWidget,
+                  const SizedBox(height: 14),
+                  confirmPasswordField,
+                ],
+                const SizedBox(height: 14),
+                AuthAgreementRow(
+                  onTermsTap: controller.openTermsDocument,
+                  onPrivacyTap: controller.openPrivacyPolicyDocument,
+                ),
+                const SizedBox(height: 16),
+                Obx(
+                  () => AuthPrimaryButton(
+                    label: 'Sign Up',
+                    isLoading: controller.isSignUpLoading.value,
+                    onPressed: controller.submitSignUp,
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            AuthAgreementRow(
-              onTermsTap: controller.openTermsDocument,
-              onPrivacyTap: controller.openPrivacyPolicyDocument,
-            ),
-            const SizedBox(height: 16),
-            Obx(
-              () => AuthPrimaryButton(
-                label: 'Sign Up',
-                isLoading: controller.isSignUpLoading.value,
-                onPressed: controller.submitSignUp,
-              ),
-            ),
-            const SizedBox(height: 18),
-            const AuthOrDivider(),
-            const SizedBox(height: 18),
-            Obx(
-              () => AuthGoogleButton(
-                isLoading: controller.isGoogleSignInLoading.value,
-                onPressed: controller.continueWithGoogle,
-              ),
-            ),
-            if (Theme.of(context).platform == TargetPlatform.iOS) ...[
-              const SizedBox(height: 12),
-              Obx(
-                () => AuthAppleButton(
-                  isLoading: controller.isAppleSignInLoading.value,
-                  onPressed: controller.continueWithApple,
+                const SizedBox(height: 18),
+                const AuthOrDivider(),
+                const SizedBox(height: 18),
+                if (isTablet && Theme.of(context).platform == TargetPlatform.iOS) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Obx(
+                          () => AuthGoogleButton(
+                            isLoading: controller.isGoogleSignInLoading.value,
+                            onPressed: controller.continueWithGoogle,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Obx(
+                          () => AuthAppleButton(
+                            isLoading: controller.isAppleSignInLoading.value,
+                            onPressed: controller.continueWithApple,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  Obx(
+                    () => AuthGoogleButton(
+                      isLoading: controller.isGoogleSignInLoading.value,
+                      onPressed: controller.continueWithGoogle,
+                    ),
+                  ),
+                  if (Theme.of(context).platform == TargetPlatform.iOS) ...[
+                    const SizedBox(height: 12),
+                    Obx(
+                      () => AuthAppleButton(
+                        isLoading: controller.isAppleSignInLoading.value,
+                        onPressed: controller.continueWithApple,
+                      ),
+                    ),
+                  ],
+                ],
+                const SizedBox(height: 18),
+                AuthBottomLink(
+                  prompt: 'Already have an account? ',
+                  action: 'Log In',
+                  onTap: () => Get.offAllNamed(AppRoutes.login),
                 ),
-              ),
-            ],
-            const SizedBox(height: 18),
-            AuthBottomLink(
-              prompt: 'Already have an account? ',
-              action: 'Log In',
-              onTap: () => Get.offAllNamed(AppRoutes.login),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'For Google-linked businesses, use Google sign-in. No password is needed there.',
-              textAlign: TextAlign.center,
-              style: AppTypography.body(
-                fontSize: 13.2,
-                color: AppColors.mutedText,
-                height: 1.45,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+                const SizedBox(height: 12),
+                Text(
+                  'For Google-linked businesses, use Google sign-in. No password is needed there.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.body(
+                    fontSize: 13.2,
+                    color: AppColors.mutedText,
+                    height: 1.45,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

@@ -57,18 +57,18 @@ class AuthScreenShell extends StatelessWidget {
                 ),
                 child: SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.all(36),
+                    padding: const EdgeInsets.all(40),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const AppLogo(iconSize: 72, centered: true),
+                        const AppLogo(iconSize: 72, fontSize: 34, centered: true),
                         const SizedBox(height: 24),
                         Text(
                           'Grow Your Business with AI',
                           textAlign: TextAlign.center,
                           style: AppTypography.section(
-                            fontSize: 30,
+                            fontSize: 32,
                             color: AppColors.brandBlue,
                             fontWeight: FontWeight.w700,
                           ),
@@ -105,9 +105,9 @@ class AuthScreenShell extends StatelessWidget {
                 body: SafeArea(
                   child: Center(
                     child: SingleChildScrollView(
-                      padding: EdgeInsets.fromLTRB(36, 20, 36, bottomInset + 20),
+                      padding: EdgeInsets.fromLTRB(40, 24, 40, bottomInset + 24),
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 480),
+                        constraints: const BoxConstraints(maxWidth: 540),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -128,7 +128,7 @@ class AuthScreenShell extends StatelessWidget {
                               title,
                               textAlign: TextAlign.center,
                               style: AppTypography.section(
-                                fontSize: 30,
+                                fontSize: 32,
                                 color: AppColors.brandBlue,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -158,8 +158,8 @@ class AuthScreenShell extends StatelessWidget {
     }
 
     // Tablet Portrait layout
-    final formMaxWidth = isTabletPortrait ? 520.0 : 430.0;
-    final verticalPadding = isTabletPortrait ? 28.0 : 6.0;
+    final formMaxWidth = isTabletPortrait ? 620.0 : 430.0;
+    final verticalPadding = isTabletPortrait ? 32.0 : 6.0;
 
     return Scaffold(
       backgroundColor: AppColors.white,
@@ -173,24 +173,24 @@ class AuthScreenShell extends StatelessWidget {
                   context.responsiveHorizontalPadding,
                   verticalPadding,
                   context.responsiveHorizontalPadding,
-                  bottomInset + 20,
+                  bottomInset + 24,
                 ),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: formMaxWidth),
                     child: Container(
                       padding: isTabletPortrait
-                          ? const EdgeInsets.all(32)
+                          ? const EdgeInsets.all(36)
                           : EdgeInsets.zero,
                       decoration: isTabletPortrait
                           ? BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(24),
+                              borderRadius: BorderRadius.circular(28),
                               boxShadow: const [
                                 BoxShadow(
-                                  color: Color(0x0F0F2746),
-                                  blurRadius: 24,
-                                  offset: Offset(0, 8),
+                                  color: Color(0x120F2746),
+                                  blurRadius: 28,
+                                  offset: Offset(0, 10),
                                 ),
                               ],
                               border: Border.all(color: const Color(0xFFE8EEF5)),
@@ -221,7 +221,7 @@ class AuthScreenShell extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          const Center(child: AppLogo(iconSize: 58, centered: true)),
+                          const Center(child: AppLogo(iconSize: 60, fontSize: 30, centered: true)),
                           const SizedBox(height: 14),
                           Text(
                             title,
@@ -248,7 +248,7 @@ class AuthScreenShell extends StatelessWidget {
                           Center(
                             child: Image.asset(
                               bannerAssetPath,
-                              height: isTabletPortrait ? bannerHeight * 0.9 : bannerHeight,
+                              height: isTabletPortrait ? bannerHeight * 0.85 : bannerHeight,
                               fit: BoxFit.contain,
                             ),
                           ),
