@@ -687,7 +687,7 @@ class OnboardingController extends GetxController {
 
       debugPrint('🍏 [Apple Sign-In] Requesting getAppleIDCredential from iOS...');
       final credential = await SignInWithApple.getAppleIDCredential(
-        scopes: [
+        scopes: const [
           AppleIDAuthorizationScopes.email,
           AppleIDAuthorizationScopes.fullName,
         ],
@@ -704,7 +704,7 @@ class OnboardingController extends GetxController {
       final identityToken = credential.identityToken?.trim() ?? '';
       final authorizationCode = credential.authorizationCode.trim();
 
-      if (identityToken.isEmpty || authorizationCode.isEmpty) {
+      if (identityToken.isEmpty) {
         throw Exception(
           'Apple did not return a valid authentication credential. Please try again.',
         );
@@ -715,18 +715,15 @@ class OnboardingController extends GetxController {
       final familyName = credential.familyName?.trim();
       final userIdentifier = credential.userIdentifier?.trim();
 
-      final fullName = [givenName ?? '', familyName ?? '']
-          .join(' ')
-          .trim();
+      final fullName = [givenName ?? '', familyName ?? ''].join(' ').trim();
 
       debugPrint('🍏 [Apple Sign-In] Contacting backend auth service...');
       final remoteProfile = await _authApiService.loginWithAppleMobile(
         identityToken: identityToken,
-        authorizationCode: authorizationCode,
+        authorizationCode: authorizationCode.isEmpty ? null : authorizationCode,
         email: appleEmail,
-        givenName: givenName,
-        familyName: familyName,
-        userIdentifier: userIdentifier,
+        fullName: fullName,
+        appleUserId: userIdentifier,
       );
 
       debugPrint('🍏 [Apple Sign-In] Backend auth success! User ID: ${remoteProfile.userId}');
@@ -3366,6 +3363,8 @@ class OnboardingController extends GetxController {
           return 'Apple sign-in request was not handled. Please try again.';
         case AuthorizationErrorCode.notInteractive:
           return 'Apple sign-in requires user interaction. Please try again.';
+        default:
+          return 'Apple sign-in failed (${error.code}). Please try again.';
       }
     }
 
@@ -3646,6 +3645,13 @@ class OnboardingController extends GetxController {
         locationId: locationId,
         googleLocationId: googleLocationId,
         consentType: 'GBP_AI_AUTO_POST',
+        metadata: <String, dynamic>{
+          'autoPostActive': true,
+          'approvalMode': 'APPROVE_CALENDAR',
+          'postingFrequency': 'GROWTH',
+          'updatedFrom': 'mobile_onboarding',
+          'updatedAt': DateTime.now().toUtc().toIso8601String(),
+        },
       );
       Get.offAllNamed(AppRoutes.payment);
     } catch (error) {

@@ -319,10 +319,11 @@ class PaymentController extends GetxController {
   }
 
   bool get supportsNativeCheckout {
-    return !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.iOS);
+    return !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   }
+
+  bool get isIosAppStoreBuild =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   String get subscriptionStatusRaw {
     final subStatus = _firstNonEmpty(<String>[
@@ -610,7 +611,9 @@ class PaymentController extends GetxController {
     }
     if (selectedBillingMode.value == 'AUTOPAY') {
       if (!supportsAutopayCheckout) {
-        return 'AutoPay available on Android or iPhone';
+        return isIosAppStoreBuild
+            ? 'Subscription managed on web'
+            : 'AutoPay available on Android';
       }
       if (canResumeAutopay) {
         return 'Resume AutoPay';
@@ -618,7 +621,9 @@ class PaymentController extends GetxController {
       return 'Enable AutoPay with Razorpay';
     }
     if (!supportsNativeCheckout) {
-      return 'Checkout available on Android or iPhone';
+      return isIosAppStoreBuild
+          ? 'Subscription managed on web'
+          : 'Checkout available on Android';
     }
     if (selectedPlan.code == activePlanCode && hasActiveSubscription) {
       return 'Renew this plan';
@@ -995,8 +1000,9 @@ class PaymentController extends GetxController {
     }
 
     if (!supportsNativeCheckout) {
-      errorMessage.value =
-          'Razorpay mobile checkout is available on Android and iPhone only.';
+      errorMessage.value = isIosAppStoreBuild
+          ? 'This iOS app lets existing VisibloAI customers access their activated workspace. Subscription purchase is not available in this app build.'
+          : 'Razorpay mobile checkout is available on Android only.';
       return;
     }
 
@@ -1230,8 +1236,9 @@ class PaymentController extends GetxController {
       return;
     }
     if (!supportsAutopayCheckout) {
-      errorMessage.value =
-          'AutoPay checkout is available on Android and iPhone only.';
+      errorMessage.value = isIosAppStoreBuild
+          ? 'This iOS app lets existing VisibloAI customers access their activated workspace. AutoPay setup is not available in this app build.'
+          : 'AutoPay checkout is available on Android only.';
       return;
     }
 

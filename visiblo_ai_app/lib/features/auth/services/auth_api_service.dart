@@ -216,11 +216,10 @@ class AuthApiService extends GetxService {
 
   Future<AuthMeResponse> loginWithAppleMobile({
     required String identityToken,
-    required String authorizationCode,
+    String? authorizationCode,
     String? email,
-    String? givenName,
-    String? familyName,
-    String? userIdentifier,
+    String? fullName,
+    String? appleUserId,
   }) async {
     try {
       debugPrint('Sending native Apple login request...');
@@ -228,11 +227,14 @@ class AuthApiService extends GetxService {
         '/auth/apple/mobile',
         data: <String, dynamic>{
           'identityToken': identityToken.trim(),
-          'authorizationCode': authorizationCode.trim(),
-          if (email != null && email.trim().isNotEmpty) 'email': email.trim().toLowerCase(),
-          if (givenName != null && givenName.trim().isNotEmpty) 'givenName': givenName.trim(),
-          if (familyName != null && familyName.trim().isNotEmpty) 'familyName': familyName.trim(),
-          if (userIdentifier != null && userIdentifier.trim().isNotEmpty) 'userIdentifier': userIdentifier.trim(),
+          if (authorizationCode != null && authorizationCode.trim().isNotEmpty)
+            'authorizationCode': authorizationCode.trim(),
+          if (email != null && email.trim().isNotEmpty)
+            'email': email.trim().toLowerCase(),
+          if (fullName != null && fullName.trim().isNotEmpty)
+            'fullName': fullName.trim(),
+          if (appleUserId != null && appleUserId.trim().isNotEmpty)
+            'appleUserId': appleUserId.trim(),
         },
       );
 

@@ -13,6 +13,10 @@ class SignUpView extends GetView<OnboardingController> {
 
   @override
   Widget build(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    final showAppleSignIn =
+        platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
+
     return AuthScreenShell(
       showBackButton: true,
       onBack: Get.back,
@@ -539,10 +543,8 @@ class _PhoneNumberField extends StatelessWidget {
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
             itemCount: _supportedPhoneCountries.length,
-            separatorBuilder: (_, _) => const Divider(
-              height: 1,
-              color: Color(0xFFE7EEF7),
-            ),
+            separatorBuilder: (_, _) =>
+                const Divider(height: 1, color: Color(0xFFE7EEF7)),
             itemBuilder: (context, index) {
               final item = _supportedPhoneCountries[index];
               return ListTile(
@@ -657,10 +659,7 @@ List<_PasswordRule> _buildPasswordRules(String password) {
 }
 
 class _PasswordRule {
-  const _PasswordRule({
-    required this.label,
-    required this.satisfied,
-  });
+  const _PasswordRule({required this.label, required this.satisfied});
 
   final String label;
   final bool satisfied;

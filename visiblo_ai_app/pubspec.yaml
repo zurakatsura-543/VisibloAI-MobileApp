@@ -54,7 +54,7 @@ dependencies:
   razorpay_flutter: ^1.4.5
   firebase_crashlytics: ^5.2.7
   firebase_app_check: ^0.4.6
-  sign_in_with_apple: ^6.1.4
+  sign_in_with_apple: ^8.1.0
   in_app_purchase: ^3.2.0
 
 dev_dependencies:
