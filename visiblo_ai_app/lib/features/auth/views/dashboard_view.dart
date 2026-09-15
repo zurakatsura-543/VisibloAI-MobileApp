@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../app/services/local_auth_service.dart';
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_responsive.dart';
 import '../../../app/widgets/app_logo.dart';
 import '../../onboarding/controllers/onboarding_controller.dart';
 import '../models/gbp_post.dart';
@@ -167,10 +168,17 @@ class _DashboardContentState extends State<_DashboardContent> {
         onRefresh: _doRefresh,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: AuthViewSpacing.pagePadding,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          padding: EdgeInsets.fromLTRB(
+            context.responsiveHorizontalPadding,
+            AuthViewSpacing.pageTop,
+            context.responsiveHorizontalPadding,
+            AuthViewSpacing.pageBottom,
+          ),
+          child: ResponsiveCenter(
+            useHorizontalPadding: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               Row(
                 children: [
                   const AuthShellBackButton(),
@@ -298,9 +306,10 @@ class _DashboardContentState extends State<_DashboardContent> {
             ],
           ),
         ),
-      );
-    });
-  }
+      ),
+    );
+  });
+}
 
   Future<void> _doRefresh() async {
     // Reset filter to All so posts that moved (e.g. Scheduled → Live) are visible

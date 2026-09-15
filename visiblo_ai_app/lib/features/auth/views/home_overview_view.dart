@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_responsive.dart';
 import '../../../app/widgets/app_logo.dart';
 import '../controllers/product_mode_controller.dart';
 import '../../onboarding/controllers/onboarding_controller.dart';
@@ -673,15 +674,17 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
             onNotification: _handleScrollNotification,
             child: SingleChildScrollView(
               physics: _adaptiveHomeScrollPhysics(context),
-              padding: const EdgeInsets.fromLTRB(
-                AuthViewSpacing.pageHorizontal,
+              padding: EdgeInsets.fromLTRB(
+                context.responsiveHorizontalPadding,
                 AuthViewSpacing.pageTop,
-                AuthViewSpacing.pageHorizontal,
+                context.responsiveHorizontalPadding,
                 AuthViewSpacing.pageBottom,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              child: ResponsiveCenter(
+                useHorizontalPadding: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   const SizedBox(height: 2),
                   _HomeOverviewHeader(onMenuTap: () => _openSidebar(user)),
                   SizedBox(height: topCardGap),
@@ -787,7 +790,8 @@ class _HomeOverviewContentState extends State<_HomeOverviewContent> {
                 ],
               ),
             ),
-          );
+          ),
+        );
         },
       );
     });

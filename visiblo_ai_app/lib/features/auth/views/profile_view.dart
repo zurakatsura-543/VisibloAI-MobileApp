@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_responsive.dart';
 import '../../../app/theme/app_typography.dart';
 import '../controllers/account_settings_controller.dart';
 import '../widgets/auth_layout.dart';
@@ -35,17 +36,21 @@ class AccountView extends GetView<AccountSettingsController> {
         return RefreshIndicator(
           color: AppColors.primary,
           onRefresh: controller.refreshData,
-          child: ListView(
+          child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),
-            padding: const EdgeInsets.fromLTRB(
-              AuthViewSpacing.pageHorizontal,
+            padding: EdgeInsets.fromLTRB(
+              context.responsiveHorizontalPadding,
               10,
-              AuthViewSpacing.pageHorizontal,
+              context.responsiveHorizontalPadding,
               26,
             ),
-            children: [
+            child: ResponsiveCenter(
+              useHorizontalPadding: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               const _AccountHeader(),
               const SizedBox(height: 12),
               if (controller.errorMessage.value != null) ...[
@@ -82,9 +87,11 @@ class AccountView extends GetView<AccountSettingsController> {
               ),
             ],
           ),
-        );
-      }),
+        ),
+      ),
     );
+  }),
+);
   }
 
   Future<void> _confirmDeleteAccount(BuildContext context) async {

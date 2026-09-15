@@ -6,6 +6,8 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../app/widgets/app_logo.dart';
 
+import '../../../app/theme/app_responsive.dart';
+
 class AuthScreenShell extends StatelessWidget {
   const AuthScreenShell({
     super.key,
@@ -29,6 +31,135 @@ class AuthScreenShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final width = MediaQuery.sizeOf(context).width;
+    final isTabletLandscape = width >= 768 && context.isLandscape;
+    final isTabletPortrait = width >= 600 && !context.isLandscape;
+
+    if (isTabletLandscape) {
+      return Scaffold(
+        backgroundColor: AppColors.white,
+        body: Row(
+          children: [
+            // Left Hero Banner Column
+            Expanded(
+              flex: 5,
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFFEAF8FA),
+                      Color(0xFFD6F2F5),
+                      Color(0xFFC7ECF2),
+                    ],
+                  ),
+                ),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(36),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const AppLogo(iconSize: 72, centered: true),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Grow Your Business with AI',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.section(
+                            fontSize: 30,
+                            color: AppColors.brandBlue,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Automate reviews, AI content, local SEO & customer interactions in one place.',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.body(
+                            fontSize: 16.5,
+                            color: AppColors.mutedText,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Expanded(
+                          child: Center(
+                            child: Image.asset(
+                              bannerAssetPath,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Right Auth Form Column
+            Expanded(
+              flex: 6,
+              child: Scaffold(
+                backgroundColor: AppColors.white,
+                body: SafeArea(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(36, 20, 36, bottomInset + 20),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 480),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (showBackButton)
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: IconButton(
+                                  onPressed: onBack,
+                                  icon: const Icon(
+                                    Icons.arrow_back_rounded,
+                                    color: AppColors.text,
+                                    size: 26,
+                                  ),
+                                ),
+                              ),
+                            Text(
+                              title,
+                              textAlign: TextAlign.center,
+                              style: AppTypography.section(
+                                fontSize: 30,
+                                color: AppColors.brandBlue,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              subtitle,
+                              textAlign: TextAlign.center,
+                              style: AppTypography.body(
+                                fontSize: 16,
+                                color: AppColors.mutedText,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            child,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Tablet Portrait layout
+    final formMaxWidth = isTabletPortrait ? 520.0 : 430.0;
+    final verticalPadding = isTabletPortrait ? 28.0 : 6.0;
 
     return Scaffold(
       backgroundColor: AppColors.white,
@@ -36,70 +167,96 @@ class AuthScreenShell extends StatelessWidget {
         children: [
           const _AuthBackground(),
           SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(22, 6, 22, bottomInset + 20),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 430),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(
-                        height: 42,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: showBackButton
-                              ? IconButton(
-                                  onPressed: onBack,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints.tightFor(
-                                    width: 42,
-                                    height: 42,
-                                  ),
-                                  icon: const Icon(
-                                    Icons.arrow_back_rounded,
-                                    color: AppColors.text,
-                                    size: 24,
-                                  ),
-                                )
-                              : const SizedBox(width: 42, height: 42),
-                        ),
+            child: Center(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  context.responsiveHorizontalPadding,
+                  verticalPadding,
+                  context.responsiveHorizontalPadding,
+                  bottomInset + 20,
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: formMaxWidth),
+                    child: Container(
+                      padding: isTabletPortrait
+                          ? const EdgeInsets.all(32)
+                          : EdgeInsets.zero,
+                      decoration: isTabletPortrait
+                          ? BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x0F0F2746),
+                                  blurRadius: 24,
+                                  offset: Offset(0, 8),
+                                ),
+                              ],
+                              border: Border.all(color: const Color(0xFFE8EEF5)),
+                            )
+                          : null,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(
+                            height: 42,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: showBackButton
+                                  ? IconButton(
+                                      onPressed: onBack,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints.tightFor(
+                                        width: 42,
+                                        height: 42,
+                                      ),
+                                      icon: const Icon(
+                                        Icons.arrow_back_rounded,
+                                        color: AppColors.text,
+                                        size: 24,
+                                      ),
+                                    )
+                                  : const SizedBox(width: 42, height: 42),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Center(child: AppLogo(iconSize: 58, centered: true)),
+                          const SizedBox(height: 14),
+                          Text(
+                            title,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.section(
+                              fontSize: isTabletPortrait ? 30 : 26,
+                              height: 1.12,
+                              color: AppColors.brandBlue,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            subtitle,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.body(
+                              fontSize: isTabletPortrait ? 16.5 : 15.5,
+                              color: AppColors.mutedText,
+                              height: 1.45,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Center(
+                            child: Image.asset(
+                              bannerAssetPath,
+                              height: isTabletPortrait ? bannerHeight * 0.9 : bannerHeight,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          child,
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      const Center(child: AppLogo(iconSize: 58, centered: true)),
-                      const SizedBox(height: 14),
-                      Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: AppTypography.section(
-                          fontSize: 26,
-                          height: 1.12,
-                          color: AppColors.brandBlue,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        subtitle,
-                        textAlign: TextAlign.center,
-                        style: AppTypography.body(
-                          fontSize: 15.5,
-                          color: AppColors.mutedText,
-                          height: 1.45,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Center(
-                        child: Image.asset(
-                          bannerAssetPath,
-                          height: bannerHeight,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      child,
-                    ],
+                    ),
                   ),
                 ),
               ),
