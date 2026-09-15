@@ -666,7 +666,7 @@ class OnboardingController extends GetxController {
       }
 
       final credential = await SignInWithApple.getAppleIDCredential(
-        scopes: [
+        scopes: const [
           AppleIDAuthorizationScopes.email,
           AppleIDAuthorizationScopes.fullName,
         ],
@@ -675,7 +675,7 @@ class OnboardingController extends GetxController {
       final identityToken = credential.identityToken?.trim() ?? '';
       final authorizationCode = credential.authorizationCode.trim();
 
-      if (identityToken.isEmpty || authorizationCode.isEmpty) {
+      if (identityToken.isEmpty) {
         throw Exception(
           'Apple did not return a valid authentication credential. Please try again.',
         );
@@ -686,28 +686,22 @@ class OnboardingController extends GetxController {
       final familyName = credential.familyName?.trim();
       final userIdentifier = credential.userIdentifier?.trim();
 
-      final fullName = [givenName ?? '', familyName ?? '']
-          .join(' ')
-          .trim();
+      final fullName = [givenName ?? '', familyName ?? ''].join(' ').trim();
 
       debugPrint('Apple sign-in: credential received, contacting backend');
       final remoteProfile = await _authApiService.loginWithAppleMobile(
         identityToken: identityToken,
-        authorizationCode: authorizationCode,
+        authorizationCode: authorizationCode.isEmpty ? null : authorizationCode,
         email: appleEmail,
-        givenName: givenName,
-        familyName: familyName,
-        userIdentifier: userIdentifier,
+        fullName: fullName,
+        appleUserId: userIdentifier,
       );
 
-      final activeEmail = (appleEmail != null && appleEmail.isNotEmpty)
-          ? appleEmail
-          : (remoteProfile.email.isNotEmpty ? remoteProfile.email : '');
-
-      if (activeEmail.isNotEmpty) {
-        loginEmailController.text = activeEmail;
-        forgotPasswordEmailController.text = activeEmail;
-        signUpEmailController.text = activeEmail;
+      final normalizedEmail = remoteProfile.email.trim().toLowerCase();
+      if (normalizedEmail.isNotEmpty) {
+        loginEmailController.text = normalizedEmail;
+        forgotPasswordEmailController.text = normalizedEmail;
+        signUpEmailController.text = normalizedEmail;
       }
       if (fullName.isNotEmpty) {
         fullNameController.text = fullName;
@@ -715,7 +709,7 @@ class OnboardingController extends GetxController {
 
       await _syncCurrentUserFromRemoteProfile(
         remoteProfile,
-        email: activeEmail,
+        email: normalizedEmail,
         fallbackFullName: fullNameController.text.trim(),
       );
       await _navigateToSessionRoute(remoteProfile);
@@ -3567,6 +3561,13 @@ class OnboardingController extends GetxController {
         locationId: locationId,
         googleLocationId: googleLocationId,
         consentType: 'GBP_AI_AUTO_POST',
+        metadata: <String, dynamic>{
+          'autoPostActive': true,
+          'approvalMode': 'APPROVE_CALENDAR',
+          'postingFrequency': 'GROWTH',
+          'updatedFrom': 'mobile_onboarding',
+          'updatedAt': DateTime.now().toUtc().toIso8601String(),
+        },
       );
       Get.offAllNamed(AppRoutes.payment);
     } catch (error) {

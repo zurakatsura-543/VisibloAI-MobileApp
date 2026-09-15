@@ -67,7 +67,9 @@ class AuthScreenShell extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      const Center(child: AppLogo(iconSize: 58, centered: true)),
+                      const Center(
+                        child: AppLogo(iconSize: 58, centered: true),
+                      ),
                       const SizedBox(height: 14),
                       Text(
                         title,
@@ -478,13 +480,7 @@ class AuthBackgroundActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        leading,
-        const Spacer(),
-        trailing,
-      ],
-    );
+    return Row(children: [leading, const Spacer(), trailing]);
   }
 }
 

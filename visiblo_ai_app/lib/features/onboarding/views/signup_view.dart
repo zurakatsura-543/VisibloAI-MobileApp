@@ -12,6 +12,10 @@ class SignUpView extends GetView<OnboardingController> {
 
   @override
   Widget build(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    final showAppleSignIn =
+        platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
+
     return AuthScreenShell(
       showBackButton: true,
       onBack: Get.back,
@@ -27,10 +31,8 @@ class SignUpView extends GetView<OnboardingController> {
               controller: controller.fullNameController,
               icon: Icons.person_outline_rounded,
               textInputAction: TextInputAction.next,
-              validator: (value) => controller.validateRequired(
-                value,
-                fieldName: 'Full name',
-              ),
+              validator: (value) =>
+                  controller.validateRequired(value, fieldName: 'Full name'),
             ),
             const SizedBox(height: 14),
             AuthInputField(
@@ -206,7 +208,7 @@ class SignUpView extends GetView<OnboardingController> {
                 onPressed: controller.continueWithGoogle,
               ),
             ),
-            if (Theme.of(context).platform == TargetPlatform.iOS) ...[
+            if (showAppleSignIn) ...[
               const SizedBox(height: 12),
               Obx(
                 () => AuthAppleButton(
@@ -223,7 +225,7 @@ class SignUpView extends GetView<OnboardingController> {
             ),
             const SizedBox(height: 12),
             Text(
-              'For Google-linked businesses, use Google sign-in. No password is needed there.',
+              'For connected business accounts, use a secure sign-in option. No password is needed there.',
               textAlign: TextAlign.center,
               style: AppTypography.body(
                 fontSize: 13.2,
@@ -382,10 +384,7 @@ class _PhoneNumberField extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  country.flag,
-                  style: const TextStyle(fontSize: 18),
-                ),
+                Text(country.flag, style: const TextStyle(fontSize: 18)),
                 const SizedBox(width: 8),
                 Text(
                   country.dialCode,
@@ -430,19 +429,14 @@ class _PhoneNumberField extends StatelessWidget {
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
             itemCount: _supportedPhoneCountries.length,
-            separatorBuilder: (_, _) => const Divider(
-              height: 1,
-              color: Color(0xFFE7EEF7),
-            ),
+            separatorBuilder: (_, _) =>
+                const Divider(height: 1, color: Color(0xFFE7EEF7)),
             itemBuilder: (context, index) {
               final item = _supportedPhoneCountries[index];
               return ListTile(
                 onTap: () => Navigator.of(context).pop(item),
                 contentPadding: EdgeInsets.zero,
-                leading: Text(
-                  item.flag,
-                  style: const TextStyle(fontSize: 22),
-                ),
+                leading: Text(item.flag, style: const TextStyle(fontSize: 22)),
                 title: Text(
                   item.name,
                   style: AppTypography.body(
@@ -537,10 +531,7 @@ List<_PasswordRule> _buildPasswordRules(String password) {
 }
 
 class _PasswordRule {
-  const _PasswordRule({
-    required this.label,
-    required this.satisfied,
-  });
+  const _PasswordRule({required this.label, required this.satisfied});
 
   final String label;
   final bool satisfied;

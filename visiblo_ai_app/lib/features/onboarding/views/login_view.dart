@@ -11,6 +11,10 @@ class LoginView extends GetView<OnboardingController> {
 
   @override
   Widget build(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    final showAppleSignIn =
+        platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
+
     return AuthScreenShell(
       title: 'Welcome Back',
       subtitle: 'Sign in to manage your business growth with AI.',
@@ -106,7 +110,7 @@ class LoginView extends GetView<OnboardingController> {
                 onPressed: controller.continueWithGoogle,
               ),
             ),
-            if (Theme.of(context).platform == TargetPlatform.iOS) ...[
+            if (showAppleSignIn) ...[
               const SizedBox(height: 12),
               Obx(
                 () => AuthAppleButton(

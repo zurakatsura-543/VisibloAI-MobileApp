@@ -2323,20 +2323,28 @@ class _PaymentContentState extends State<_PaymentContent> {
                       _BillingWarningsCard(controller: widget.controller),
                       const SizedBox(height: 12),
                     ],
-                    _IntroAccessBanner(controller: widget.controller),
-                    const SizedBox(height: 12),
+                    if (!widget.controller.isIosAppStoreBuild) ...[
+                      _IntroAccessBanner(controller: widget.controller),
+                      const SizedBox(height: 12),
+                    ],
                     _ActiveSubscriptionCard(controller: widget.controller),
                     const SizedBox(height: 12),
-                    _UpgradePlansCard(controller: widget.controller),
-                    const SizedBox(height: 12),
-                    _SecurePaymentCard(controller: widget.controller),
+                    if (widget.controller.isIosAppStoreBuild) ...[
+                      _IosAccountAccessCard(controller: widget.controller),
+                    ] else ...[
+                      _UpgradePlansCard(controller: widget.controller),
+                      const SizedBox(height: 12),
+                      _SecurePaymentCard(controller: widget.controller),
+                    ],
                     const SizedBox(height: 12),
                     Container(
                       key: _billingHistoryKey,
                       child: _PaymentHistoryCard(controller: widget.controller),
                     ),
-                    const SizedBox(height: 12),
-                    _AutoRenewCard(controller: widget.controller),
+                    if (!widget.controller.isIosAppStoreBuild) ...[
+                      const SizedBox(height: 12),
+                      _AutoRenewCard(controller: widget.controller),
+                    ],
                   ],
                 ),
               ),
@@ -2365,6 +2373,87 @@ class _PaymentContentState extends State<_PaymentContent> {
       duration: const Duration(milliseconds: 360),
       curve: Curves.easeOutCubic,
       alignment: 0.08,
+    );
+  }
+}
+
+class _IosAccountAccessCard extends StatelessWidget {
+  const _IosAccountAccessCard({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF8F0),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.verified_user_rounded,
+                  color: Color(0xFF1C8B57),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Account access',
+                      style: AppTypography.button(
+                        fontSize: 15.2,
+                        color: AppColors.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Sign in with an activated VisibloAI account to use your business workspace on iPhone and iPad.',
+                      style: AppTypography.body(
+                        fontSize: 12.6,
+                        color: AppColors.mutedText,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: controller.refreshData,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Refresh access'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: BorderSide(
+                  color: AppColors.primary.withValues(alpha: 0.35),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -3070,7 +3159,11 @@ class _UpgradePlansCardState extends State<_UpgradePlansCard> {
           const SizedBox(height: 14),
           Column(
             children: [
-              for (int index = 0; index < widget.controller.plans.length; index++) ...[
+              for (
+                int index = 0;
+                index < widget.controller.plans.length;
+                index++
+              ) ...[
                 _PlanOfferCard(
                   controller: widget.controller,
                   plan: widget.controller.plans[index],
@@ -3348,40 +3441,42 @@ class _PlanOfferCard extends StatelessWidget {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Builder(builder: (context) {
-                      final localizedIapPrice =
-                          controller.getLocalizedPriceForPlan(plan.code);
-                      final displayPrice = localizedIapPrice.isNotEmpty
-                          ? localizedIapPrice
-                          : _formatInr(price);
-                      return RichText(
-                        text: TextSpan(
-                          style: AppTypography.card(
-                            fontSize: 16,
-                            color: AppColors.brandBlue,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          children: [
-                            TextSpan(
-                              text: displayPrice,
-                              style: AppTypography.card(
-                                fontSize: 24,
-                                color: AppColors.brandBlue,
-                                fontWeight: FontWeight.w800,
-                              ),
+                    Builder(
+                      builder: (context) {
+                        final localizedIapPrice = controller
+                            .getLocalizedPriceForPlan(plan.code);
+                        final displayPrice = localizedIapPrice.isNotEmpty
+                            ? localizedIapPrice
+                            : _formatInr(price);
+                        return RichText(
+                          text: TextSpan(
+                            style: AppTypography.card(
+                              fontSize: 16,
+                              color: AppColors.brandBlue,
+                              fontWeight: FontWeight.w700,
                             ),
-                            if (localizedIapPrice.isEmpty)
+                            children: [
                               TextSpan(
-                                text: '/mo',
-                                style: AppTypography.body(
-                                  fontSize: 13,
-                                  color: AppColors.mutedText,
+                                text: displayPrice,
+                                style: AppTypography.card(
+                                  fontSize: 24,
+                                  color: AppColors.brandBlue,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
-                          ],
-                        ),
-                      );
-                    }),
+                              if (localizedIapPrice.isEmpty)
+                                TextSpan(
+                                  text: '/mo',
+                                  style: AppTypography.body(
+                                    fontSize: 13,
+                                    color: AppColors.mutedText,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                     if (isYearly)
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -3434,7 +3529,8 @@ class _PlanOfferCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 14),
-                for (final feature in expanded ? plan.features : plan.features.take(4)) ...[
+                for (final feature
+                    in expanded ? plan.features : plan.features.take(4)) ...[
                   _FeatureBullet(label: feature),
                   const SizedBox(height: 9),
                 ],
@@ -3614,10 +3710,10 @@ class _SecurePaymentCard extends StatelessWidget {
                   Theme.of(context).platform == TargetPlatform.iOS
                       ? 'Subscriptions renew automatically through Apple StoreKit until cancelled in your Apple ID settings.'
                       : controller.selectedBillingMode.value == 'AUTOPAY'
-                          ? controller.canResumeAutopay
-                              ? 'Resume recurring billing for this business. Razorpay will ask for a fresh mandate authorization.'
-                              : 'Set up a recurring Razorpay mandate so renewals happen automatically until the owner cancels it.'
-                          : 'Use a one-time Razorpay checkout for this billing cycle. This is best when the owner does not want recurring deductions yet.',
+                      ? controller.canResumeAutopay
+                            ? 'Resume recurring billing for this business. Razorpay will ask for a fresh mandate authorization.'
+                            : 'Set up a recurring Razorpay mandate so renewals happen automatically until the owner cancels it.'
+                      : 'Use a one-time Razorpay checkout for this billing cycle. This is best when the owner does not want recurring deductions yet.',
                   style: AppTypography.body(
                     fontSize: 12.6,
                     color: AppColors.mutedText,
@@ -3805,10 +3901,10 @@ class _SecurePaymentCard extends StatelessWidget {
                 controller.couponResult.value?.skipPayment == true
                     ? 'This action will activate the selected plan immediately using the validated coupon.'
                     : Theme.of(context).platform == TargetPlatform.iOS
-                        ? 'Purchases are handled securely by Apple StoreKit.'
-                        : controller.selectedBillingMode.value == 'AUTOPAY'
-                            ? 'AutoPay is only a mandate setup here. The backend still controls renewal status, warnings, and cancellation rules per activated business.'
-                            : 'Razorpay checkout stays real. The charged amount comes from the backend order created at tap time.',
+                    ? 'Purchases are handled securely by Apple StoreKit.'
+                    : controller.selectedBillingMode.value == 'AUTOPAY'
+                    ? 'AutoPay is only a mandate setup here. The backend still controls renewal status, warnings, and cancellation rules per activated business.'
+                    : 'Razorpay checkout stays real. The charged amount comes from the backend order created at tap time.',
                 style: AppTypography.body(
                   fontSize: 12.2,
                   color: AppColors.mutedText,
