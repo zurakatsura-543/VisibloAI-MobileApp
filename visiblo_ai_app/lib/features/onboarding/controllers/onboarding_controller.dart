@@ -2949,18 +2949,19 @@ class OnboardingController extends GetxController {
   }
 
   void _prefillFromSavedUser() {
+    loginEmailController.text = '';
+    loginPasswordController.text = '';
+    forgotPasswordEmailController.text = '';
+    signUpEmailController.text = '';
+    signUpPasswordController.text = '';
+    signUpConfirmPasswordController.text = '';
+
     final savedUser = _authService.currentUser.value;
     if (savedUser == null) {
       return;
     }
 
-    loginEmailController.text = savedUser.email;
-    loginPasswordController.text = '';
-    forgotPasswordEmailController.text = savedUser.email;
     fullNameController.text = savedUser.fullName;
-    signUpEmailController.text = savedUser.email;
-    signUpPasswordController.text = '';
-    signUpConfirmPasswordController.text = '';
     businessNameController.text = savedUser.businessName;
     selectedIndustry.value = savedUser.industry;
     selectedCity.value = savedUser.city.isEmpty ? null : savedUser.city;
