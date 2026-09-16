@@ -6,7 +6,6 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_responsive.dart';
 import '../../../app/theme/app_typography.dart';
 import '../controllers/account_settings_controller.dart';
-import '../widgets/auth_layout.dart';
 import '../widgets/auth_navigation_shell.dart';
 
 class AccountView extends GetView<AccountSettingsController> {

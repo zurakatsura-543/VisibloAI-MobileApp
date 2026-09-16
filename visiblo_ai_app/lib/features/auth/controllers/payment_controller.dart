@@ -955,22 +955,25 @@ class PaymentController extends GetxController {
       return;
     }
 
-    // Web SaaS checkout for iOS & all platforms to avoid platform fees
+    // Apple In-App Purchase flow for iOS to comply with App Store Guideline 3.1.1
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       final plan = selectedPlan;
       checkoutPlanCode.value = plan.code;
       errorMessage.value = null;
-      infoMessage.value = 'Opening website subscription page...';
+      infoMessage.value = 'Initiating Apple In-App Purchase...';
 
       try {
-        final uri = Uri.parse('https://www.visibloai.com/pricing');
-        final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-        if (!opened) {
+        final success = await AppleIapService().purchasePlan(
+          plan: plan.code,
+          billingCycle: selectedBillingCycle.value,
+        );
+        if (!success) {
+          final iapError = AppleIapService().lastError.value;
           errorMessage.value =
-              'Could not open website. Please visit www.visibloai.com/pricing in your web browser.';
+              iapError ?? 'Could not complete Apple In-App Purchase.';
         }
       } catch (e) {
-        errorMessage.value = 'Could not open web pricing page: $e';
+        errorMessage.value = 'Apple In-App Purchase error: $e';
       } finally {
         checkoutPlanCode.value = null;
       }
