@@ -56,6 +56,7 @@ dependencies:
   firebase_app_check: ^0.4.6
   sign_in_with_apple: ^8.1.0
   in_app_purchase: ^3.2.0
+  lottie: ^3.1.2
 
 dev_dependencies:
   flutter_test:
@@ -88,6 +89,7 @@ flutter:
 
   assets:
     - assets/icons/
+    - lib/animation/
     - assets/images/AI_Image_Generator.png
     - assets/images/Festival_Post.png
     - assets/images/Offer_banner1.png
