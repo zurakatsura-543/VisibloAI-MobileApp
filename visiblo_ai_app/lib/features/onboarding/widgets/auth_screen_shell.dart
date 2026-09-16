@@ -16,6 +16,7 @@ class AuthScreenShell extends StatelessWidget {
     required this.child,
     this.bannerAssetPath = 'assets/images/app-banner2.png',
     this.bannerHeight = 216,
+    this.showBanner = false,
     this.showBackButton = false,
     this.onBack,
   });
@@ -25,6 +26,7 @@ class AuthScreenShell extends StatelessWidget {
   final Widget child;
   final String bannerAssetPath;
   final double bannerHeight;
+  final bool showBanner;
   final bool showBackButton;
   final VoidCallback? onBack;
 
@@ -157,109 +159,144 @@ class AuthScreenShell extends StatelessWidget {
       );
     }
 
-    // Tablet Portrait layout
+    // Mobile / Tablet Portrait layout
     final formMaxWidth = isTabletPortrait ? 620.0 : 430.0;
-    final verticalPadding = isTabletPortrait ? 32.0 : 6.0;
 
     return Scaffold(
       backgroundColor: AppColors.white,
+      resizeToAvoidBottomInset: true,
       body: Stack(
         children: [
           const _AuthBackground(),
           SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  context.responsiveHorizontalPadding,
-                  verticalPadding,
-                  context.responsiveHorizontalPadding,
-                  bottomInset + 24,
-                ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: formMaxWidth),
-                    child: Container(
-                      padding: isTabletPortrait
-                          ? const EdgeInsets.all(36)
-                          : EdgeInsets.zero,
-                      decoration: isTabletPortrait
-                          ? BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(28),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x120F2746),
-                                  blurRadius: 28,
-                                  offset: Offset(0, 10),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final availableHeight = constraints.maxHeight;
+                final topPadding = isTabletPortrait ? 28.0 : 16.0;
+                final bottomPadding = isTabletPortrait ? 28.0 : 18.0;
+                final effectiveMinHeight =
+                    availableHeight - topPadding - bottomPadding - bottomInset;
+
+                return SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    context.responsiveHorizontalPadding,
+                    topPadding,
+                    context.responsiveHorizontalPadding,
+                    bottomInset + bottomPadding,
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: formMaxWidth,
+                        minHeight: effectiveMinHeight > 0 ? effectiveMinHeight : 0,
+                      ),
+                      child: Container(
+                        padding: isTabletPortrait
+                            ? const EdgeInsets.all(32)
+                            : EdgeInsets.zero,
+                        decoration: isTabletPortrait
+                            ? BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(28),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x120F2746),
+                                    blurRadius: 28,
+                                    offset: Offset(0, 10),
+                                  ),
+                                ],
+                                border: Border.all(color: const Color(0xFFE8EEF5)),
+                              )
+                            : null,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (showBackButton)
+                                  SizedBox(
+                                    height: 38,
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: IconButton(
+                                        onPressed: onBack,
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints.tightFor(
+                                          width: 38,
+                                          height: 38,
+                                        ),
+                                        icon: const Icon(
+                                          Icons.arrow_back_rounded,
+                                          color: AppColors.text,
+                                          size: 24,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                const SizedBox(height: 4),
+                                Center(
+                                  child: AppLogo(
+                                    iconSize: isTabletPortrait ? 56 : 48,
+                                    fontSize: isTabletPortrait ? 28 : 24,
+                                    centered: true,
+                                  ),
                                 ),
                               ],
-                              border: Border.all(color: const Color(0xFFE8EEF5)),
-                            )
-                          : null,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SizedBox(
-                            height: 42,
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: showBackButton
-                                  ? IconButton(
-                                      onPressed: onBack,
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints.tightFor(
-                                        width: 42,
-                                        height: 42,
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    title,
+                                    textAlign: TextAlign.center,
+                                    style: AppTypography.section(
+                                      fontSize: isTabletPortrait ? 30 : 26,
+                                      height: 1.15,
+                                      color: AppColors.brandBlue,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    subtitle,
+                                    textAlign: TextAlign.center,
+                                    style: AppTypography.body(
+                                      fontSize: isTabletPortrait ? 16.0 : 14.5,
+                                      color: AppColors.mutedText,
+                                      height: 1.38,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  if (showBanner && bannerAssetPath.isNotEmpty) ...[
+                                    const SizedBox(height: 12),
+                                    Center(
+                                      child: Image.asset(
+                                        bannerAssetPath,
+                                        height: isTabletPortrait
+                                            ? bannerHeight * 0.75
+                                            : bannerHeight * 0.55,
+                                        fit: BoxFit.contain,
                                       ),
-                                      icon: const Icon(
-                                        Icons.arrow_back_rounded,
-                                        color: AppColors.text,
-                                        size: 24,
-                                      ),
-                                    )
-                                  : const SizedBox(width: 42, height: 42),
+                                    ),
+                                  ],
+                                  SizedBox(height: isTabletPortrait ? 24 : 18),
+                                  child,
+                                ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          const Center(child: AppLogo(iconSize: 60, fontSize: 30, centered: true)),
-                          const SizedBox(height: 14),
-                          Text(
-                            title,
-                            textAlign: TextAlign.center,
-                            style: AppTypography.section(
-                              fontSize: isTabletPortrait ? 30 : 26,
-                              height: 1.12,
-                              color: AppColors.brandBlue,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            subtitle,
-                            textAlign: TextAlign.center,
-                            style: AppTypography.body(
-                              fontSize: isTabletPortrait ? 16.5 : 15.5,
-                              color: AppColors.mutedText,
-                              height: 1.45,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Center(
-                            child: Image.asset(
-                              bannerAssetPath,
-                              height: isTabletPortrait ? bannerHeight * 0.85 : bannerHeight,
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          child,
-                        ],
+                            const SizedBox.shrink(),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ],
@@ -408,17 +445,20 @@ class AuthGoogleButton extends StatelessWidget {
     super.key,
     required this.onPressed,
     required this.isLoading,
+    this.compact = false,
   });
 
   final VoidCallback onPressed;
   final bool isLoading;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final isTablet = context.isTabletOrLarger;
+    final labelText = compact ? 'Google' : 'Continue with Google';
 
     return SizedBox(
-      height: isTablet ? 56 : 52,
+      height: isTablet ? 56 : 50,
       child: OutlinedButton(
         onPressed: isLoading ? null : onPressed,
         style: OutlinedButton.styleFrom(
@@ -427,6 +467,7 @@ class AuthGoogleButton extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
         ),
         child: isLoading
             ? const SizedBox(
@@ -436,19 +477,24 @@ class AuthGoogleButton extends StatelessWidget {
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   SvgPicture.asset(
                     'assets/icons/google_logo.svg',
                     width: isTablet ? 22 : 20,
                     height: isTablet ? 22 : 20,
                   ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Continue with Google',
-                    style: AppTypography.button(
-                      fontSize: isTablet ? 17.0 : 16.0,
-                      color: AppColors.brandBlue,
-                      fontWeight: FontWeight.w500,
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      labelText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.button(
+                        fontSize: isTablet ? 16.5 : 14.5,
+                        color: AppColors.brandBlue,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
@@ -463,17 +509,20 @@ class AuthAppleButton extends StatelessWidget {
     super.key,
     required this.onPressed,
     required this.isLoading,
+    this.compact = false,
   });
 
   final VoidCallback onPressed;
   final bool isLoading;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final isTablet = context.isTabletOrLarger;
+    final labelText = compact ? 'Apple' : 'Sign in with Apple';
 
     return SizedBox(
-      height: isTablet ? 56 : 52,
+      height: isTablet ? 56 : 50,
       child: OutlinedButton(
         onPressed: isLoading ? null : onPressed,
         style: OutlinedButton.styleFrom(
@@ -482,6 +531,7 @@ class AuthAppleButton extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
         ),
         child: isLoading
             ? const SizedBox(
@@ -494,19 +544,24 @@ class AuthAppleButton extends StatelessWidget {
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     Icons.apple,
                     size: isTablet ? 22 : 20,
                     color: Colors.white,
                   ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Sign in with Apple',
-                    style: AppTypography.button(
-                      fontSize: isTablet ? 17.0 : 16.0,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      labelText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.button(
+                        fontSize: isTablet ? 16.5 : 14.5,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],

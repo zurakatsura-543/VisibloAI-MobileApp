@@ -274,7 +274,7 @@ class SignUpView extends GetView<OnboardingController> {
                 const SizedBox(height: 18),
                 const AuthOrDivider(),
                 const SizedBox(height: 18),
-                if (isTablet && Theme.of(context).platform == TargetPlatform.iOS) ...[
+                if (showAppleSignIn && constraints.maxWidth >= 300) ...[
                   Row(
                     children: [
                       Expanded(
@@ -282,15 +282,17 @@ class SignUpView extends GetView<OnboardingController> {
                           () => AuthGoogleButton(
                             isLoading: controller.isGoogleSignInLoading.value,
                             onPressed: controller.continueWithGoogle,
+                            compact: !isTablet,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Obx(
                           () => AuthAppleButton(
                             isLoading: controller.isAppleSignInLoading.value,
                             onPressed: controller.continueWithApple,
+                            compact: !isTablet,
                           ),
                         ),
                       ),
@@ -303,7 +305,7 @@ class SignUpView extends GetView<OnboardingController> {
                       onPressed: controller.continueWithGoogle,
                     ),
                   ),
-                  if (Theme.of(context).platform == TargetPlatform.iOS) ...[
+                  if (showAppleSignIn) ...[
                     const SizedBox(height: 12),
                     Obx(
                       () => AuthAppleButton(

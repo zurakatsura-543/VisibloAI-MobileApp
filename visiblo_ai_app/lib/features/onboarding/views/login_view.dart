@@ -69,14 +69,14 @@ class LoginView extends GetView<OnboardingController> {
                             controller.rememberMe.value
                                 ? Icons.check_box_rounded
                                 : Icons.check_box_outline_blank_rounded,
-                            size: 21,
+                            size: 20,
                             color: AppColors.primary,
                           ),
                           const SizedBox(width: 8),
                           Text(
                             'Remember me',
                             style: AppTypography.body(
-                              fontSize: 14.6,
+                              fontSize: 14.2,
                               color: AppColors.brandBlue,
                               fontWeight: FontWeight.w500,
                             ),
@@ -89,7 +89,7 @@ class LoginView extends GetView<OnboardingController> {
                       child: Text(
                         'Forgot Password?',
                         style: AppTypography.body(
-                          fontSize: 14.8,
+                          fontSize: 14.2,
                           color: AppColors.primary,
                           fontWeight: FontWeight.w600,
                         ),
@@ -97,7 +97,7 @@ class LoginView extends GetView<OnboardingController> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
                 Obx(
                   () => AuthPrimaryButton(
                     label: 'Log In',
@@ -108,7 +108,7 @@ class LoginView extends GetView<OnboardingController> {
                 const SizedBox(height: 18),
                 const AuthOrDivider(),
                 const SizedBox(height: 18),
-                if (isTablet && showAppleSignIn) ...[
+                if (showAppleSignIn && constraints.maxWidth >= 300) ...[
                   Row(
                     children: [
                       Expanded(
@@ -116,15 +116,17 @@ class LoginView extends GetView<OnboardingController> {
                           () => AuthGoogleButton(
                             isLoading: controller.isGoogleSignInLoading.value,
                             onPressed: controller.continueWithGoogle,
+                            compact: !isTablet,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Obx(
                           () => AuthAppleButton(
                             isLoading: controller.isAppleSignInLoading.value,
                             onPressed: controller.continueWithApple,
+                            compact: !isTablet,
                           ),
                         ),
                       ),
@@ -147,7 +149,7 @@ class LoginView extends GetView<OnboardingController> {
                     ),
                   ],
                 ],
-                const SizedBox(height: 18),
+                const SizedBox(height: 22),
                 AuthBottomLink(
                   prompt: 'Don’t have an account? ',
                   action: 'Sign Up',
