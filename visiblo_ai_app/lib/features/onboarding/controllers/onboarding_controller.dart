@@ -1789,9 +1789,10 @@ class OnboardingController extends GetxController {
 
   Future<void> logout() async {
     await _authApiService.logoutBackend();
+    await _authApiService.clearSession();
     await _authService.logout();
     _resetAccountDrafts();
-    Get.offAllNamed(AppRoutes.signUp);
+    Get.offAllNamed(AppRoutes.login);
   }
 
   Future<void> deleteCurrentAccount() async {
@@ -1807,7 +1808,7 @@ class OnboardingController extends GetxController {
     await _authService.deleteCurrentAccount();
     _resetAccountDrafts();
 
-    Get.offAllNamed(AppRoutes.signUp);
+    Get.offAllNamed(AppRoutes.login);
     Get.snackbar(
       'Account deleted',
       'Your saved test account was removed from this device.',

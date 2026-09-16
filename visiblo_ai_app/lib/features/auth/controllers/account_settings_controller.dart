@@ -445,7 +445,7 @@ class AccountSettingsController extends GetxController {
       } else {
         await _authApiService.clearSession();
         await _localAuthService.logout();
-        Get.offAllNamed(AppRoutes.signUp);
+        Get.offAllNamed(AppRoutes.login);
         Get.snackbar(
           'Business profile deleted',
           message,
@@ -500,7 +500,7 @@ class AccountSettingsController extends GetxController {
     try {
       await _authApiService.confirmUserAccountDelete(otp: otp);
       await _localAuthService.logout();
-      Get.offAllNamed(AppRoutes.signUp);
+      Get.offAllNamed(AppRoutes.login);
       Get.snackbar(
         'Account Deleted',
         'Your Visiblo AI account and personal data have been permanently deleted.',
