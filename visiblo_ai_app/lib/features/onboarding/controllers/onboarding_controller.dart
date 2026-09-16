@@ -3744,7 +3744,7 @@ class OnboardingController extends GetxController {
     await _authApiService.clearSession();
     await _authService.logout();
     _resetAccountDrafts();
-    Get.offAllNamed(AppRoutes.welcome);
+    Get.offAllNamed(AppRoutes.login);
   }
 
   void _resetAccountDrafts() {

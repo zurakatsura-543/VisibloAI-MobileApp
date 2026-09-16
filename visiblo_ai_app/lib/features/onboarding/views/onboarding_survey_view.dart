@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/widgets/app_logo.dart';
 import '../../../app/widgets/app_primary_button.dart';
@@ -85,7 +86,34 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const AppLogo(iconSize: 46, centered: true),
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: IconButton(
+                          onPressed: () {
+                            if (Navigator.canPop(context)) {
+                              Get.back();
+                            } else {
+                              Get.offAllNamed(AppRoutes.login);
+                            }
+                          },
+                          padding: EdgeInsets.zero,
+                          alignment: Alignment.centerLeft,
+                          constraints: const BoxConstraints(
+                            minWidth: 34,
+                            minHeight: 34,
+                          ),
+                          icon: const Icon(
+                            Icons.arrow_back_rounded,
+                            color: AppColors.text,
+                          ),
+                        ),
+                      ),
+                      const AppLogo(iconSize: 46, centered: true),
+                    ],
+                  ),
                   const SizedBox(height: 18),
                   Text(
                     'Teach VisibloAI Your Business',
