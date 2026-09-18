@@ -15,15 +15,19 @@ class ProductionMonitoring {
       return;
     }
 
-    final crashlytics = FirebaseCrashlytics.instance;
-    await crashlytics.setCrashlyticsCollectionEnabled(kReleaseMode);
+    try {
+      final crashlytics = FirebaseCrashlytics.instance;
+      await crashlytics.setCrashlyticsCollectionEnabled(kReleaseMode);
 
-    if (kReleaseMode) {
-      FlutterError.onError = crashlytics.recordFlutterFatalError;
-      PlatformDispatcher.instance.onError = (error, stack) {
-        unawaited(crashlytics.recordError(error, stack, fatal: true));
-        return true;
-      };
+      if (kReleaseMode) {
+        FlutterError.onError = crashlytics.recordFlutterFatalError;
+        PlatformDispatcher.instance.onError = (error, stack) {
+          unawaited(crashlytics.recordError(error, stack, fatal: true));
+          return true;
+        };
+      }
+    } catch (error) {
+      debugPrint('Firebase Crashlytics setup notice: $error');
     }
 
     try {
@@ -33,19 +37,21 @@ class ProductionMonitoring {
       final AppleAppCheckProvider appleProvider = kReleaseMode
           ? const AppleAppAttestWithDeviceCheckFallbackProvider()
           : const AppleDebugProvider();
+
       await FirebaseAppCheck.instance.activate(
         providerAndroid: androidProvider,
         providerApple: appleProvider,
       );
     } catch (error, stack) {
+      debugPrint('Firebase App Check activation notice: $error');
       if (kReleaseMode) {
-        await crashlytics.recordError(
-          error,
-          stack,
-          reason: 'Firebase App Check activation failed',
-        );
-      } else {
-        debugPrint('Firebase App Check activation failed: $error');
+        try {
+          await FirebaseCrashlytics.instance.recordError(
+            error,
+            stack,
+            reason: 'Firebase App Check activation notice',
+          );
+        } catch (_) {}
       }
     }
   }
