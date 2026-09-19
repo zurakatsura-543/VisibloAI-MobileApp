@@ -1,3 +1,4 @@
+
 abstract final class AppRoutes {
   static const boot = '/';
   static const welcome = '/welcome';
