@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../app/routes/app_routes.dart';
+import '../../../app/services/platform_billing_policy.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_responsive.dart';
 import '../../../app/theme/app_typography.dart';
@@ -50,47 +51,47 @@ class AccountView extends GetView<AccountSettingsController> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-              const _AccountHeader(),
-              const SizedBox(height: 12),
-              if (controller.errorMessage.value != null) ...[
-                _BannerMessage(
-                  message: controller.errorMessage.value!,
-                  accent: const Color(0xFFE24B4B),
-                  background: const Color(0xFFFFF1F1),
-                  icon: Icons.error_outline_rounded,
-                  onDismiss: controller.clearError,
-                ),
-                const SizedBox(height: 12),
-              ],
-              if (controller.infoMessage.value != null) ...[
-                _BannerMessage(
-                  message: controller.infoMessage.value!,
-                  accent: const Color(0xFF179CA3),
-                  background: const Color(0xFFEAF9FB),
-                  icon: Icons.check_circle_outline_rounded,
-                  onDismiss: controller.clearInfo,
-                ),
-                const SizedBox(height: 12),
-              ],
-              _WorkspaceSummaryCard(controller: controller),
-              const SizedBox(height: 12),
-              _WorkspaceMetricsGrid(controller: controller),
-              const SizedBox(height: 12),
-              _AccountNavigationCard(controller: controller),
-              const SizedBox(height: 12),
-              _LogoutCard(onTap: controller.logout),
-              const SizedBox(height: 12),
-              _DeleteAccountCard(
-                onDelete: () => _confirmDeleteAccount(context),
-                businessName: controller.businessNameValue,
+                  const _AccountHeader(),
+                  const SizedBox(height: 12),
+                  if (controller.errorMessage.value != null) ...[
+                    _BannerMessage(
+                      message: controller.errorMessage.value!,
+                      accent: const Color(0xFFE24B4B),
+                      background: const Color(0xFFFFF1F1),
+                      icon: Icons.error_outline_rounded,
+                      onDismiss: controller.clearError,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (controller.infoMessage.value != null) ...[
+                    _BannerMessage(
+                      message: controller.infoMessage.value!,
+                      accent: const Color(0xFF179CA3),
+                      background: const Color(0xFFEAF9FB),
+                      icon: Icons.check_circle_outline_rounded,
+                      onDismiss: controller.clearInfo,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  _WorkspaceSummaryCard(controller: controller),
+                  const SizedBox(height: 12),
+                  _WorkspaceMetricsGrid(controller: controller),
+                  const SizedBox(height: 12),
+                  _AccountNavigationCard(controller: controller),
+                  const SizedBox(height: 12),
+                  _LogoutCard(onTap: controller.logout),
+                  const SizedBox(height: 12),
+                  _DeleteAccountCard(
+                    onDelete: () => _confirmDeleteAccount(context),
+                    businessName: controller.businessNameValue,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      }),
     );
-  }),
-);
   }
 
   Future<void> _confirmDeleteAccount(BuildContext context) async {
@@ -1163,9 +1164,15 @@ class _AccountNavigationCard extends StatelessWidget {
         onTap: () => Get.toNamed(AppRoutes.accountBusinessProfile),
       ),
       _AccountMenuData(
-        title: 'Package & Billing',
-        subtitle: '/ current plan, billing, usage limits.',
-        icon: Icons.credit_card_rounded,
+        title: PlatformBillingPolicy.usesSupportActivation
+            ? 'Plan & Access'
+            : 'Package & Billing',
+        subtitle: PlatformBillingPolicy.usesSupportActivation
+            ? '/ current plan, access status, usage limits.'
+            : '/ current plan, billing, usage limits.',
+        icon: PlatformBillingPolicy.usesSupportActivation
+            ? Icons.verified_user_outlined
+            : Icons.credit_card_rounded,
         iconColor: const Color(0xFFF17735),
         iconBackground: const Color(0xFFFFF1E8),
         onTap: controller.openBilling,

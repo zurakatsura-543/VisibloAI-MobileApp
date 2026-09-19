@@ -38,6 +38,11 @@ class SupportController extends GetxController {
 
   static const supportEmail = 'support@visibloai.com';
 
+  bool get isPlanActivationRequest {
+    final arguments = Get.arguments;
+    return arguments is Map && arguments['topic'] == 'plan_activation';
+  }
+
   final categories = const <SupportCategory>[
     SupportCategory(
       id: 'getting-started',
@@ -421,19 +426,28 @@ class SupportController extends GetxController {
   }
 
   Future<void> submitTicket() async {
+    final activationRequest = isPlanActivationRequest;
     await _openMailSupport(
-      subject: 'Support ticket for $businessName',
+      subject: activationRequest
+          ? 'Plan activation request for $businessName'
+          : 'Support ticket for $businessName',
       body: [
         'Hi Visiblo support,',
         '',
-        'I need help with $businessName.',
+        activationRequest
+            ? 'I would like help activating a plan for $businessName.'
+            : 'I need help with $businessName.',
         '',
         'Workspace owner: $ownerName',
         'Registered email: ${currentUser?.email.trim() ?? ''}',
         '',
-        'Please describe the issue:',
+        activationRequest
+            ? 'Please contact me with the next steps.'
+            : 'Please describe the issue:',
       ].join('\n'),
-      successMessage: 'Support ticket draft opened in your mail app.',
+      successMessage: activationRequest
+          ? 'Plan activation request opened in your mail app.'
+          : 'Support ticket draft opened in your mail app.',
       fallbackMessage: 'Unable to open the support ticket flow right now.',
     );
   }

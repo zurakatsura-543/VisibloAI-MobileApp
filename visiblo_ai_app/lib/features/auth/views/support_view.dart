@@ -181,6 +181,15 @@ class SupportView extends GetView<SupportController> {
                       Expanded(flex: 5, child: sideColumn),
                     ],
                   )
+                : controller.isPlanActivationRequest
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      sideColumn,
+                      const SizedBox(height: 12),
+                      mainColumn,
+                    ],
+                  )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -933,11 +942,13 @@ class _ContactCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final activationRequest = controller.isPlanActivationRequest;
     return _SectionCard(
       eyebrow: 'Contact support',
-      title: 'Need more help?',
-      description:
-          'The Visiblo team is ready to help with setup, account, content, and growth questions.',
+      title: activationRequest ? 'Need to activate a plan?' : 'Need more help?',
+      description: activationRequest
+          ? 'Contact our support team to request activation for your account.'
+          : 'The Visiblo team is ready to help with setup, account, content, and growth questions.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1020,7 +1031,9 @@ class _ContactCard extends StatelessWidget {
                 ? null
                 : controller.submitTicket,
             icon: const Icon(Icons.mail_outline_rounded),
-            label: const Text('Submit Ticket'),
+            label: Text(
+              activationRequest ? 'Request Activation' : 'Submit Ticket',
+            ),
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF0E7490),
               side: const BorderSide(color: Color(0xFFC9EEF1)),

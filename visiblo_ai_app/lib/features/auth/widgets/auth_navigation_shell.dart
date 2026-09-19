@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../app/routes/app_routes.dart';
+import '../../../app/services/platform_billing_policy.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_responsive.dart';
 import '../../../app/theme/app_typography.dart';
@@ -49,12 +50,12 @@ class AuthNavigationShell extends StatelessWidget {
         body: Row(
           children: [
             _AuthTabletSideNav(currentTab: currentTab),
-            const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE8E8EE)),
-            Expanded(
-              child: SafeArea(
-                child: child,
-              ),
+            const VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: Color(0xFFE8E8EE),
             ),
+            Expanded(child: SafeArea(child: child)),
           ],
         ),
       );
@@ -83,20 +84,61 @@ class _AuthTabletSideNav extends StatelessWidget {
     final isSocialShell =
         productModeController.isSocialMedia || currentTab._isSocialTab;
 
+    final paymentLabel = PlatformBillingPolicy.usesSupportActivation
+        ? 'Plan'
+        : 'Payment';
     final items = isSocialShell
         ? [
-            (tab: AuthTab.socialDashboard, label: 'Dashboard', icon: Icons.dashboard_outlined),
-            (tab: AuthTab.socialAccounts, label: 'Accounts', icon: Icons.groups_outlined),
-            (tab: AuthTab.socialPosts, label: 'Posts', icon: Icons.task_alt_rounded),
-            (tab: AuthTab.socialCalendar, label: 'Calendar', icon: Icons.calendar_month_outlined),
-            (tab: AuthTab.socialAnalytics, label: 'Analytics', icon: Icons.bar_chart_rounded),
+            (
+              tab: AuthTab.socialDashboard,
+              label: 'Dashboard',
+              icon: Icons.dashboard_outlined,
+            ),
+            (
+              tab: AuthTab.socialAccounts,
+              label: 'Accounts',
+              icon: Icons.groups_outlined,
+            ),
+            (
+              tab: AuthTab.socialPosts,
+              label: 'Posts',
+              icon: Icons.task_alt_rounded,
+            ),
+            (
+              tab: AuthTab.socialCalendar,
+              label: 'Calendar',
+              icon: Icons.calendar_month_outlined,
+            ),
+            (
+              tab: AuthTab.socialAnalytics,
+              label: 'Analytics',
+              icon: Icons.bar_chart_rounded,
+            ),
           ]
         : [
             (tab: AuthTab.home, label: 'Home', icon: Icons.home_outlined),
-            (tab: AuthTab.audit, label: 'Audit', icon: Icons.insert_chart_outlined_rounded),
-            (tab: AuthTab.reports, label: 'Reports', icon: Icons.pie_chart_outline_rounded),
-            (tab: AuthTab.payment, label: 'Payment', icon: Icons.account_balance_wallet_outlined),
-            (tab: AuthTab.account, label: 'Account', icon: Icons.person_outline_rounded),
+            (
+              tab: AuthTab.audit,
+              label: 'Audit',
+              icon: Icons.insert_chart_outlined_rounded,
+            ),
+            (
+              tab: AuthTab.reports,
+              label: 'Reports',
+              icon: Icons.pie_chart_outline_rounded,
+            ),
+            (
+              tab: AuthTab.payment,
+              label: paymentLabel,
+              icon: PlatformBillingPolicy.usesSupportActivation
+                  ? Icons.verified_user_outlined
+                  : Icons.account_balance_wallet_outlined,
+            ),
+            (
+              tab: AuthTab.account,
+              label: 'Account',
+              icon: Icons.person_outline_rounded,
+            ),
           ];
 
     return Container(
@@ -128,9 +170,14 @@ class _AuthTabletSideNav extends StatelessWidget {
                     )._navigate(item.tab),
                     borderRadius: BorderRadius.circular(14),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.brandBlue.withValues(alpha: 0.1) : Colors.transparent,
+                        color: isSelected
+                            ? AppColors.brandBlue.withValues(alpha: 0.1)
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Row(
@@ -138,7 +185,9 @@ class _AuthTabletSideNav extends StatelessWidget {
                           Icon(
                             item.icon,
                             size: 24,
-                            color: isSelected ? AppColors.brandBlue : const Color(0xFF5A6473),
+                            color: isSelected
+                                ? AppColors.brandBlue
+                                : const Color(0xFF5A6473),
                           ),
                           const SizedBox(width: 14),
                           Expanded(
@@ -146,8 +195,12 @@ class _AuthTabletSideNav extends StatelessWidget {
                               item.label,
                               style: AppTypography.button(
                                 fontSize: 15,
-                                color: isSelected ? AppColors.brandBlue : const Color(0xFF5A6473),
-                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                color: isSelected
+                                    ? AppColors.brandBlue
+                                    : const Color(0xFF5A6473),
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                               ),
                             ),
                           ),
@@ -231,6 +284,9 @@ class AuthBottomNavigationBar extends StatelessWidget {
         : Get.put(ProductModeController(), permanent: true);
     final isSocialShell =
         productModeController.isSocialMedia || currentTab._isSocialTab;
+    final paymentLabel = PlatformBillingPolicy.usesSupportActivation
+        ? 'Plan'
+        : 'Payment';
     final items = isSocialShell
         ? [
             (
@@ -285,8 +341,10 @@ class AuthBottomNavigationBar extends StatelessWidget {
             ),
             (
               tab: AuthTab.payment,
-              label: 'Payment',
-              icon: Icons.account_balance_wallet_outlined,
+              label: paymentLabel,
+              icon: PlatformBillingPolicy.usesSupportActivation
+                  ? Icons.verified_user_outlined
+                  : Icons.account_balance_wallet_outlined,
               iconWeight: 300.0,
             ),
             (

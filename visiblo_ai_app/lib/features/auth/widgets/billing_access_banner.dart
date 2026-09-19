@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_typography.dart';
+import '../../../app/services/platform_billing_policy.dart';
 
 class BillingAccessBanner extends StatelessWidget {
   const BillingAccessBanner({
@@ -35,6 +36,9 @@ class BillingAccessBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final displayedPrimaryLabel = PlatformBillingPolicy.usesSupportActivation
+        ? 'Plan support'
+        : primaryLabel;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -136,7 +140,7 @@ class BillingAccessBanner extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    primaryLabel,
+                    displayedPrimaryLabel,
                     style: AppTypography.button(
                       fontSize: 13.2,
                       color: Colors.white,
@@ -144,7 +148,8 @@ class BillingAccessBanner extends StatelessWidget {
                   ),
                 ),
               ),
-              if ((secondaryLabel ?? '').trim().isNotEmpty && onSecondaryTap != null) ...[
+              if ((secondaryLabel ?? '').trim().isNotEmpty &&
+                  onSecondaryTap != null) ...[
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton(
@@ -186,6 +191,9 @@ Future<void> showBillingAccessSheet({
   String? badge,
   IconData icon = Icons.workspace_premium_rounded,
 }) async {
+  final displayedPrimaryLabel = PlatformBillingPolicy.usesSupportActivation
+      ? 'Plan support'
+      : primaryLabel;
   await showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
@@ -287,7 +295,7 @@ Future<void> showBillingAccessSheet({
                         ),
                       ),
                       child: Text(
-                        primaryLabel,
+                        displayedPrimaryLabel,
                         style: AppTypography.button(
                           fontSize: 13.4,
                           color: Colors.white,

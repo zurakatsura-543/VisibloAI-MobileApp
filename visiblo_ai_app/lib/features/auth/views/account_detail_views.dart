@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/routes/app_routes.dart';
+import '../../../app/services/platform_billing_policy.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_typography.dart';
 import '../../../app/widgets/app_text_field.dart';
@@ -296,6 +297,7 @@ class AccountGrowthPackageView extends GetView<OnboardingController> {
       }
 
       final plan = _planSummaryFor(controller, user);
+      final usesSupportActivation = PlatformBillingPolicy.usesSupportActivation;
       final renewsOn = _formatDayMonthYear(
         controller.subscriptionRenewalDateFor(user),
       );
@@ -320,7 +322,9 @@ class AccountGrowthPackageView extends GetView<OnboardingController> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Your current package, renewal status, and usage limits.',
+                  usesSupportActivation
+                      ? 'Your current plan, access status, and usage limits.'
+                      : 'Your current package, renewal status, and usage limits.',
                   style: AppTypography.body(
                     fontSize: 14,
                     color: const Color(0xFF27466E),
@@ -370,8 +374,10 @@ class AccountGrowthPackageView extends GetView<OnboardingController> {
                   childAspectRatio: 1.24,
                   children: [
                     _PackageDetailCard(
-                      label: 'MONTHLY PRICE',
-                      value: _formatInr(plan.monthlyPrice),
+                      label: usesSupportActivation ? 'PLAN' : 'MONTHLY PRICE',
+                      value: usesSupportActivation
+                          ? plan.title
+                          : _formatInr(plan.monthlyPrice),
                       borderColor: const Color(0xFFD4E7FF),
                     ),
                     _PackageDetailCard(
@@ -385,19 +391,34 @@ class AccountGrowthPackageView extends GetView<OnboardingController> {
                       borderColor: const Color(0xFFF0DCF8),
                     ),
                     _PackageDetailCard(
-                      label: 'BILLING CYCLE',
-                      value: _titleCase(
-                        controller.subscriptionBillingCycleFor(user),
-                      ),
+                      label: usesSupportActivation
+                          ? 'ACCESS STATUS'
+                          : 'BILLING CYCLE',
+                      value: usesSupportActivation
+                          ? 'Active'
+                          : _titleCase(
+                              controller.subscriptionBillingCycleFor(user),
+                            ),
                       borderColor: const Color(0xFFFDE7C8),
                     ),
                   ],
                 ),
                 const SizedBox(height: 26),
                 _AccountPrimaryButton(
-                  label: 'Manage Subscription',
-                  icon: Icons.settings_outlined,
-                  onPressed: () => Get.toNamed(AppRoutes.payment),
+                  label: usesSupportActivation
+                      ? 'Contact Support'
+                      : 'Manage Subscription',
+                  icon: usesSupportActivation
+                      ? Icons.mail_outline_rounded
+                      : Icons.settings_outlined,
+                  onPressed: usesSupportActivation
+                      ? () => Get.toNamed(
+                          AppRoutes.support,
+                          arguments: const <String, dynamic>{
+                            'topic': 'plan_activation',
+                          },
+                        )
+                      : () => Get.toNamed(AppRoutes.payment),
                 ),
               ],
             ),

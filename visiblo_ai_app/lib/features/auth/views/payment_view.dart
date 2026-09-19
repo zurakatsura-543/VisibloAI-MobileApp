@@ -23,6 +23,14 @@ class PaymentView extends GetView<PaymentController> {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
+      if (controller.isIosAppStoreBuild) {
+        return AuthNavigationShell(
+          currentTab: AuthTab.payment,
+          backgroundColor: const Color(0xFFF5F7FB),
+          child: _IosPlanAccessContent(controller: controller),
+        );
+      }
+
       final liveProfile = controller.remoteProfile.value;
       if (liveProfile != null && controller.requiresIntroActivationPayment) {
         return _TrialUnlockView(controller: controller);
@@ -40,6 +48,242 @@ class PaymentView extends GetView<PaymentController> {
         child: _PaymentContent(controller: controller),
       );
     });
+  }
+}
+
+class _IosPlanAccessContent extends StatelessWidget {
+  const _IosPlanAccessContent({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final profile = controller.remoteProfile.value;
+      if (controller.isLoading.value && profile == null) {
+        return const _LoadingState();
+      }
+
+      if (profile == null) {
+        return _ErrorState(
+          message:
+              controller.errorMessage.value ??
+              'Unable to load your plan details right now.',
+          onRetry: controller.refreshData,
+        );
+      }
+
+      final maxWidth = MediaQuery.sizeOf(context).width >= 820 ? 720.0 : 560.0;
+      return RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: controller.refreshData,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const AuthShellBackButton(),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Plan & account',
+                                style: AppTypography.section(
+                                  fontSize: 21,
+                                  color: AppColors.text,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'View your current access and account history.',
+                                style: AppTypography.body(
+                                  fontSize: 12.8,
+                                  color: AppColors.mutedText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _IosPlanStatusCard(controller: controller),
+                    const SizedBox(height: 12),
+                    _IosActivationSupportCard(controller: controller),
+                    const SizedBox(height: 12),
+                    _PaymentHistoryCard(controller: controller),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _IosPlanStatusCard extends StatelessWidget {
+  const _IosPlanStatusCard({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = controller.hasActiveSubscription;
+    final statusColor = isActive
+        ? const Color(0xFF16865A)
+        : const Color(0xFF9A6711);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  isActive ? Icons.verified_rounded : Icons.schedule_rounded,
+                  color: statusColor,
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Current plan',
+                      style: AppTypography.label(
+                        fontSize: 12,
+                        color: AppColors.mutedText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _planDisplayTitle(controller.activePlan),
+                      style: AppTypography.card(
+                        fontSize: 18,
+                        color: AppColors.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  isActive ? 'Active' : 'Activation needed',
+                  style: AppTypography.label(
+                    fontSize: 11,
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (isActive) ...[
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: Color(0xFFE8EEF4)),
+            const SizedBox(height: 12),
+            Text(
+              controller.renewalLabel == 'Not scheduled'
+                  ? 'No renewal date is currently scheduled.'
+                  : 'Current access through ${controller.renewalLabel}.',
+              style: AppTypography.body(
+                fontSize: 13,
+                color: AppColors.mutedText,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _IosActivationSupportCard extends StatelessWidget {
+  const _IosActivationSupportCard({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(
+        border: Border.all(color: const Color(0xFFCFE1F8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Need to activate a plan?',
+            style: AppTypography.card(
+              fontSize: 17,
+              color: AppColors.text,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Contact our support team to activate your plan.',
+            style: AppTypography.body(
+              fontSize: 13.2,
+              color: AppColors.mutedText,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: controller.contactSupportForActivation,
+              icon: const Icon(Icons.mail_outline_rounded, size: 19),
+              label: const Text('Contact Support'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -3064,9 +3308,7 @@ class _UpgradePlansCardState extends State<_UpgradePlansCard> {
           ),
           const SizedBox(height: 6),
           Text(
-            Theme.of(context).platform == TargetPlatform.iOS
-                ? 'Choose a subscription plan to continue with Visiblo AI.'
-                : 'Review all three plans, expand the full feature list, and complete payment securely with Razorpay.',
+            'Review all three plans, expand the full feature list, and complete payment securely with Razorpay.',
             style: AppTypography.body(
               fontSize: 12.8,
               color: AppColors.mutedText,
@@ -3074,25 +3316,6 @@ class _UpgradePlansCardState extends State<_UpgradePlansCard> {
           ),
           const SizedBox(height: 14),
           _BillingCycleToggle(controller: widget.controller),
-          /*
-          if (Theme.of(context).platform == TargetPlatform.iOS) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: widget.controller.restoreApplePurchases,
-                icon: const Icon(Icons.restore_rounded, size: 16),
-                label: Text(
-                  'Restore Purchases',
-                  style: AppTypography.button(
-                    fontSize: 13,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-            ),
-          ],
-          */
           const SizedBox(height: 14),
           Column(
             children: [
@@ -3466,41 +3689,31 @@ class _PlanOfferCard extends StatelessWidget {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Builder(
-                      builder: (context) {
-                        final localizedIapPrice = controller
-                            .getLocalizedPriceForPlan(plan.code);
-                        final displayPrice = localizedIapPrice.isNotEmpty
-                            ? localizedIapPrice
-                            : _formatInr(price);
-                        return RichText(
-                          text: TextSpan(
+                    RichText(
+                      text: TextSpan(
+                        style: AppTypography.card(
+                          fontSize: 16,
+                          color: AppColors.brandBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: _formatInr(price),
                             style: AppTypography.card(
-                              fontSize: 16,
+                              fontSize: 24,
                               color: AppColors.brandBlue,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w800,
                             ),
-                            children: [
-                              TextSpan(
-                                text: displayPrice,
-                                style: AppTypography.card(
-                                  fontSize: 24,
-                                  color: AppColors.brandBlue,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              if (localizedIapPrice.isEmpty)
-                                TextSpan(
-                                  text: '/mo',
-                                  style: AppTypography.body(
-                                    fontSize: 13,
-                                    color: AppColors.mutedText,
-                                  ),
-                                ),
-                            ],
                           ),
-                        );
-                      },
+                          TextSpan(
+                            text: '/mo',
+                            style: AppTypography.body(
+                              fontSize: 13,
+                              color: AppColors.mutedText,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     if (isYearly)
                       Container(
@@ -3572,7 +3785,8 @@ class _PlanOfferCard extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: Obx(() {
-                    final isPlanLoading = controller.isCheckoutBusy &&
+                    final isPlanLoading =
+                        controller.isCheckoutBusy &&
                         controller.checkoutPlanCode.value == plan.code;
                     final isThisPlanSelected =
                         controller.selectedPlan.code == plan.code;
@@ -3588,17 +3802,19 @@ class _PlanOfferCard extends StatelessWidget {
                         backgroundColor: isActive
                             ? Colors.white
                             : (isThisPlanSelected
-                                ? AppColors.brandBlue
-                                : accentColor),
-                        foregroundColor:
-                            isActive ? AppColors.brandBlue : Colors.white,
+                                  ? AppColors.brandBlue
+                                  : accentColor),
+                        foregroundColor: isActive
+                            ? AppColors.brandBlue
+                            : Colors.white,
                         disabledBackgroundColor: isActive
                             ? Colors.white
                             : (isThisPlanSelected
-                                ? AppColors.brandBlue.withValues(alpha: 0.6)
-                                : accentColor.withValues(alpha: 0.6)),
-                        disabledForegroundColor:
-                            isActive ? AppColors.brandBlue : Colors.white70,
+                                  ? AppColors.brandBlue.withValues(alpha: 0.6)
+                                  : accentColor.withValues(alpha: 0.6)),
+                        disabledForegroundColor: isActive
+                            ? AppColors.brandBlue
+                            : Colors.white70,
                         side: isActive
                             ? const BorderSide(color: Color(0xFFD7E2EC))
                             : BorderSide.none,
@@ -3617,7 +3833,9 @@ class _PlanOfferCard extends StatelessWidget {
                               ),
                             )
                           : Text(
-                              isActive ? 'Current Plan' : 'Subscribe to this plan',
+                              isActive
+                                  ? 'Current Plan'
+                                  : 'Subscribe to this plan',
                               style: AppTypography.button(
                                 fontSize: 13.8,
                                 color: isActive

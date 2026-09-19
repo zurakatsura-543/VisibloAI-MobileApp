@@ -12,7 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../app/services/local_auth_service.dart';
-import '../services/apple_iap_service.dart';
+import '../../../app/services/platform_billing_policy.dart';
 import '../../onboarding/controllers/onboarding_controller.dart';
 import '../models/auth_me_response.dart';
 import '../models/payment_models.dart';
@@ -77,7 +77,6 @@ class PaymentController extends GetxController {
     syncBillingTargetFromRouteArguments();
     couponCodeController.addListener(_handleCouponChanged);
     _setupRazorpay();
-    _setupAppleIap();
     ever<String?>(errorMessage, (msg) {
       if (msg != null && msg.trim().isNotEmpty) {
         Get.snackbar(
@@ -88,7 +87,10 @@ class PaymentController extends GetxController {
           colorText: const Color(0xFF991B1B),
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           borderRadius: 14,
-          icon: const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626)),
+          icon: const Icon(
+            Icons.error_outline_rounded,
+            color: Color(0xFFDC2626),
+          ),
           duration: const Duration(seconds: 5),
         );
       }
@@ -103,7 +105,10 @@ class PaymentController extends GetxController {
           colorText: const Color(0xFF065F46),
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           borderRadius: 14,
-          icon: const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF059669)),
+          icon: const Icon(
+            Icons.check_circle_outline_rounded,
+            color: Color(0xFF059669),
+          ),
           duration: const Duration(seconds: 4),
         );
       }
@@ -322,8 +327,14 @@ class PaymentController extends GetxController {
     return !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   }
 
-  bool get isIosAppStoreBuild =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+  bool get isIosAppStoreBuild => PlatformBillingPolicy.usesSupportActivation;
+
+  Future<void> contactSupportForActivation() async {
+    await Get.toNamed<void>(
+      AppRoutes.support,
+      arguments: const <String, dynamic>{'topic': 'plan_activation'},
+    );
+  }
 
   String get subscriptionStatusRaw {
     final subStatus = _firstNonEmpty(<String>[
@@ -679,7 +690,7 @@ class PaymentController extends GetxController {
       }
 
       final checkout = checkoutContextResult.value;
-      if (checkout == null) {
+      if (checkout == null && !isIosAppStoreBuild) {
         throw checkoutContextResult.error ??
             Exception(
               'Unable to load your billing checkout details right now.',
@@ -687,7 +698,9 @@ class PaymentController extends GetxController {
       }
 
       remoteProfile.value = profile;
-      checkoutContext.value = checkout;
+      if (checkout != null) {
+        checkoutContext.value = checkout;
+      }
       subscriptionStatus.value = subscriptionStatusResult.value;
       billingUsage.value = usageResult.value;
       remoteInvoices.assignAll(
@@ -699,7 +712,7 @@ class PaymentController extends GetxController {
 
       final nextCycle = normalizeBillingCycle(
         _firstNonEmpty(<String>[
-          checkout.subscription?.billingCycle ?? '',
+          checkout?.subscription?.billingCycle ?? '',
           subscriptionStatus.value?.subscription?.billingCycle ?? '',
           _stringValue(profile.subscription['billingCycle']),
           selectedBillingCycle.value,
@@ -715,7 +728,7 @@ class PaymentController extends GetxController {
       }
 
       final nextPlanCode = _firstNonEmpty(<String>[
-        checkout.subscription?.plan ?? '',
+        checkout?.subscription?.plan ?? '',
         subscriptionStatus.value?.subscription?.plan ?? '',
         _stringValue(profile.subscription['plan']).toUpperCase(),
         recommendedPlanCode,
@@ -731,8 +744,8 @@ class PaymentController extends GetxController {
       }
 
       final nextMode = _firstNonEmpty(<String>[
-        checkout.recommendedMode,
-        checkout.subscription?.billingMode ?? '',
+        checkout?.recommendedMode ?? '',
+        checkout?.subscription?.billingMode ?? '',
         'MANUAL',
       ]).toUpperCase();
       if (syncSelectionToActivePlan ||
@@ -894,6 +907,10 @@ class PaymentController extends GetxController {
   }
 
   Future<void> applyCoupon() async {
+    if (isIosAppStoreBuild) {
+      await contactSupportForActivation();
+      return;
+    }
     if (isApplyingCoupon.value || isCheckoutBusy) {
       return;
     }
@@ -955,28 +972,8 @@ class PaymentController extends GetxController {
       return;
     }
 
-    // Apple In-App Purchase flow for iOS to comply with App Store Guideline 3.1.1
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      final plan = selectedPlan;
-      checkoutPlanCode.value = plan.code;
-      errorMessage.value = null;
-      infoMessage.value = 'Initiating Apple In-App Purchase...';
-
-      try {
-        final success = await AppleIapService().purchasePlan(
-          plan: plan.code,
-          billingCycle: selectedBillingCycle.value,
-        );
-        if (!success) {
-          final iapError = AppleIapService().lastError.value;
-          errorMessage.value =
-              iapError ?? 'Could not complete Apple In-App Purchase.';
-        }
-      } catch (e) {
-        errorMessage.value = 'Apple In-App Purchase error: $e';
-      } finally {
-        checkoutPlanCode.value = null;
-      }
+    if (isIosAppStoreBuild) {
+      await contactSupportForActivation();
       return;
     }
 
@@ -1091,6 +1088,10 @@ class PaymentController extends GetxController {
   }
 
   Future<void> updateAutoRenew(bool enabled) async {
+    if (isIosAppStoreBuild) {
+      await contactSupportForActivation();
+      return;
+    }
     if (enabled == autoRenewEnabled) {
       return;
     }
@@ -1102,6 +1103,10 @@ class PaymentController extends GetxController {
   }
 
   Future<void> updatePreferredPaymentMethod(String methodId) async {
+    if (isIosAppStoreBuild) {
+      await contactSupportForActivation();
+      return;
+    }
     final savedUser = currentUser;
     final normalized = methodId.trim().toLowerCase();
     if (savedUser == null ||
@@ -1136,55 +1141,6 @@ class PaymentController extends GetxController {
     razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
     _razorpay = razorpay;
-  }
-
-  void _setupAppleIap() {
-    if (defaultTargetPlatform != TargetPlatform.iOS) {
-      return;
-    }
-    AppleIapService().initialize(
-      onPurchaseSuccess: (purchaseDetails) async {
-        await refreshData();
-        infoMessage.value =
-            'Visiblo AI subscription activated via Apple In-App Purchase!';
-      },
-    );
-  }
-
-  String getLocalizedPriceForPlan(String planCode) {
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      final price = AppleIapService().getLocalizedPrice(
-        plan: planCode,
-        billingCycle: selectedBillingCycle.value,
-      );
-      if (price != null && price.isNotEmpty) {
-        return price;
-      }
-    }
-    return '';
-  }
-
-  Future<void> restoreApplePurchases() async {
-    if (defaultTargetPlatform != TargetPlatform.iOS) return;
-    errorMessage.value = null;
-    infoMessage.value = 'Restoring Apple purchases...';
-    try {
-      await AppleIapService().restorePurchases();
-      await refreshData();
-      infoMessage.value = 'Purchases restored successfully.';
-    } catch (error) {
-      errorMessage.value = 'Failed to restore purchases: $error';
-    }
-  }
-
-  Future<void> manageAppleSubscription() async {
-    const url = 'https://apps.apple.com/account/subscriptions';
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      errorMessage.value = 'Unable to open Apple Subscription Settings.';
-    }
   }
 
   Future<void> _applyFreeCoupon() async {
@@ -1235,6 +1191,10 @@ class PaymentController extends GetxController {
   }
 
   Future<void> _startAutopayCheckout() async {
+    if (isIosAppStoreBuild) {
+      await contactSupportForActivation();
+      return;
+    }
     if (isCheckoutBusy) {
       return;
     }
@@ -1608,6 +1568,10 @@ class PaymentController extends GetxController {
   }
 
   Future<void> cancelAutopay({bool cancelAtPeriodEnd = true}) async {
+    if (isIosAppStoreBuild) {
+      await contactSupportForActivation();
+      return;
+    }
     if (!canCancelAutopay || isCheckoutBusy) {
       return;
     }
@@ -1640,6 +1604,10 @@ class PaymentController extends GetxController {
   }
 
   Future<void> resumeAutopay() async {
+    if (isIosAppStoreBuild) {
+      await contactSupportForActivation();
+      return;
+    }
     if (isCheckoutBusy) {
       return;
     }
