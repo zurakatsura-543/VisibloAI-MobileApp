@@ -17,44 +17,52 @@ class OnboardingSurveyView extends StatefulWidget {
 
 class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
   final OnboardingController _controller = Get.find<OnboardingController>();
-  final TextEditingController _categoryController = TextEditingController();
   final TextEditingController _servicesController = TextEditingController();
+  final TextEditingController _customCategoryController =
+      TextEditingController();
 
   String _locationSetup = 'single_location';
+  String _industryCategory = '';
   String _brandVoice = 'Professional';
   String _primaryLanguage = 'English';
   String _secondaryLanguage = 'None';
   String _postingFrequency = '5 posts/week';
   String _approvalMode = 'Approve calendar';
-  final Set<String> _targetCustomers = <String>{'Local customers'};
   final Set<String> _goals = <String>{
     'Generate enquiries',
     'Promote services',
     'Improve profile activity',
   };
+  final List<String> _servicesToPromote = <String>[];
 
   @override
   void dispose() {
-    _categoryController.dispose();
     _servicesController.dispose();
+    _customCategoryController.dispose();
     super.dispose();
   }
 
   List<String> _services() {
-    return _servicesController.text
+    final typed = _servicesController.text
         .split(RegExp(r'[,;\n]'))
         .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toSet()
-        .toList(growable: false);
+        .where((value) => value.isNotEmpty);
+    return <String>{..._servicesToPromote, ...typed}.toList(growable: false);
+  }
+
+  String _industryValue() {
+    if (_industryCategory == 'Other') {
+      return _customCategoryController.text.trim();
+    }
+    return _industryCategory.trim();
   }
 
   Future<void> _submit() async {
     await _controller.submitAiBusinessSetup(
       locationSetup: _locationSetup,
-      industryCategory: _categoryController.text,
+      industryCategory: _industryValue(),
       services: _services(),
-      targetCustomers: _targetCustomers.toList(growable: false),
+      targetCustomers: const ['Local customers'],
       goals: _goals.toList(growable: false),
       brandVoice: _brandVoice,
       primaryLanguage: _primaryLanguage,
@@ -151,11 +159,12 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
                               setState(() => _locationSetup = value),
                         ),
                         const SizedBox(height: 14),
-                        _TextInput(
-                          controller: _categoryController,
-                          label: 'Industry / category',
-                          hint: 'Dentist, salon, cafe, gym, real estate...',
-                          icon: Icons.category_outlined,
+                        _IndustryPicker(
+                          value: _industryCategory,
+                          customController: _customCategoryController,
+                          onChanged: (value) => setState(() {
+                            _industryCategory = value;
+                          }),
                         ),
                       ],
                     ),
@@ -163,28 +172,22 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
                   const SizedBox(height: 14),
                   _Section(
                     title: 'Services To Promote',
-                    subtitle: 'Add comma-separated services or products.',
-                    child: _TextInput(
+                    subtitle:
+                        'These become the core topics for AI calendar posts.',
+                    child: _ServiceBuilder(
                       controller: _servicesController,
-                      label: 'Main services / products',
-                      hint: 'Root canal, dental implants, teeth whitening',
-                      icon: Icons.sell_outlined,
-                      maxLines: 3,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _Section(
-                    title: 'Target Customers',
-                    child: _ChipWrap(
-                      selected: _targetCustomers,
-                      options: _customerOptions,
-                      onChanged: (value) =>
-                          setState(() => _toggle(_targetCustomers, value)),
+                      services: _servicesToPromote,
+                      suggestions: _serviceSuggestions(_industryValue()),
+                      onAdd: _addService,
+                      onRemove: (value) =>
+                          setState(() => _servicesToPromote.remove(value)),
                     ),
                   ),
                   const SizedBox(height: 14),
                   _Section(
                     title: 'Content Goals',
+                    subtitle:
+                        'Choose the intent VisibloAI should optimize for.',
                     child: _ChipWrap(
                       selected: _goals,
                       options: _goalOptions,
@@ -195,6 +198,8 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
                   const SizedBox(height: 14),
                   _Section(
                     title: 'Voice & Language',
+                    subtitle:
+                        'Controls caption style, CTA tone and local language mix.',
                     child: Column(
                       children: [
                         _DropdownRow(
@@ -229,6 +234,7 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
                   const SizedBox(height: 14),
                   _Section(
                     title: 'Automation Preference',
+                    subtitle: 'You can change this later from the AI calendar.',
                     child: Column(
                       children: [
                         _DropdownRow(
@@ -290,6 +296,17 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
     } else {
       target.add(value);
     }
+  }
+
+  void _addService(String value) {
+    final cleaned = value.trim();
+    if (cleaned.isEmpty) return;
+    setState(() {
+      if (!_servicesToPromote.contains(cleaned)) {
+        _servicesToPromote.add(cleaned);
+      }
+      _servicesController.clear();
+    });
   }
 }
 
@@ -353,23 +370,21 @@ class _TextInput extends StatelessWidget {
     required this.label,
     required this.hint,
     required this.icon,
-    this.maxLines = 1,
+    this.onSubmitted,
   });
 
   final TextEditingController controller;
   final String label;
   final String hint;
   final IconData icon;
-  final int maxLines;
+  final ValueChanged<String>? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
-      maxLines: maxLines,
-      textInputAction: maxLines > 1
-          ? TextInputAction.newline
-          : TextInputAction.next,
+      onSubmitted: onSubmitted,
+      textInputAction: TextInputAction.next,
       style: GoogleFonts.manrope(
         fontSize: 14,
         fontWeight: FontWeight.w700,
@@ -379,7 +394,6 @@ class _TextInput extends StatelessWidget {
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icon, color: AppColors.brandBlue),
-        alignLabelWithHint: maxLines > 1,
         filled: true,
         fillColor: const Color(0xFFF7FAFF),
         border: OutlineInputBorder(
@@ -395,6 +409,164 @@ class _TextInput extends StatelessWidget {
           borderSide: const BorderSide(color: Color(0xFF106CFF), width: 1.4),
         ),
       ),
+    );
+  }
+}
+
+class _IndustryPicker extends StatelessWidget {
+  const _IndustryPicker({
+    required this.value,
+    required this.customController,
+    required this.onChanged,
+  });
+
+  final String value;
+  final TextEditingController customController;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _DropdownRow(
+          label: 'Industry / category',
+          value: value.isEmpty ? null : value,
+          options: _industryOptions,
+          icon: Icons.category_outlined,
+          hint: 'Choose your business type',
+          onChanged: onChanged,
+        ),
+        if (value == 'Other') ...[
+          const SizedBox(height: 12),
+          _TextInput(
+            controller: customController,
+            label: 'Enter industry',
+            hint: 'e.g. Interior designer, coaching center',
+            icon: Icons.edit_note_rounded,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ServiceBuilder extends StatelessWidget {
+  const _ServiceBuilder({
+    required this.controller,
+    required this.services,
+    required this.suggestions,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final TextEditingController controller;
+  final List<String> services;
+  final List<String> suggestions;
+  final ValueChanged<String> onAdd;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleSuggestions = suggestions
+        .where((value) => !services.contains(value))
+        .toList(growable: false);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _TextInput(
+                controller: controller,
+                label: 'Main service / product',
+                hint: 'Type and tap add',
+                icon: Icons.sell_outlined,
+                onSubmitted: onAdd,
+              ),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(
+              height: 56,
+              child: ElevatedButton(
+                onPressed: () => onAdd(controller.text),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF106CFF),
+                  foregroundColor: AppColors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
+                child: const Icon(Icons.add_rounded),
+              ),
+            ),
+          ],
+        ),
+        if (visibleSuggestions.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Quick picks',
+            style: GoogleFonts.manrope(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              color: AppColors.mutedText,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: visibleSuggestions
+                .map(
+                  (value) => ActionChip(
+                    label: Text(value),
+                    avatar: const Icon(Icons.add_rounded, size: 16),
+                    onPressed: () => onAdd(value),
+                    backgroundColor: const Color(0xFFF7FAFF),
+                    side: const BorderSide(color: AppColors.line),
+                    labelStyle: GoogleFonts.manrope(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.text,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ],
+        if (services.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: services
+                .map(
+                  (value) => InputChip(
+                    label: Text(value),
+                    selected: true,
+                    onDeleted: () => onRemove(value),
+                    deleteIconColor: AppColors.white,
+                    selectedColor: const Color(0xFF106CFF),
+                    checkmarkColor: AppColors.white,
+                    labelStyle: GoogleFonts.manrope(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.white,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -511,18 +683,21 @@ class _DropdownRow extends StatelessWidget {
     required this.options,
     required this.icon,
     required this.onChanged,
+    this.hint,
   });
 
   final String label;
-  final String value;
+  final String? value;
   final List<String> options;
   final IconData icon;
   final ValueChanged<String> onChanged;
+  final String? hint;
 
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
       initialValue: value,
+      hint: hint == null ? null : Text(hint!),
       items: options
           .map(
             (option) =>
@@ -582,15 +757,19 @@ class _Glow extends StatelessWidget {
   }
 }
 
-const _customerOptions = <String>[
-  'Local customers',
-  'Families',
-  'Working professionals',
-  'Students',
-  'Business owners',
-  'Women',
-  'Homeowners',
-  'Parents',
+const _industryOptions = <String>[
+  'Salon / spa',
+  'Dental clinic',
+  'Healthcare clinic',
+  'Restaurant / cafe',
+  'Gym / fitness',
+  'Retail store',
+  'Real estate',
+  'Automotive',
+  'Education / coaching',
+  'Home services',
+  'Legal / finance',
+  'Other',
 ];
 
 const _goalOptions = <String>[
@@ -641,3 +820,39 @@ const _approvalOptions = <String>[
   'Approve calendar',
   'Full auto later',
 ];
+
+List<String> _serviceSuggestions(String industry) {
+  final normalized = industry.toLowerCase();
+  if (normalized.contains('salon') || normalized.contains('spa')) {
+    return const ['Haircut', 'Hair colour', 'Facial', 'Bridal makeup'];
+  }
+  if (normalized.contains('dental')) {
+    return const ['Root canal', 'Dental implants', 'Teeth whitening', 'Braces'];
+  }
+  if (normalized.contains('health') || normalized.contains('clinic')) {
+    return const ['Consultation', 'Health checkup', 'Diagnostics', 'Follow-up'];
+  }
+  if (normalized.contains('restaurant') || normalized.contains('cafe')) {
+    return const ['Dine-in', 'Takeaway', 'Catering', 'Special offers'];
+  }
+  if (normalized.contains('gym') || normalized.contains('fitness')) {
+    return const [
+      'Personal training',
+      'Weight loss',
+      'Strength training',
+      'Group classes',
+    ];
+  }
+  if (normalized.contains('real estate')) {
+    return const ['Property sales', 'Rentals', 'Site visits', 'Consultation'];
+  }
+  if (normalized.contains('automotive')) {
+    return const ['Car service', 'Repairs', 'Detailing', 'Inspection'];
+  }
+  return const [
+    'Core service',
+    'Premium service',
+    'Seasonal offer',
+    'Consultation',
+  ];
+}

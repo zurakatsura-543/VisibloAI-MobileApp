@@ -1335,17 +1335,32 @@ class OnboardingController extends GetxController {
 
     try {
       final aiProfile = <String, dynamic>{
-        'version': '2026-08-ai-business-setup-v1',
+        'version': '2026-09-ai-business-setup-v2',
         'locationSetup': locationSetup,
         'industryCategory': industryCategory.trim(),
         'services': services,
-        'targetCustomers': targetCustomers,
+        'targetCustomers': targetCustomers.isEmpty
+            ? const ['Local customers']
+            : targetCustomers,
         'goals': goals,
         'brandVoice': brandVoice,
         'primaryLanguage': primaryLanguage,
         'secondaryLanguage': secondaryLanguage,
         'postingFrequency': postingFrequency,
         'approvalMode': approvalMode,
+        'contentIntent': {
+          'promoteServices': services,
+          'primaryGoals': goals,
+          'audience': 'Local customers near the connected business location',
+          'callToActionStyle': brandVoice,
+        },
+        'knowledgeSources': const [
+          'mobile_onboarding_services',
+          'connected_google_business_profile',
+          'gbp_business_details',
+          'previous_google_business_posts',
+          'previous_social_posts',
+        ],
         'source': 'mobile_onboarding',
         'capturedAt': DateTime.now().toIso8601String(),
       };
