@@ -981,7 +981,7 @@ class OnboardingController extends GetxController {
       }
 
       final remoteProfile = await _authApiService.fetchMyData();
-      if (!remoteProfile.authenticated) {
+      if (!remoteProfile.authenticated || !remoteProfile.emailVerified) {
         await _resetToPublicEntry();
         return;
       }
@@ -3570,11 +3570,8 @@ class OnboardingController extends GetxController {
   }
 
   String _routeForSession(AuthMeResponse remoteProfile) {
-    if (!remoteProfile.authenticated) {
+    if (!remoteProfile.authenticated || !remoteProfile.emailVerified) {
       return AppRoutes.login;
-    }
-    if (!remoteProfile.emailVerified) {
-      return AppRoutes.otpVerification;
     }
     if (!remoteProfile.surveyDone) {
       return AppRoutes.onboardingSurvey;
