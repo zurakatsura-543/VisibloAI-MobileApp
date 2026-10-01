@@ -576,7 +576,11 @@ class OnboardingController extends GetxController {
 
     final hasStoredSession = await _authApiService.hasStoredAuthSession();
     if (!hasStoredSession) {
-      goToSignUp();
+      if (Platform.isIOS) {
+        goToLogin();
+      } else {
+        goToSignUp();
+      }
       return;
     }
 

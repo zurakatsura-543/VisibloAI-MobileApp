@@ -149,12 +149,14 @@ class LoginView extends GetView<OnboardingController> {
                     ),
                   ],
                 ],
-                const SizedBox(height: 22),
-                AuthBottomLink(
-                  prompt: 'Don’t have an account? ',
-                  action: 'Sign Up',
-                  onTap: controller.goToSignUp,
-                ),
+                if (platform != TargetPlatform.iOS) ...[
+                  const SizedBox(height: 22),
+                  AuthBottomLink(
+                    prompt: 'Don’t have an account? ',
+                    action: 'Sign Up',
+                    onTap: controller.goToSignUp,
+                  ),
+                ],
               ],
             );
           },

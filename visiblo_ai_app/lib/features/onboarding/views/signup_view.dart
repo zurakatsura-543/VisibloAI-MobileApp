@@ -17,6 +17,31 @@ class SignUpView extends GetView<OnboardingController> {
     final showAppleSignIn =
         platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
 
+    if (platform == TargetPlatform.iOS) {
+      return AuthScreenShell(
+        showBackButton: true,
+        onBack: controller.goToLogin,
+        title: 'Sign In Required',
+        subtitle: 'Account setup and subscriptions are managed on our web portal.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 30),
+            Text(
+              'Please sign in with your existing account credentials.',
+              style: AppTypography.body(color: AppColors.mutedText),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 30),
+            AuthPrimaryButton(
+              label: 'Go to Sign In',
+              onPressed: controller.goToLogin,
+            ),
+          ],
+        ),
+      );
+    }
+
     return AuthScreenShell(
       showBackButton: true,
       onBack: Get.back,
