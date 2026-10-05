@@ -1316,6 +1316,7 @@ class OnboardingController extends GetxController {
     required String secondaryLanguage,
     required String postingFrequency,
     required String approvalMode,
+    List<String> businessImagePaths = const <String>[],
   }) async {
     if (industryCategory.trim().isEmpty ||
         services.isEmpty ||
@@ -1373,6 +1374,9 @@ class OnboardingController extends GetxController {
         heardFrom: 'other',
         aiOnboardingProfile: aiProfile,
       );
+      for (final imagePath in businessImagePaths.take(15)) {
+        await _authApiService.uploadAiBusinessMedia(imagePath: imagePath);
+      }
       final remoteProfile = await _authApiService.fetchMyData();
       await _syncCurrentUserFromRemoteProfile(remoteProfile);
       await _navigateToSessionRoute(remoteProfile);

@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -20,6 +23,8 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
   final TextEditingController _servicesController = TextEditingController();
   final TextEditingController _customCategoryController =
       TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
+  final List<String> _businessPhotoPaths = <String>[];
 
   String _locationSetup = 'single_location';
   String _industryCategory = '';
@@ -79,6 +84,7 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
       secondaryLanguage: _secondaryLanguage,
       postingFrequency: _postingFrequency,
       approvalMode: _approvalMode,
+      businessImagePaths: _businessPhotoPaths,
     );
   }
 
@@ -197,6 +203,19 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
                   ),
                   const SizedBox(height: 14),
                   _Section(
+                    title: 'Show AI Your Business',
+                    subtitle:
+                        'Add up to 15 real photos. VisibloAI will use them in your future calendar posts instead of generic visuals.',
+                    child: _BusinessPhotoPicker(
+                      imagePaths: _businessPhotoPaths,
+                      onAdd: _pickBusinessPhotos,
+                      onRemove: (path) => setState(
+                        () => _businessPhotoPaths.remove(path),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _Section(
                     title: 'Content Goals',
                     subtitle:
                         'Choose the intent VisibloAI should optimize for.',
@@ -300,6 +319,34 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
     );
   }
 
+  Future<void> _pickBusinessPhotos() async {
+    final remaining = 15 - _businessPhotoPaths.length;
+    if (remaining <= 0) {
+      Get.snackbar(
+        'Photo limit reached',
+        'You can add up to 15 business photos.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    final selected = await _imagePicker.pickMultiImage(
+      imageQuality: 88,
+      maxWidth: 2400,
+      maxHeight: 2400,
+    );
+    if (selected.isEmpty || !mounted) return;
+
+    setState(() {
+      final known = _businessPhotoPaths.toSet();
+      for (final image in selected) {
+        if (known.add(image.path) && _businessPhotoPaths.length < 15) {
+          _businessPhotoPaths.add(image.path);
+        }
+      }
+    });
+  }
+
   void _toggle(Set<String> target, String value) {
     if (target.contains(value)) {
       if (target.length > 1) {
@@ -319,6 +366,104 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
       }
       _servicesController.clear();
     });
+  }
+}
+
+class _BusinessPhotoPicker extends StatelessWidget {
+  const _BusinessPhotoPicker({
+    required this.imagePaths,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final List<String> imagePaths;
+  final VoidCallback onAdd;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final canAdd = imagePaths.length < 15;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: canAdd ? onAdd : null,
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: Text(imagePaths.isEmpty ? 'Add business photos' : 'Add more photos'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.brandBlue,
+                  minimumSize: const Size.fromHeight(48),
+                  side: const BorderSide(color: Color(0xFFBFD5FF)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              '${imagePaths.length}/15',
+              style: GoogleFonts.manrope(
+                fontWeight: FontWeight.w800,
+                color: AppColors.mutedText,
+              ),
+            ),
+          ],
+        ),
+        if (imagePaths.isEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Examples: storefront, team, products, services, interior, completed work or logo.',
+            style: GoogleFonts.manrope(
+              fontSize: 11.7,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+              color: AppColors.mutedText,
+            ),
+          ),
+        ] else ...[
+          const SizedBox(height: 12),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: imagePaths.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 9,
+              mainAxisSpacing: 9,
+            ),
+            itemBuilder: (context, index) {
+              final path = imagePaths[index];
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.file(File(path), fit: BoxFit.cover),
+                  ),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Material(
+                      color: Colors.black54,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () => onRemove(path),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(Icons.close_rounded, color: Colors.white, size: 16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ],
+    );
   }
 }
 

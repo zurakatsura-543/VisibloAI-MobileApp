@@ -1831,6 +1831,35 @@ class AuthApiService extends GetxService {
     }
   }
 
+  Future<Map<String, dynamic>> uploadAiBusinessMedia({
+    required String imagePath,
+  }) async {
+    try {
+      final file = File(imagePath);
+      if (!await file.exists()) {
+        throw Exception('Selected business image was not found.');
+      }
+      final response = await _api.post(
+        '/auth/ai-business-media',
+        data: FormData.fromMap({
+          'image': await MultipartFile.fromFile(imagePath),
+        }),
+        options: Options(
+          contentType: 'multipart/form-data',
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 90),
+        ),
+      );
+      return _asMap(response.data);
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(error, fallback: 'Unable to upload business photo.'),
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> uploadAiPostImage({
     required String postId,
     required String imagePath,
