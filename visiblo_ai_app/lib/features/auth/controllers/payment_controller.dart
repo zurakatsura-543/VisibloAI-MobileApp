@@ -1143,59 +1143,6 @@ class PaymentController extends GetxController {
     _razorpay = razorpay;
   }
 
-  Future<void> _applyFreeCoupon() async {
-    if (isCheckoutBusy) {
-      return;
-    }
-
-    final code = couponCode.value.trim().toUpperCase();
-    if (code.isEmpty) {
-      errorMessage.value =
-          'A valid coupon code is required to activate the free checkout path.';
-      return;
-    }
-
-    checkoutPlanCode.value = selectedPlan.code;
-    errorMessage.value = null;
-    infoMessage.value = null;
-
-    try {
-      await _authApiService.applyBillingCoupon(
-        code: code,
-        plan: selectedPlan.code,
-        billingCycle: selectedBillingCycle.value,
-        businessId: billingTargetBusinessId,
-      );
-      _clearCouponState(clearInput: true);
-      infoMessage.value =
-          'Plan activated successfully with coupon $code. Refreshing your account now...';
-      if (hasExternalBillingTarget) {
-        await _activateBillingTargetAfterSuccessfulPayment();
-        return;
-      }
-      await loadInitialData(
-        manualRefresh: true,
-        preserveInfoMessage: true,
-        syncSelectionToActivePlan: true,
-      );
-      if (hasActiveSubscription) {
-        infoMessage.value =
-            'Coupon applied successfully. Opening your dashboard...';
-        Get.offAllNamed(AppRoutes.unifiedDashboard);
-        return;
-      }
-      infoMessage.value =
-          'Coupon applied successfully. ${selectedPlan.name} is now active.';
-    } catch (error) {
-      errorMessage.value = _humanizeError(
-        error,
-        fallback: 'Unable to activate this coupon right now.',
-      );
-    } finally {
-      checkoutPlanCode.value = null;
-    }
-  }
-
   Future<void> _startAutopayCheckout() async {
     if (isIosAppStoreBuild) {
       await contactSupportForActivation();
