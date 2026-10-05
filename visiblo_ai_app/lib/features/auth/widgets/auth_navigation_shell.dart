@@ -157,7 +157,7 @@ class _AuthTabletSideNav extends StatelessWidget {
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                separatorBuilder: (_, _) => const SizedBox(height: 6),
                 itemBuilder: (context, index) {
                   final item = items[index];
                   final isSelected = item.tab == currentTab;
