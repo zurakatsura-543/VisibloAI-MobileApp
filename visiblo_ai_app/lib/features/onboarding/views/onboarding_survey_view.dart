@@ -34,6 +34,15 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
     'Improve profile activity',
   };
   final List<String> _servicesToPromote = <String>[];
+  bool _showValidationErrors = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _servicesController.addListener(() {
+      if (_showValidationErrors) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
@@ -58,6 +67,7 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
   }
 
   Future<void> _submit() async {
+    setState(() => _showValidationErrors = true);
     await _controller.submitAiBusinessSetup(
       locationSetup: _locationSetup,
       industryCategory: _industryValue(),
@@ -173,7 +183,7 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
                   _Section(
                     title: 'Services To Promote',
                     subtitle:
-                        'These become the core topics for AI calendar posts.',
+                        'GBP will fetch your listed services after connection. Add anything extra or missing here manually.',
                     child: _ServiceBuilder(
                       controller: _servicesController,
                       services: _servicesToPromote,
@@ -181,6 +191,8 @@ class _OnboardingSurveyViewState extends State<OnboardingSurveyView> {
                       onAdd: _addService,
                       onRemove: (value) =>
                           setState(() => _servicesToPromote.remove(value)),
+                      showRequiredHint:
+                          _showValidationErrors && _services().isEmpty,
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -371,6 +383,8 @@ class _TextInput extends StatelessWidget {
     required this.hint,
     required this.icon,
     this.onSubmitted,
+    this.hasError = false,
+    this.helperText,
   });
 
   final TextEditingController controller;
@@ -378,6 +392,8 @@ class _TextInput extends StatelessWidget {
   final String hint;
   final IconData icon;
   final ValueChanged<String>? onSubmitted;
+  final bool hasError;
+  final String? helperText;
 
   @override
   Widget build(BuildContext context) {
@@ -393,16 +409,30 @@ class _TextInput extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(icon, color: AppColors.brandBlue),
+        prefixIcon: Icon(
+          icon,
+          color: hasError ? const Color(0xFF0EA5A6) : AppColors.brandBlue,
+        ),
+        helperText: helperText,
+        helperMaxLines: 2,
+        helperStyle: GoogleFonts.manrope(
+          fontSize: 11.5,
+          height: 1.25,
+          fontWeight: FontWeight.w700,
+          color: hasError ? const Color(0xFF0F766E) : AppColors.mutedText,
+        ),
         filled: true,
-        fillColor: const Color(0xFFF7FAFF),
+        fillColor: hasError ? const Color(0xFFEFFFFF) : const Color(0xFFF7FAFF),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
           borderSide: const BorderSide(color: AppColors.line),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: const BorderSide(color: AppColors.line),
+          borderSide: BorderSide(
+            color: hasError ? const Color(0xFF0EA5A6) : AppColors.line,
+            width: hasError ? 1.4 : 1,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
@@ -458,6 +488,7 @@ class _ServiceBuilder extends StatelessWidget {
     required this.suggestions,
     required this.onAdd,
     required this.onRemove,
+    required this.showRequiredHint,
   });
 
   final TextEditingController controller;
@@ -465,6 +496,7 @@ class _ServiceBuilder extends StatelessWidget {
   final List<String> suggestions;
   final ValueChanged<String> onAdd;
   final ValueChanged<String> onRemove;
+  final bool showRequiredHint;
 
   @override
   Widget build(BuildContext context) {
@@ -481,9 +513,13 @@ class _ServiceBuilder extends StatelessWidget {
               child: _TextInput(
                 controller: controller,
                 label: 'Main service / product',
-                hint: 'Type and tap add',
+                hint: 'e.g. Hair spa, bridal makeup, dental implants',
                 icon: Icons.sell_outlined,
                 onSubmitted: onAdd,
+                hasError: showRequiredHint,
+                helperText: showRequiredHint
+                    ? 'Add at least one service to guide AI posts.'
+                    : 'Separate multiple services with commas, or tap quick picks.',
               ),
             ),
             const SizedBox(width: 10),
@@ -504,6 +540,8 @@ class _ServiceBuilder extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 10),
+        _GbpServiceNotice(showRequiredHint: showRequiredHint),
         if (visibleSuggestions.isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(
@@ -567,6 +605,61 @@ class _ServiceBuilder extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _GbpServiceNotice extends StatelessWidget {
+  const _GbpServiceNotice({required this.showRequiredHint});
+
+  final bool showRequiredHint;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: showRequiredHint
+            ? const Color(0xFFEFFFFF)
+            : const Color(0xFFF7FAFF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: showRequiredHint ? const Color(0xFF0EA5A6) : AppColors.line,
+          width: showRequiredHint ? 1.4 : 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            showRequiredHint
+                ? Icons.error_outline_rounded
+                : Icons.storefront_outlined,
+            size: 18,
+            color: showRequiredHint
+                ? const Color(0xFF0F766E)
+                : AppColors.brandBlue,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              showRequiredHint
+                  ? 'This part is empty. Add one service now, even if GBP will import more later.'
+                  : 'After Google Business Profile connection, VisibloAI will also fetch your GBP services and products.',
+              style: GoogleFonts.manrope(
+                fontSize: 11.8,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+                color: showRequiredHint
+                    ? const Color(0xFF0F766E)
+                    : AppColors.mutedText,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

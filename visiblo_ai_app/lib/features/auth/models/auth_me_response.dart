@@ -14,6 +14,7 @@ class AuthMeResponse {
     required this.availableBusinesses,
     required this.locationQuota,
     required this.subscription,
+    required this.aiOnboardingProfile,
     required this.rawData,
   });
 
@@ -31,6 +32,7 @@ class AuthMeResponse {
   final List<Map<String, dynamic>> availableBusinesses;
   final Map<String, dynamic> locationQuota;
   final Map<String, dynamic> subscription;
+  final Map<String, dynamic> aiOnboardingProfile;
   final Map<String, dynamic> rawData;
 
   bool get hasBusiness => businessId.isNotEmpty;
@@ -119,6 +121,12 @@ class AuthMeResponse {
             .whereType<Map>()
             .map((item) => Map<String, dynamic>.from(item))
             .toList();
+    final aiProfileData = map['aiOnboardingProfile'];
+    final aiOnboardingProfile = aiProfileData is Map<String, dynamic>
+        ? aiProfileData
+        : aiProfileData is Map
+        ? Map<String, dynamic>.from(aiProfileData)
+        : <String, dynamic>{};
     final subscriptionStatus = _asString(subscription['status']).toUpperCase();
 
     return AuthMeResponse(
@@ -136,6 +144,7 @@ class AuthMeResponse {
       availableBusinesses: businesses,
       locationQuota: locationQuota,
       subscription: subscription,
+      aiOnboardingProfile: aiOnboardingProfile,
       rawData: Map<String, dynamic>.from(map),
     );
   }
@@ -156,6 +165,7 @@ class AuthMeResponse {
       'availableBusinesses': availableBusinesses,
       'locationQuota': locationQuota,
       'subscription': subscription,
+      'aiOnboardingProfile': aiOnboardingProfile,
     };
   }
 

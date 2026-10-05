@@ -307,6 +307,9 @@ class _TrialUnlockView extends StatelessWidget {
             );
           }
 
+          final freeIntroCoupon =
+              controller.couponResult.value?.skipPayment == true;
+
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
             child: Column(
@@ -340,7 +343,7 @@ class _TrialUnlockView extends StatelessWidget {
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  'Unlock Your 7-Day Trial',
+                  'Unlock Your 14-Day Trial',
                   style: GoogleFonts.manrope(
                     fontSize: 29,
                     height: 1.08,
@@ -350,7 +353,7 @@ class _TrialUnlockView extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Pay a one-time fee of Rs 99 to access VisibloAI and start your 7-day trial.',
+                  'Pay a one-time fee of Rs 99 to access VisibloAI and start your 14-day trial.',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.manrope(
@@ -384,7 +387,7 @@ class _TrialUnlockView extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '₹99',
+                              freeIntroCoupon ? '₹0' : '₹99',
                               style: GoogleFonts.manrope(
                                 fontSize: 42,
                                 height: 0.95,
@@ -392,9 +395,23 @@ class _TrialUnlockView extends StatelessWidget {
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
+                            if (freeIntroCoupon) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                '₹99 waived by coupon',
+                                style: GoogleFonts.manrope(
+                                  fontSize: 11.5,
+                                  color: AppColors.mutedText,
+                                  fontWeight: FontWeight.w800,
+                                  decoration: TextDecoration.lineThrough,
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 2),
                             Text(
-                              '7-Day Trial Access',
+                              freeIntroCoupon
+                                  ? 'Free 14-Day Access'
+                                  : '14-Day Trial Access',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               softWrap: false,
@@ -425,7 +442,9 @@ class _TrialUnlockView extends StatelessWidget {
                                   const SizedBox(width: 6),
                                   Flexible(
                                     child: Text(
-                                      'One-time payment',
+                                      freeIntroCoupon
+                                          ? 'Coupon applied'
+                                          : 'One-time payment',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       softWrap: false,
@@ -469,6 +488,8 @@ class _TrialUnlockView extends StatelessWidget {
                 _TrialBenefitsCard(controller: controller),
                 const SizedBox(height: 18),
                 _SecureCheckoutNote(),
+                const SizedBox(height: 14),
+                _IntroCouponRow(controller: controller),
                 const SizedBox(height: 18),
                 Container(
                   decoration: BoxDecoration(
@@ -483,8 +504,12 @@ class _TrialUnlockView extends StatelessWidget {
                     ],
                   ),
                   child: AppPrimaryButton(
-                    label: 'Pay Rs 99 & Start Trial',
-                    icon: Icons.arrow_forward_rounded,
+                    label: freeIntroCoupon
+                        ? 'Activate Free 14-Day Access'
+                        : 'Pay Rs 99 & Start 14-Day Trial',
+                    icon: freeIntroCoupon
+                        ? Icons.check_rounded
+                        : Icons.arrow_forward_rounded,
                     isLoading: controller.isSelectedPlanBusy,
                     backgroundColor: Colors.transparent,
                     disabledBackgroundColor: Colors.transparent,
@@ -1418,6 +1443,167 @@ class _ExpiredAmountRow extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _IntroCouponRow extends StatelessWidget {
+  const _IntroCouponRow({required this.controller});
+
+  final PaymentController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final couponResult = controller.couponResult.value;
+
+      if (couponResult != null) {
+        final isFree = couponResult.skipPayment;
+        final code = couponResult.coupon?.code ?? controller.couponCode.value;
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isFree ? const Color(0xFFF0FBF6) : const Color(0xFFF3F8FF),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isFree ? const Color(0xFFC4EAD4) : const Color(0xFFD6E6FF),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                isFree ? Icons.verified_rounded : Icons.local_offer_rounded,
+                color: isFree ? const Color(0xFF1D8F58) : AppColors.primary,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isFree ? 'Free access for 14 days' : '$code applied',
+                      style: GoogleFonts.manrope(
+                        fontSize: 14,
+                        color: isFree
+                            ? const Color(0xFF126B42)
+                            : AppColors.brandBlue,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isFree
+                          ? '$code reduced your intro checkout to ₹0.'
+                          : 'Coupon will be applied at checkout.',
+                      style: GoogleFonts.manrope(
+                        fontSize: 11.8,
+                        height: 1.3,
+                        color: AppColors.mutedText,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: controller.removeCoupon,
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+        );
+      }
+
+      final canApplyCoupon =
+          !controller.isApplyingCoupon.value &&
+          controller.couponCode.value.trim().isNotEmpty;
+
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFDCE5EE)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0C003F70),
+              blurRadius: 14,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Have a coupon?',
+              style: GoogleFonts.manrope(
+                fontSize: 14.2,
+                color: AppColors.brandBlue,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Apply a valid coupon to reduce the ₹99 intro checkout. A 100% coupon gives free access for 14 days.',
+              style: GoogleFonts.manrope(
+                fontSize: 11.8,
+                height: 1.35,
+                color: AppColors.mutedText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller.couponCodeController,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: _couponInputDecoration().copyWith(
+                      hintText: 'Enter coupon code',
+                      prefixIcon: const Icon(
+                        Icons.sell_outlined,
+                        size: 18,
+                        color: Color(0xFF8EA0B7),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 48,
+                  child: FilledButton(
+                    onPressed: canApplyCoupon ? controller.applyCoupon : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      disabledBackgroundColor: const Color(0xFFE9EFF6),
+                      foregroundColor: Colors.white,
+                      disabledForegroundColor: const Color(0xFF9AA8BA),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: controller.isApplyingCoupon.value
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            'Apply',
+                            style: GoogleFonts.spaceGrotesk(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
 

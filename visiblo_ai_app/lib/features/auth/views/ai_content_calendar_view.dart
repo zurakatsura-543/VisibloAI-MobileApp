@@ -88,10 +88,12 @@ class _AiContentCalendarViewState extends State<AiContentCalendarView>
   Map<String, List<_PlatformChipData>> _platformChipsByPostId =
       const <String, List<_PlatformChipData>>{};
   Map<String, dynamic>? _automationSettings;
+  Set<String> _connectedSocialPlatforms = const <String>{};
   bool _isLoading = false;
   bool _isBuildingPlan = false;
   bool _isSavingAutomation = false;
   bool _refreshCalendarOnResume = false;
+  bool _hasFocusedFirstUpcomingMonth = false;
   String? _busyPostId;
 
   @override
@@ -124,8 +126,6 @@ class _AiContentCalendarViewState extends State<AiContentCalendarView>
     setState(() => _isLoading = true);
     try {
       final locationId = _resolveWorkspaceLocationId();
-      final rangeStart = DateTime(_visibleMonth.year, _visibleMonth.month);
-      final rangeEnd = DateTime(_visibleMonth.year, _visibleMonth.month + 1, 0);
       final results = await Future.wait<dynamic>([
         _api.fetchAiPostsList(businessId),
         _api
@@ -140,6 +140,30 @@ class _AiContentCalendarViewState extends State<AiContentCalendarView>
       final connectedPlatforms = Set<String>.from(results[2] as Set<String>);
       posts.sort((a, b) => _postDate(a).compareTo(_postDate(b)));
 
+      // A new plan begins tomorrow. Focus its first month instead of showing
+      // an empty current-month calendar on the day before the first draft.
+      final today = _startOfDay(DateTime.now());
+      final firstUpcoming = posts.cast<GbpPost?>().firstWhere(
+        (post) =>
+            post?.scheduledFor != null &&
+            !_postDate(post!).isBefore(today),
+        orElse: () => null,
+      );
+      final hasPostsInVisibleMonth = posts.any(
+        (post) =>
+            post.scheduledFor != null &&
+            _isSameMonth(_postDate(post), _visibleMonth),
+      );
+      if (!_hasFocusedFirstUpcomingMonth &&
+          !hasPostsInVisibleMonth &&
+          firstUpcoming != null) {
+        final firstDate = _postDate(firstUpcoming);
+        _visibleMonth = DateTime(firstDate.year, firstDate.month);
+        _hasFocusedFirstUpcomingMonth = true;
+      }
+
+      final rangeStart = DateTime(_visibleMonth.year, _visibleMonth.month);
+      final rangeEnd = DateTime(_visibleMonth.year, _visibleMonth.month + 1, 0);
       final calendar = await _api
           .fetchAiMasterContentCalendar(
             businessId: businessId,
@@ -159,6 +183,7 @@ class _AiContentCalendarViewState extends State<AiContentCalendarView>
         setState(() {
           _posts = posts;
           _platformChipsByPostId = platformChips;
+          _connectedSocialPlatforms = connectedPlatforms;
           _automationSettings = Map<String, dynamic>.from(results[1] as Map);
         });
       }
@@ -235,6 +260,7 @@ class _AiContentCalendarViewState extends State<AiContentCalendarView>
 
   void _changeVisibleMonth(int offset) {
     setState(() {
+      _hasFocusedFirstUpcomingMonth = true;
       _visibleMonth = DateTime(
         _visibleMonth.year,
         _visibleMonth.month + offset,
@@ -327,11 +353,20 @@ class _AiContentCalendarViewState extends State<AiContentCalendarView>
         actionId: approvedAction.id,
         businessId: businessId,
       );
+      final postCount = int.tryParse(
+            completed.result['postCount']?.toString() ?? '',
+          ) ??
+          0;
+      if (!completed.isCompleted || postCount <= 0) {
+        throw Exception(
+          completed.result['message']?.toString() ??
+              'The calendar was not created. Please try building it again.',
+        );
+      }
       await _loadPosts();
       Get.snackbar(
-        'Calendar ready',
-        completed.result['message']?.toString() ??
-            'VisibloAI created your 30-day Google Business Profile drafts.',
+        '$postCount Google drafts ready',
+        'Your 30-day calendar is ready. Connect Facebook or Instagram separately to prepare social drafts.',
         snackPosition: SnackPosition.BOTTOM,
       );
     } catch (error) {
@@ -842,7 +877,13 @@ class _AiContentCalendarViewState extends State<AiContentCalendarView>
               const SizedBox(height: 10),
               const _CalendarLegend(),
               const SizedBox(height: 18),
-              if (socialConnectCounts.isNotEmpty) ...[
+              if (_connectedSocialPlatforms.isEmpty) ...[
+                _SocialConnectRequiredCard(
+                  counts: socialConnectCounts,
+                  onTap: _openSocialAccountsAndRefresh,
+                ),
+                const SizedBox(height: 18),
+              ] else if (socialConnectCounts.isNotEmpty) ...[
                 _SocialConnectRequiredCard(
                   counts: socialConnectCounts,
                   onTap: _openSocialAccountsAndRefresh,
@@ -1629,7 +1670,7 @@ class _LegendItem extends StatelessWidget {
   }
 }
 
-class _UpcomingPosts extends StatelessWidget {
+class _UpcomingPosts extends StatefulWidget {
   const _UpcomingPosts({
     required this.posts,
     required this.platformChipsByPostId,
@@ -1651,8 +1692,18 @@ class _UpcomingPosts extends StatelessWidget {
   final bool isBuildingPlan;
 
   @override
+  State<_UpcomingPosts> createState() => _UpcomingPostsState();
+}
+
+class _UpcomingPostsState extends State<_UpcomingPosts> {
+  static const int _initialPostCount = 2;
+  bool _showAll = false;
+
+  @override
   Widget build(BuildContext context) {
-    final visiblePosts = posts.take(6).toList();
+    final visiblePosts = _showAll
+        ? widget.posts
+        : widget.posts.take(_initialPostCount).toList(growable: false);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1669,7 +1720,7 @@ class _UpcomingPosts extends StatelessWidget {
             ),
             const Spacer(),
             TextButton.icon(
-              onPressed: onOpenPosts,
+              onPressed: widget.onOpenPosts,
               icon: const Icon(Icons.edit_calendar_outlined, size: 22),
               label: const Text('Manage'),
               style: TextButton.styleFrom(
@@ -1701,7 +1752,7 @@ class _UpcomingPosts extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  monthPostCount > 0
+                  widget.monthPostCount > 0
                       ? 'This month has draft posts, but none are scheduled after today. Use Manage to review all drafts.'
                       : 'Go back to dashboard and approve the 30-day calendar action. VisibloAI will then create dated Google Business Profile post drafts.',
                   style: const TextStyle(
@@ -1714,8 +1765,8 @@ class _UpcomingPosts extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: isBuildingPlan ? null : onBuildPlan,
-                    icon: isBuildingPlan
+                    onPressed: widget.isBuildingPlan ? null : widget.onBuildPlan,
+                    icon: widget.isBuildingPlan
                         ? const SizedBox(
                             width: 16,
                             height: 16,
@@ -1726,7 +1777,7 @@ class _UpcomingPosts extends StatelessWidget {
                           )
                         : const Icon(Icons.auto_awesome_rounded),
                     label: Text(
-                      isBuildingPlan
+                      widget.isBuildingPlan
                           ? 'Building plan...'
                           : 'Build 30-day Google plan',
                     ),
@@ -1743,16 +1794,37 @@ class _UpcomingPosts extends StatelessWidget {
               ],
             ),
           )
-        else
+        else ...[
           ...visiblePosts.map(
             (post) => _UpcomingPostTile(
               post: post,
-              platformChips:
-                  platformChipsByPostId[post.id] ?? const <_PlatformChipData>[],
-              onPlatformTap: (chip) => onPlatformTap(post, chip),
-              onTap: () => onPostTap(post),
+              platformChips: widget.platformChipsByPostId[post.id] ??
+                  const <_PlatformChipData>[],
+              onPlatformTap: (chip) => widget.onPlatformTap(post, chip),
+              onTap: () => widget.onPostTap(post),
             ),
           ),
+          if (widget.posts.length > _initialPostCount)
+            Center(
+              child: TextButton.icon(
+                onPressed: () => setState(() => _showAll = !_showAll),
+                icon: Icon(
+                  _showAll
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                ),
+                label: Text(
+                  _showAll
+                      ? 'Show fewer posts'
+                      : 'View all ${widget.posts.length} posts',
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+        ],
       ],
     );
   }
@@ -1797,7 +1869,7 @@ class _SocialConnectRequiredCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Connect social channels',
+                      'Create social posts from this calendar',
                       style: TextStyle(
                         fontSize: 14.5,
                         fontWeight: FontWeight.w900,
@@ -1806,7 +1878,7 @@ class _SocialConnectRequiredCard extends StatelessWidget {
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'VisibloAI prepared these social drafts. Connect accounts to schedule them.',
+                      'Connect Facebook or Instagram and VisibloAI will generate social versions of your scheduled Google posts.',
                       style: TextStyle(
                         fontSize: 11.5,
                         height: 1.3,
@@ -2316,6 +2388,19 @@ class _UpcomingPostTile extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               _PlatformChipRow(chips: platformChips, onTap: onPlatformTap),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: onTap,
+                  icon: const Icon(Icons.visibility_outlined, size: 18),
+                  label: const Text('View post'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ),
             ],
           ),
         ),

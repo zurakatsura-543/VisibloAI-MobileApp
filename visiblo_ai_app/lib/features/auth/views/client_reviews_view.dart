@@ -36,6 +36,31 @@ class _ClientReviewsViewState extends State<ClientReviewsView> {
   void initState() {
     super.initState();
     _selectedFilter = _filterFromArgument(Get.arguments);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _controller.syncBusinessReviewsFromGoogle().catchError((_) => null);
+    });
+  }
+
+  Future<void> _syncReviews() async {
+    final count = await _controller.syncBusinessReviewsFromGoogle();
+    if (!mounted) return;
+
+    if (count == null) {
+      Get.snackbar(
+        'Could not sync reviews',
+        'Check your Google Business Profile connection and try again.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    Get.snackbar(
+      count == 1 ? '1 review synced' : '$count reviews synced',
+      count == 0
+          ? 'Google did not return any reviews for this location.'
+          : 'Your latest Google reviews are ready.',
+      snackPosition: SnackPosition.BOTTOM,
+    );
   }
 
   @override
@@ -90,15 +115,43 @@ class _ClientReviewsViewState extends State<ClientReviewsView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Review Management',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontFamily: _reviewFontFamily,
-                        fontSize: 21,
-                        height: 1.08,
-                        fontWeight: FontWeight.w800,
-                        color: _reviewInk,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Review Management',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontFamily: _reviewFontFamily,
+                              fontSize: 21,
+                              height: 1.08,
+                              fontWeight: FontWeight.w800,
+                              color: _reviewInk,
+                            ),
+                          ),
+                        ),
+                        Obx(() {
+                          final isSyncing = _controller.isSyncingReviews.value;
+                          return TextButton.icon(
+                            onPressed: isSyncing ? null : _syncReviews,
+                            icon: isSyncing
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.sync_rounded, size: 18),
+                            label: Text(isSyncing ? 'Syncing' : 'Sync'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFF167D91),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          );
+                        }),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     const Text(

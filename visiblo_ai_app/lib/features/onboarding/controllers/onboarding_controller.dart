@@ -116,6 +116,7 @@ class OnboardingController extends GetxController {
   final liveGbpPosts = <GbpPost>[].obs;
   final liveGbpMedia = <GbpMedia>[].obs;
   final liveGbpReviews = <GbpReview>[].obs;
+  final isSyncingReviews = false.obs;
   final liveInsights = Rxn<LocationInsightsResponse>();
   final liveKeywords = <SearchKeyword>[].obs;
   final isLoadingReports = false.obs;
@@ -446,10 +447,10 @@ class OnboardingController extends GetxController {
       else
         Future.value(),
 
-      // 4. Reviews – needs dbLocationId
+      // 4. Reviews – needs dbLocationId. If the local cache is empty,
+      // sync once from Google so newly connected profiles show reviews quickly.
       if (dbLocationId.isNotEmpty)
-        _authApiService
-            .fetchLiveReviews(dbLocationId)
+        _fetchLiveReviewsWithSyncFallback(dbLocationId)
             .then((reviews) {
               debugPrint('fetchDashboardLiveStream: ${reviews.length} reviews');
               if (_isCurrentDashboardFetch(
@@ -1389,7 +1390,22 @@ class OnboardingController extends GetxController {
   Future<void> openGoogleConnectionFlow() async {
     isGoogleConnectLaunching.value = true;
     try {
+      final alreadyConnected = await refreshGoogleConnectionStatus(
+        showErrorSnack: false,
+        attempts: 2,
+        delay: const Duration(milliseconds: 700),
+      );
+      if (alreadyConnected) {
+        return;
+      }
+
       await Get.toNamed(AppRoutes.googleOAuth);
+
+      await refreshGoogleConnectionStatus(
+        showErrorSnack: false,
+        attempts: 4,
+        delay: const Duration(seconds: 1),
+      );
     } finally {
       isGoogleConnectLaunching.value = false;
     }
@@ -2292,29 +2308,65 @@ class OnboardingController extends GetxController {
     return totalScore / reviews.length;
   }
 
-  Future<void> syncBusinessReviewsFromGoogle() async {
-    final user = currentUser.value;
-    if (user == null) {
-      return;
-    }
-    final meProfile = await _authApiService.fetchMyData();
-    final locationId = meProfile.locationId.trim();
-    if (locationId.isEmpty) {
-      liveGbpReviews.clear();
-      await _authService.updateCurrentUser(
-        user.copyWith(businessReviews: const <BusinessReview>[]),
-      );
-      return;
+  Future<List<GbpReview>> _fetchLiveReviewsWithSyncFallback(
+    String locationId,
+  ) async {
+    final cachedReviews = await _authApiService.fetchLiveReviews(locationId);
+    if (cachedReviews.isNotEmpty) {
+      return cachedReviews;
     }
 
-    await _authApiService.syncLocationReviews(locationId);
-    final reviews = await _authApiService.fetchLiveReviews(locationId);
-    liveGbpReviews.value = reviews;
-    await _authService.updateCurrentUser(
-      user.copyWith(
-        businessReviews: reviews.map(_mapLiveReviewToBusinessReview).toList(),
-      ),
-    );
+    await _authApiService.syncLocationReviews(locationId).catchError((_) {});
+    return _authApiService.fetchLiveReviews(locationId);
+  }
+
+  Future<int?> syncBusinessReviewsFromGoogle() async {
+    final user = currentUser.value;
+    if (user == null || isSyncingReviews.value) return null;
+
+    isSyncingReviews.value = true;
+    try {
+      final meProfile = await _authApiService.fetchMyData();
+      final selectedBusiness = user.backendAvailableBusinesses.firstWhere(
+        (business) => business['id']?.toString() == user.backendBusinessId,
+        orElse: () => user.backendAvailableBusinesses.isNotEmpty
+            ? user.backendAvailableBusinesses.first
+            : const <String, dynamic>{},
+      );
+      final locationId = _firstNonEmpty([
+        meProfile.locationId,
+        selectedBusiness['locationId']?.toString() ?? '',
+        liveGbpLocation.value?.backendLocationId ?? '',
+      ]);
+      if (locationId.isEmpty) {
+        debugPrint(
+          'syncBusinessReviewsFromGoogle: no active DB location found',
+        );
+        return null;
+      }
+
+      await _authApiService.syncLocationReviews(locationId);
+      final reviews = await _authApiService.fetchLiveReviews(locationId);
+      if (reviews.isEmpty && liveGbpReviews.isNotEmpty) {
+        debugPrint(
+          'syncBusinessReviewsFromGoogle: keeping existing live reviews',
+        );
+        return liveGbpReviews.length;
+      }
+
+      liveGbpReviews.value = reviews;
+      await _authService.updateCurrentUser(
+        user.copyWith(
+          businessReviews: reviews.map(_mapLiveReviewToBusinessReview).toList(),
+        ),
+      );
+      return reviews.length;
+    } catch (error) {
+      debugPrint('syncBusinessReviewsFromGoogle failed: $error');
+      return null;
+    } finally {
+      isSyncingReviews.value = false;
+    }
   }
 
   BusinessReview _mapLiveReviewToBusinessReview(GbpReview review) {

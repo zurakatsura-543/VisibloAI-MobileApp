@@ -1178,6 +1178,12 @@ class PaymentController extends GetxController {
         preserveInfoMessage: true,
         syncSelectionToActivePlan: true,
       );
+      if (hasActiveSubscription) {
+        infoMessage.value =
+            'Coupon applied successfully. Opening your dashboard...';
+        Get.offAllNamed(AppRoutes.unifiedDashboard);
+        return;
+      }
       infoMessage.value =
           'Coupon applied successfully. ${selectedPlan.name} is now active.';
     } catch (error) {

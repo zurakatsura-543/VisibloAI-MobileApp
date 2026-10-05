@@ -52,6 +52,8 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
   bool _isLoadingBusinessHealth = false;
   Map<String, dynamic>? _aiWorkReport;
   bool _isLoadingAiWorkReport = false;
+  Map<String, dynamic> _aiBusinessProfile = const <String, dynamic>{};
+  bool _isSavingAiBusinessProfile = false;
 
   @override
   void initState() {
@@ -70,11 +72,13 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
       end: now.subtract(const Duration(days: 30)),
     );
     await _controller.fetchDashboardLiveStream();
+    final profileFuture = _authApiService.fetchMyData();
     final results = await Future.wait<Object?>([
       _controller.fetchReportsData(insightsRange),
       _controller.loadInsightsForRange(previousRange),
       _socialAccountsController.loadAccounts(),
       _socialPostsController.loadPosts(),
+      profileFuture,
     ]);
     await _loadAiActions(generateNow: true);
     await _loadBusinessHealthReport(refresh: true);
@@ -82,9 +86,40 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
     if (mounted) {
       setState(() {
         _previousInsights = results[1] as LocationInsightsResponse?;
+        _aiBusinessProfile =
+            (results[4] as dynamic).aiOnboardingProfile as Map<String, dynamic>;
       });
     }
     _socialAnalyticsController.loadIfBusinessOrRangeChanged('Last 28 days');
+  }
+
+  Future<void> _saveAiBusinessProfile(Map<String, dynamic> nextProfile) async {
+    if (_isSavingAiBusinessProfile) return;
+    setState(() => _isSavingAiBusinessProfile = true);
+    try {
+      final profile = await _authApiService.updateAiBusinessProfile(
+        nextProfile,
+      );
+      if (!mounted) return;
+      setState(() {
+        _aiBusinessProfile = profile.aiOnboardingProfile;
+      });
+      Get.snackbar(
+        'AI knowledge saved',
+        'VisibloAI will use these details for future posts and calendars.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (error) {
+      Get.snackbar(
+        'AI knowledge',
+        error.toString().replaceFirst('Exception: ', ''),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingAiBusinessProfile = false);
+      }
+    }
   }
 
   Future<void> _showRecentActivity(
@@ -363,12 +398,21 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
         actionId: approved.id,
         businessId: businessId,
       );
+      final postCount = int.tryParse(
+            completed.result['postCount']?.toString() ?? '',
+          ) ??
+          0;
+      if (!completed.isCompleted || postCount <= 0) {
+        throw Exception(
+          completed.result['message']?.toString() ??
+              'The calendar could not be created. Please try again.',
+        );
+      }
       await _loadAiActions();
       _productModeController.selectMode(ProductMode.googleBusiness);
       Get.snackbar(
-        'Calendar ready',
-        completed.result['message']?.toString() ??
-            'VisibloAI created your Google Business Profile content calendar.',
+        '$postCount Google drafts ready',
+        'Your calendar is ready. Connect Facebook or Instagram separately to prepare social drafts.',
         snackPosition: SnackPosition.BOTTOM,
       );
       Get.toNamed(AppRoutes.aiContentCalendar);
@@ -650,7 +694,7 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
             onRefresh: _refreshDashboard,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 120),
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 150),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -726,27 +770,6 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
                       onRefreshTap: () => _loadAiWorkReport(),
                     ),
                   ],
-                  const SizedBox(height: 14),
-                  _TodayGooglePostCard(
-                    posts: todayGooglePosts,
-                    onTap: () {
-                      _productModeController.selectMode(
-                        ProductMode.googleBusiness,
-                      );
-                      Get.toNamed(AppRoutes.aiContentCalendar);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _ReviewQueueCard(
-                    reviews: unrepliedReviewItems,
-                    onViewAllTap: () => Get.toNamed(AppRoutes.clientReviews),
-                  ),
-                  const SizedBox(height: 12),
-                  _BackgroundWorkGrid(
-                    onWebsiteTap: () => Get.toNamed(AppRoutes.websiteManager),
-                    onKeywordTap: () => Get.toNamed(AppRoutes.keywordRanking),
-                    onAuditTap: () => Get.toNamed(AppRoutes.audit),
-                  ),
                   const SizedBox(height: 14),
                   Row(
                     children: [
@@ -837,6 +860,34 @@ class _UnifiedDashboardViewState extends State<UnifiedDashboardView> {
                     reach: reach,
                     insights: insights,
                     previousInsights: _previousInsights,
+                  ),
+                  const SizedBox(height: 14),
+                  _AiBusinessKnowledgeCard(
+                    user: user,
+                    profile: _aiBusinessProfile,
+                    isSaving: _isSavingAiBusinessProfile,
+                    onSave: _saveAiBusinessProfile,
+                  ),
+                  const SizedBox(height: 14),
+                  _TodayGooglePostCard(
+                    posts: todayGooglePosts,
+                    onTap: () {
+                      _productModeController.selectMode(
+                        ProductMode.googleBusiness,
+                      );
+                      Get.toNamed(AppRoutes.aiContentCalendar);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _ReviewQueueCard(
+                    reviews: unrepliedReviewItems,
+                    onViewAllTap: () => Get.toNamed(AppRoutes.clientReviews),
+                  ),
+                  const SizedBox(height: 12),
+                  _BackgroundWorkGrid(
+                    onWebsiteTap: () => Get.toNamed(AppRoutes.websiteManager),
+                    onKeywordTap: () => Get.toNamed(AppRoutes.keywordRanking),
+                    onAuditTap: () => Get.toNamed(AppRoutes.audit),
                   ),
                   const SizedBox(height: 12),
                   _RecentActivityCard(
@@ -985,7 +1036,7 @@ class _DashboardHeader extends StatelessWidget {
             fontWeight: FontWeight.w900,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         const Text(
           'Here\'s what\'s happening with your business today.',
           style: TextStyle(
@@ -997,6 +1048,958 @@ class _DashboardHeader extends StatelessWidget {
       ],
     );
   }
+}
+
+class _AiBusinessKnowledgeCard extends StatelessWidget {
+  const _AiBusinessKnowledgeCard({
+    required this.user,
+    required this.profile,
+    required this.isSaving,
+    required this.onSave,
+  });
+
+  final TestAccount user;
+  final Map<String, dynamic> profile;
+  final bool isSaving;
+  final ValueChanged<Map<String, dynamic>> onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final services = _stringList(profile['services']);
+    final goals = _stringList(profile['goals']);
+    final sources = _stringList(profile['knowledgeSources']);
+    final category = _firstProfileValue([
+      profile['industryCategory'],
+      user.categoryTitle,
+      user.businessName,
+    ]);
+    final voice = _firstProfileValue([profile['brandVoice'], 'Professional']);
+    final language = _firstProfileValue([
+      profile['primaryLanguage'],
+      'English',
+    ]);
+    final frequency = _postingFrequencyLabel(profile['postingFrequency']);
+    final hasGbpKnowledge =
+        sources.any((source) => source.toLowerCase().contains('gbp')) ||
+        _stringList(profile['gbpServices']).isNotEmpty ||
+        _stringList(profile['gbpProducts']).isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 13),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFDDE6F2)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F2746),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF8FF),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: const Icon(
+                  Icons.psychology_alt_outlined,
+                  color: AppColors.brandBlue,
+                  size: 23,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AI business knowledge',
+                      style: TextStyle(
+                        fontSize: 16.2,
+                        color: Color(0xFF061A35),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Used to create posts, calendars, keywords and replies.',
+                      style: TextStyle(
+                        fontSize: 12.2,
+                        color: Color(0xFF65748B),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: isSaving
+                    ? null
+                    : () => _showAiKnowledgeEditor(context),
+                icon: isSaving
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.edit_outlined, size: 17),
+                label: const Text('Edit'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  textStyle: const TextStyle(
+                    fontSize: 11.8,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _KnowledgePill(
+                icon: Icons.storefront_outlined,
+                label: category.isEmpty ? 'Category missing' : category,
+                muted: category.isEmpty,
+              ),
+              _KnowledgePill(
+                icon: Icons.record_voice_over_outlined,
+                label: voice,
+              ),
+              _KnowledgePill(icon: Icons.language_rounded, label: language),
+              _KnowledgePill(
+                icon: Icons.calendar_month_outlined,
+                label: frequency,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _KnowledgeSection(
+            title: 'Services AI will promote',
+            values: services,
+            emptyText: hasGbpKnowledge
+                ? 'GBP connected, but no services were found. Add services here.'
+                : 'Add services so AI posts are specific to this business.',
+          ),
+          const SizedBox(height: 8),
+          _KnowledgeSection(
+            title: 'Content goals',
+            values: goals,
+            emptyText:
+                'Add goals like generate enquiries, promote offers or build trust.',
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(
+                hasGbpKnowledge
+                    ? Icons.verified_rounded
+                    : Icons.info_outline_rounded,
+                size: 16,
+                color: hasGbpKnowledge
+                    ? const Color(0xFF10A66A)
+                    : const Color(0xFF65748B),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  hasGbpKnowledge
+                      ? 'Knowledge includes connected Google Business Profile data.'
+                      : 'Connect and enrich GBP details so AI understands the real profile.',
+                  style: const TextStyle(
+                    fontSize: 11.7,
+                    color: Color(0xFF65748B),
+                    fontWeight: FontWeight.w700,
+                    height: 1.25,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAiKnowledgeEditor(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (_) =>
+          _AiKnowledgeEditorSheet(profile: profile, user: user, onSave: onSave),
+    );
+  }
+}
+
+class _KnowledgePill extends StatelessWidget {
+  const _KnowledgePill({
+    required this.icon,
+    required this.label,
+    this.muted = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool muted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      decoration: BoxDecoration(
+        color: muted ? const Color(0xFFFFF7ED) : const Color(0xFFF3FAFF),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: muted ? const Color(0xFFFFD8A8) : const Color(0xFFD8ECFA),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: muted ? const Color(0xFFB45309) : AppColors.brandBlue,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              color: muted ? const Color(0xFFB45309) : AppColors.brandBlue,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KnowledgeSection extends StatelessWidget {
+  const _KnowledgeSection({
+    required this.title,
+    required this.values,
+    required this.emptyText,
+  });
+
+  final String title;
+  final List<String> values;
+  final String emptyText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 12.2,
+            color: Color(0xFF102641),
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 6),
+        if (values.isEmpty)
+          Text(
+            emptyText,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF65748B),
+              height: 1.25,
+              fontWeight: FontWeight.w600,
+            ),
+          )
+        else
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: values
+                .take(6)
+                .map((value) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFFBF7),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: const Color(0xFFCFEFE3)),
+                    ),
+                    child: Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 11.4,
+                        color: Color(0xFF087A55),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  );
+                })
+                .toList(growable: false),
+          ),
+      ],
+    );
+  }
+}
+
+class _AiKnowledgeEditorSheet extends StatefulWidget {
+  const _AiKnowledgeEditorSheet({
+    required this.profile,
+    required this.user,
+    required this.onSave,
+  });
+
+  final Map<String, dynamic> profile;
+  final TestAccount user;
+  final ValueChanged<Map<String, dynamic>> onSave;
+
+  @override
+  State<_AiKnowledgeEditorSheet> createState() =>
+      _AiKnowledgeEditorSheetState();
+}
+
+class _AiKnowledgeEditorSheetState extends State<_AiKnowledgeEditorSheet> {
+  late final TextEditingController _customServiceController;
+  late List<String> _services;
+  late List<String> _gbpServices;
+  late Set<String> _goals;
+  late String _category;
+  late String _voice;
+  late String _language;
+  late String _frequency;
+  bool _isFetchingGbpServices = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _customServiceController = TextEditingController();
+    _services = _stringList(widget.profile['services']);
+    _gbpServices = _stringList(widget.profile['gbpServices']);
+    _goals = _stringList(widget.profile['goals']).toSet();
+    _category = _firstProfileValue([
+      widget.profile['industryCategory'],
+      widget.user.categoryTitle,
+      'Other business',
+    ]);
+    _voice = _firstProfileValue([widget.profile['brandVoice'], 'Professional']);
+    _language = _firstProfileValue([
+      widget.profile['primaryLanguage'],
+      'English',
+    ]);
+    _frequency = _firstProfileValue([
+      widget.profile['postingFrequency'],
+      '5 posts/week',
+    ]);
+  }
+
+  @override
+  void dispose() {
+    _customServiceController.dispose();
+    super.dispose();
+  }
+
+  List<String> _options(List<String> base, String current) {
+    return <String>{
+      current,
+      ...base,
+    }.where((value) => value.isNotEmpty).toList();
+  }
+
+  String get _selectedGmbLocationId {
+    final selectedBusiness = widget.user.backendAvailableBusinesses.firstWhere(
+      (business) => business['id']?.toString() == widget.user.backendBusinessId,
+      orElse: () => widget.user.backendAvailableBusinesses.isNotEmpty
+          ? widget.user.backendAvailableBusinesses.first
+          : const <String, dynamic>{},
+    );
+    return (selectedBusiness['gmbLocationId'] ?? '').toString().trim();
+  }
+
+  void _addService(String service) {
+    final value = service.trim();
+    if (value.isEmpty || _services.contains(value)) return;
+    setState(() => _services = [..._services, value]);
+  }
+
+  void _addCustomService() {
+    _addService(_customServiceController.text);
+    _customServiceController.clear();
+  }
+
+  Future<void> _fetchGbpServices() async {
+    final businessId = widget.user.backendBusinessId.trim();
+    if (businessId.isEmpty || _isFetchingGbpServices) return;
+
+    setState(() => _isFetchingGbpServices = true);
+    try {
+      final fetched = await Get.find<AuthApiService>().fetchGbpServices(
+        businessId,
+        expectedGmbLocationId: _selectedGmbLocationId,
+      );
+      if (!mounted) return;
+      if (fetched.isEmpty) {
+        Get.snackbar(
+          'No GBP services found',
+          'Google Business Profile does not currently expose any services for this location. You can add them below.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return;
+      }
+      setState(() {
+        _gbpServices = fetched;
+        _services = <String>{..._services, ...fetched}.toList();
+      });
+      Get.snackbar(
+        'Services imported',
+        '${fetched.length} service${fetched.length == 1 ? '' : 's'} added from Google Business Profile.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      Get.snackbar(
+        'Google Business Profile',
+        error.toString().replaceFirst('Exception: ', ''),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      if (mounted) setState(() => _isFetchingGbpServices = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    final suggestedServices = _knowledgeServiceSuggestions(
+      _category,
+    ).where((service) => !_services.contains(service)).toList(growable: false);
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(18, 16, 18, bottom + 18),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Edit AI business knowledge',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Color(0xFF061A35),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: Get.back,
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'These choices guide every post, calendar, keyword and reply VisibloAI creates for this business.',
+                style: TextStyle(
+                  fontSize: 12.8,
+                  height: 1.35,
+                  color: Color(0xFF65748B),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _KnowledgeDropdown(
+                label: 'Industry / category',
+                value: _category,
+                items: _options(const [
+                  'Marketing SaaS App',
+                  'Software company',
+                  'Clothing manufacturer',
+                  'Salon & spa',
+                  'Restaurant & cafe',
+                  'Healthcare clinic',
+                  'Real estate',
+                  'Retail store',
+                  'Other business',
+                ], _category),
+                icon: Icons.storefront_outlined,
+                onChanged: (value) => setState(() => _category = value),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _KnowledgeDropdown(
+                      label: 'Brand voice',
+                      value: _voice,
+                      items: _options(const [
+                        'Professional',
+                        'Friendly',
+                        'Premium',
+                        'Playful',
+                        'Direct',
+                      ], _voice),
+                      icon: Icons.record_voice_over_outlined,
+                      onChanged: (value) => setState(() => _voice = value),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _KnowledgeDropdown(
+                      label: 'Language',
+                      value: _language,
+                      items: _options(const [
+                        'English',
+                        'Hindi',
+                        'Marathi',
+                        'Gujarati',
+                        'Tamil',
+                      ], _language),
+                      icon: Icons.language_rounded,
+                      onChanged: (value) => setState(() => _language = value),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _KnowledgeDropdown(
+                label: 'Posting frequency',
+                value: _frequency,
+                items: _options(const [
+                  '3 posts/week',
+                  '5 posts/week',
+                  '7 posts/week',
+                ], _frequency),
+                icon: Icons.calendar_month_outlined,
+                onChanged: (value) => setState(() => _frequency = value),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Services AI will promote',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF102641),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Import existing services from the connected Google Business Profile, then add or remove anything needed.',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.28,
+                  color: Color(0xFF65748B),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _isFetchingGbpServices ? null : _fetchGbpServices,
+                  icon: _isFetchingGbpServices
+                      ? const SizedBox(
+                          width: 17,
+                          height: 17,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.cloud_download_outlined, size: 18),
+                  label: Text(
+                    _isFetchingGbpServices
+                        ? 'Fetching services...'
+                        : 'Fetch services from Google Business Profile',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.brandBlue,
+                    side: const BorderSide(color: Color(0xFF9FDCE6)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    textStyle: const TextStyle(
+                      fontSize: 12.6,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              if (_gbpServices.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Imported from Google Business Profile',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: const Color(0xFF16864F),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              if (_services.isNotEmpty)
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: _services
+                      .map(
+                        (service) => InputChip(
+                          label: Text(service),
+                          onDeleted: () => setState(
+                            () => _services = _services
+                                .where((value) => value != service)
+                                .toList(growable: false),
+                          ),
+                          backgroundColor: const Color(0xFFEFFBF7),
+                          deleteIconColor: const Color(0xFF16864F),
+                          labelStyle: const TextStyle(
+                            fontSize: 11.5,
+                            color: Color(0xFF087A55),
+                            fontWeight: FontWeight.w800,
+                          ),
+                          side: const BorderSide(color: Color(0xFFCFEFE3)),
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              if (suggestedServices.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                const Text(
+                  'Suggested for this category',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: Color(0xFF65748B),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: suggestedServices
+                      .take(6)
+                      .map(
+                        (service) => ActionChip(
+                          label: Text('+ $service'),
+                          onPressed: () => _addService(service),
+                          backgroundColor: const Color(0xFFF3FAFF),
+                          labelStyle: const TextStyle(
+                            fontSize: 11.4,
+                            color: AppColors.brandBlue,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              ],
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _customServiceController,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _addCustomService(),
+                      decoration: InputDecoration(
+                        hintText: 'Add another service manually',
+                        isDense: true,
+                        filled: true,
+                        fillColor: const Color(0xFFF7FAFE),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFDDE6F2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    tooltip: 'Add service',
+                    onPressed: _addCustomService,
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Content goals',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF102641),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _knowledgeGoalOptions
+                    .map(
+                      (goal) => FilterChip(
+                        label: Text(goal),
+                        selected: _goals.contains(goal),
+                        onSelected: (selected) => setState(() {
+                          if (selected) {
+                            _goals.add(goal);
+                          } else {
+                            _goals.remove(goal);
+                          }
+                        }),
+                        selectedColor: const Color(0xFFE7FAF1),
+                        checkmarkColor: const Color(0xFF16864F),
+                        labelStyle: TextStyle(
+                          fontSize: 11.5,
+                          color: _goals.contains(goal)
+                              ? const Color(0xFF087A55)
+                              : const Color(0xFF526176),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _save,
+                  icon: const Icon(Icons.save_outlined, size: 18),
+                  label: const Text('Save AI knowledge'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.brandBlue,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    textStyle: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _save() {
+    if (_services.isEmpty) {
+      Get.snackbar(
+        'Services required',
+        'Add at least one service so VisibloAI can create specific posts.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+    if (_goals.isEmpty) {
+      Get.snackbar(
+        'Content goals required',
+        'Select at least one goal for the AI content plan.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    final nextProfile = <String, dynamic>{
+      ...widget.profile,
+      'industryCategory': _category,
+      'services': _services,
+      'gbpServices': _gbpServices,
+      'goals': _goals.toList(growable: false),
+      'brandVoice': _voice,
+      'primaryLanguage': _language,
+      'postingFrequency': _frequency,
+      'contentIntent': {
+        ..._mapValue(widget.profile['contentIntent']),
+        'promoteServices': _services,
+        'primaryGoals': _goals.toList(growable: false),
+      },
+      'knowledgeSources': <String>{
+        ..._stringList(widget.profile['knowledgeSources']),
+        'user_edited_ai_business_profile',
+        if (_gbpServices.isNotEmpty) 'connected_google_business_profile',
+      }.toList(growable: false),
+    };
+    Get.back<void>();
+    widget.onSave(nextProfile);
+  }
+}
+
+class _KnowledgeDropdown extends StatelessWidget {
+  const _KnowledgeDropdown({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.icon,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String value;
+  final List<String> items;
+  final IconData icon;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 19, color: AppColors.brandBlue),
+        filled: true,
+        fillColor: const Color(0xFFF7FAFE),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFDDE6F2)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFDDE6F2)),
+        ),
+      ),
+      items: items
+          .map(
+            (item) => DropdownMenuItem<String>(
+              value: item,
+              child: Text(
+                item,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13.2,
+                  color: Color(0xFF061A35),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          )
+          .toList(growable: false),
+      onChanged: (nextValue) {
+        if (nextValue != null) onChanged(nextValue);
+      },
+    );
+  }
+}
+
+const _knowledgeGoalOptions = <String>[
+  'Generate enquiries',
+  'Promote services',
+  'Improve profile activity',
+  'Promote offers',
+  'Increase calls',
+  'Increase bookings',
+  'Increase website traffic',
+];
+
+List<String> _knowledgeServiceSuggestions(String category) {
+  final normalized = category.toLowerCase();
+  if (normalized.contains('salon') || normalized.contains('spa')) {
+    return const ['Haircut', 'Hair colour', 'Facial', 'Bridal makeup'];
+  }
+  if (normalized.contains('clothing') || normalized.contains('fashion')) {
+    return const ['Custom kurtis', 'Ethnic wear', 'Bulk orders', 'Alterations'];
+  }
+  if (normalized.contains('software') || normalized.contains('saas')) {
+    return const [
+      'Software development',
+      'Website development',
+      'SEO services',
+      'Mobile apps',
+    ];
+  }
+  if (normalized.contains('restaurant') || normalized.contains('cafe')) {
+    return const ['Dine in', 'Takeaway', 'Home delivery', 'Catering'];
+  }
+  if (normalized.contains('clinic') || normalized.contains('health')) {
+    return const [
+      'Consultation',
+      'Follow-up care',
+      'Diagnostics',
+      'Treatment plans',
+    ];
+  }
+  return const [
+    'Core service',
+    'Consultation',
+    'Custom orders',
+    'Home delivery',
+  ];
+}
+
+List<String> _splitCommaList(String raw) {
+  return raw
+      .split(',')
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toSet()
+      .toList(growable: false);
+}
+
+List<String> _stringList(Object? raw) {
+  if (raw is List) {
+    return raw
+        .map((value) {
+          if (value is Map && value['name'] != null) {
+            return value['name'].toString().trim();
+          }
+          return value.toString().trim();
+        })
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+  }
+  if (raw is String && raw.trim().isNotEmpty) {
+    return _splitCommaList(raw);
+  }
+  return const <String>[];
+}
+
+Map<String, dynamic> _mapValue(Object? raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  return <String, dynamic>{};
+}
+
+String _firstProfileValue(List<Object?> values) {
+  for (final value in values) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isNotEmpty) return text;
+  }
+  return '';
+}
+
+String _postingFrequencyLabel(Object? value) {
+  final raw = value?.toString().trim() ?? '';
+  final upper = raw.toUpperCase();
+  if (upper.contains('DAILY') || upper.contains('7')) {
+    return '30 posts / 30 days';
+  }
+  if (upper.contains('3') || upper.contains('CONSERVATIVE')) {
+    return '12 posts / 30 days';
+  }
+  if (upper.contains('5') || upper.contains('GROWTH')) {
+    return '20 posts / 30 days';
+  }
+  return raw.isEmpty ? '20 posts / 30 days' : raw;
 }
 
 class _AiActionsCard extends StatelessWidget {
@@ -1033,151 +2036,308 @@ class _AiActionsCard extends StatelessWidget {
         .where((action) => action.isPending || action.status == 'PREVIEW')
         .length;
 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _AiWorkingBanner(
+          isLoading: isLoading,
+          isPreviewMode: isPreviewMode,
+          onRefresh: onRefresh,
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _AiActionStat(
+              label: 'Pending',
+              value: '$pendingCount',
+              icon: Icons.hourglass_empty_rounded,
+              color: const Color(0xFFF5A623),
+            ),
+            const SizedBox(width: 10),
+            _AiActionStat(
+              label: 'Done',
+              value: '$completedCount',
+              icon: Icons.check_rounded,
+              color: const Color(0xFF18A85E),
+            ),
+            const SizedBox(width: 10),
+            _AiActionStat(
+              label: 'Total',
+              value: '${actions.length}',
+              icon: Icons.layers_rounded,
+              color: const Color(0xFF7654D9),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (isLoading && visibleActions.isEmpty)
+          const _AiActionsLoadingState()
+        else if (visibleActions.isEmpty)
+          const _AiActionsEmptyState()
+        else
+          ...visibleActions.map(
+            (action) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _AiActionTile(
+                action: action,
+                isBusy: activeActionId == action.id,
+                isPreview: action.status == 'PREVIEW',
+                onApprove: () => onApprove(action),
+                onReject: () => onReject(action),
+                onRun: () => onRun(action),
+                onView: () => onView(action),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AiWorkingBanner extends StatelessWidget {
+  const _AiWorkingBanner({
+    required this.isLoading,
+    required this.isPreviewMode,
+    required this.onRefresh,
+  });
+
+  final bool isLoading;
+  final bool isPreviewMode;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFDDE6F2)),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF7FBFF), Color(0xFFEAF8FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFBDE8FF)),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x120F2746),
-            blurRadius: 18,
+            color: Color(0x140F80C8),
+            blurRadius: 22,
             offset: Offset(0, 10),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
+          Positioned(
+            right: -18,
+            bottom: -24,
+            child: Opacity(
+              opacity: 0.32,
+              child: Image.asset(
+                'assets/images/a1.png',
+                width: 122,
+                height: 122,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 48,
-                height: 48,
-                padding: const EdgeInsets.all(2),
+                width: 56,
+                height: 56,
+                padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF106CFF), Color(0xFF29C2D6)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x3329AEE4),
+                      blurRadius: 18,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
                 ),
                 child: Image.asset('assets/images/ai.png', fit: BoxFit.contain),
               ),
-              const SizedBox(width: 11),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
                       'VisibloAI is working',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 16.5,
+                        fontSize: 21,
+                        height: 1.02,
                         color: Color(0xFF061A35),
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Text(
                       isPreviewMode
                           ? 'Automation preview while setup is being connected'
                           : 'Today’s AI actions for your business',
-                      style: TextStyle(
-                        fontSize: 12.4,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        height: 1.15,
                         color: Color(0xFF65748B),
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.78),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          _PulseDot(),
+                          SizedBox(width: 7),
+                          Text(
+                            'AI is active',
+                            style: TextStyle(
+                              color: Color(0xFF128A55),
+                              fontSize: 11.8,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: 'Refresh AI actions',
-                onPressed: isLoading ? null : onRefresh,
-                icon: isLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(
-                        Icons.refresh_rounded,
-                        color: AppColors.brandBlue,
-                      ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _AiActionStat(label: 'Pending', value: '$pendingCount'),
               const SizedBox(width: 8),
-              _AiActionStat(label: 'Done', value: '$completedCount'),
-              const SizedBox(width: 8),
-              _AiActionStat(label: 'Total', value: '${actions.length}'),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (isLoading && visibleActions.isEmpty)
-            const _AiActionsLoadingState()
-          else if (visibleActions.isEmpty)
-            const _AiActionsEmptyState()
-          else
-            ...visibleActions.map(
-              (action) => Padding(
-                padding: const EdgeInsets.only(bottom: 9),
-                child: _AiActionTile(
-                  action: action,
-                  isBusy: activeActionId == action.id,
-                  isPreview: action.status == 'PREVIEW',
-                  onApprove: () => onApprove(action),
-                  onReject: () => onReject(action),
-                  onRun: () => onRun(action),
-                  onView: () => onView(action),
+              Material(
+                color: Colors.white.withValues(alpha: 0.86),
+                shape: const CircleBorder(),
+                child: IconButton(
+                  tooltip: 'Refresh AI actions',
+                  onPressed: isLoading ? null : onRefresh,
+                  icon: isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(
+                          Icons.refresh_rounded,
+                          color: AppColors.brandBlue,
+                          size: 24,
+                        ),
                 ),
               ),
-            ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
+class _PulseDot extends StatelessWidget {
+  const _PulseDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 11,
+      height: 11,
+      decoration: const BoxDecoration(
+        color: Color(0xFF18C96F),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
 class _AiActionStat extends StatelessWidget {
-  const _AiActionStat({required this.label, required this.value});
+  const _AiActionStat({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   final String label;
   final String value;
+  final IconData icon;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        constraints: const BoxConstraints(minHeight: 78),
+        padding: const EdgeInsets.fromLTRB(10, 7, 10, 6),
         decoration: BoxDecoration(
-          color: const Color(0xFFF6FAFF),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE3ECF8)),
+          gradient: LinearGradient(
+            colors: [color.withValues(alpha: 0.12), Colors.white],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.14)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0E0F2746),
+              blurRadius: 14,
+              offset: Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Container(
+              width: 27,
+              height: 27,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 17),
+            ),
+            const SizedBox(height: 3),
             Text(
               value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 22,
+                height: 0.95,
                 color: Color(0xFF061A35),
                 fontWeight: FontWeight.w900,
               ),
             ),
+            const SizedBox(height: 2),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize: 11.2,
+                fontSize: 11.4,
                 color: Color(0xFF65748B),
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ],
@@ -1211,169 +2371,238 @@ class _AiActionTile extends StatelessWidget {
     final statusColor = _statusColor(action.status);
     final keywordSuggestions = _keywordSuggestions(action);
     final calendarHighlights = _calendarActionHighlights(action);
+    final typeColor = _typeColor(action.type);
+    final asset = _aiActionIllustration(action.type);
     return Container(
-      padding: const EdgeInsets.all(10),
+      clipBehavior: Clip.antiAlias,
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 13),
       decoration: BoxDecoration(
-        color: const Color(0xFFFAFCFF),
-        borderRadius: BorderRadius.circular(17),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFE3ECF8)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: _typeColor(action.type).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(
-                  _typeIcon(action.type),
-                  color: _typeColor(action.type),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      action.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13.6,
-                        height: 1.18,
-                        color: Color(0xFF061A35),
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    if ((action.reason ?? action.description ?? '')
-                        .trim()
-                        .isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        action.reason ?? action.description ?? '',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11.4,
-                          height: 1.25,
-                          color: Color(0xFF65748B),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                    if (keywordSuggestions.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: keywordSuggestions
-                            .take(4)
-                            .map((keyword) => _KeywordSuggestionChip(keyword))
-                            .toList(growable: false),
-                      ),
-                    ],
-                    if (calendarHighlights.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: calendarHighlights
-                            .take(4)
-                            .map((label) => _AiActionInfoChip(label))
-                            .toList(growable: false),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  _statusLabel(action.status),
-                  style: TextStyle(
-                    fontSize: 10.6,
-                    color: statusColor,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x100F2746),
+            blurRadius: 18,
+            offset: Offset(0, 9),
           ),
-          const SizedBox(height: 9),
-          if (isBusy)
-            const LinearProgressIndicator(minHeight: 3)
-          else if (isPreview)
-            const Text(
-              'This will become live after backend deployment and database migration.',
-              style: TextStyle(
-                fontSize: 11.2,
-                height: 1.25,
-                color: Color(0xFF65748B),
-                fontWeight: FontWeight.w700,
-              ),
-            )
-          else
-            Row(
-              children: [
-                if ((action.type == 'GBP_CONTENT_CALENDAR') ||
-                    (action.type == 'REVIEW_REPLY' &&
-                        _reviewReplySuggestions(action).isNotEmpty)) ...[
-                  _MiniActionButton(
-                    label: 'View',
-                    icon: action.type == 'GBP_CONTENT_CALENDAR'
-                        ? Icons.calendar_month_outlined
-                        : Icons.visibility_outlined,
-                    color: const Color(0xFF106CFF),
-                    onTap: onView,
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                if (action.canApprove) ...[
-                  _MiniActionButton(
-                    label: 'Approve',
-                    icon: Icons.check_rounded,
-                    color: const Color(0xFF18A85E),
-                    onTap: onApprove,
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                if (action.canRun) ...[
-                  _MiniActionButton(
-                    label: action.type == 'GBP_CONTENT_CALENDAR'
-                        ? 'Build'
-                        : action.isRunning
-                        ? 'Finish'
-                        : 'Run',
-                    icon: Icons.play_arrow_rounded,
-                    color: const Color(0xFF106CFF),
-                    onTap: onRun,
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                if (!action.isCompleted)
-                  _MiniActionButton(
-                    label: 'Skip',
-                    icon: Icons.remove_rounded,
-                    color: const Color(0xFF7D8798),
-                    onTap: onReject,
-                  ),
-              ],
-            ),
         ],
       ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -8,
+            bottom: 36,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: 0.88,
+                child: Image.asset(
+                  asset,
+                  width: 108,
+                  height: 108,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: typeColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(19),
+                    ),
+                    child: Icon(
+                      _typeIcon(action.type),
+                      color: typeColor,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          action.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            height: 1.08,
+                            color: Color(0xFF061A35),
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        if ((action.reason ?? action.description ?? '')
+                            .trim()
+                            .isNotEmpty) ...[
+                          const SizedBox(height: 7),
+                          Text(
+                            action.reason ?? action.description ?? '',
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14.1,
+                              height: 1.22,
+                              color: Color(0xFF65748B),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.auto_awesome_rounded,
+                          size: 15,
+                          color: statusColor,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          _statusLabel(action.status),
+                          style: TextStyle(
+                            fontSize: 12.1,
+                            color: statusColor,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (keywordSuggestions.isNotEmpty) ...[
+                const SizedBox(height: 13),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: keywordSuggestions
+                      .take(4)
+                      .map((keyword) => _KeywordSuggestionChip(keyword))
+                      .toList(growable: false),
+                ),
+              ],
+              if (calendarHighlights.isNotEmpty) ...[
+                const SizedBox(height: 13),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: calendarHighlights
+                      .take(4)
+                      .map((label) => _AiActionInfoChip(label))
+                      .toList(growable: false),
+                ),
+              ],
+              const SizedBox(height: 16),
+              if (isBusy)
+                const LinearProgressIndicator(minHeight: 4)
+              else if (isPreview)
+                const Text(
+                  'This will become live after backend deployment and database migration.',
+                  style: TextStyle(
+                    fontSize: 12.2,
+                    height: 1.25,
+                    color: Color(0xFF65748B),
+                    fontWeight: FontWeight.w700,
+                  ),
+                )
+              else
+                _AiActionButtonRow(
+                  action: action,
+                  onApprove: onApprove,
+                  onReject: onReject,
+                  onRun: onRun,
+                  onView: onView,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiActionButtonRow extends StatelessWidget {
+  const _AiActionButtonRow({
+    required this.action,
+    required this.onApprove,
+    required this.onReject,
+    required this.onRun,
+    required this.onView,
+  });
+
+  final AiManagerAction action;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+  final VoidCallback onRun;
+  final VoidCallback onView;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 9,
+      runSpacing: 9,
+      children: [
+        if ((action.type == 'GBP_CONTENT_CALENDAR') ||
+            (action.type == 'REVIEW_REPLY' &&
+                _reviewReplySuggestions(action).isNotEmpty))
+          _MiniActionButton(
+            label: 'View',
+            icon: action.type == 'GBP_CONTENT_CALENDAR'
+                ? Icons.visibility_rounded
+                : Icons.visibility_outlined,
+            color: const Color(0xFF106CFF),
+            prominent: true,
+            onTap: onView,
+          ),
+        if (action.canApprove)
+          _MiniActionButton(
+            label: 'Approve',
+            icon: Icons.check_rounded,
+            color: const Color(0xFF18A85E),
+            prominent: true,
+            onTap: onApprove,
+          ),
+        if (action.canRun)
+          _MiniActionButton(
+            label: action.type == 'GBP_CONTENT_CALENDAR'
+                ? 'Build'
+                : action.isRunning
+                ? 'Finish'
+                : 'Run',
+            icon: Icons.play_arrow_rounded,
+            color: const Color(0xFF106CFF),
+            prominent: true,
+            onTap: onRun,
+          ),
+        if (!action.isCompleted)
+          _MiniActionButton(
+            label: 'Skip',
+            icon: Icons.remove_rounded,
+            color: const Color(0xFF7D8798),
+            prominent: false,
+            onTap: onReject,
+          ),
+      ],
     );
   }
 }
@@ -1384,33 +2613,38 @@ class _MiniActionButton extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.onTap,
+    this.prominent = false,
   });
 
   final String label;
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+  final bool prominent;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: color.withValues(alpha: 0.10),
+      color: prominent ? color : color.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: EdgeInsets.symmetric(
+            horizontal: prominent ? 18 : 15,
+            vertical: prominent ? 12 : 11,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 15, color: color),
-              const SizedBox(width: 4),
+              Icon(icon, size: 18, color: prominent ? Colors.white : color),
+              const SizedBox(width: 7),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 11.4,
-                  color: color,
+                  fontSize: 14.1,
+                  color: prominent ? Colors.white : color,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -1419,6 +2653,18 @@ class _MiniActionButton extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+String _aiActionIllustration(String type) {
+  switch (type) {
+    case 'GBP_CONTENT_CALENDAR':
+      return 'assets/images/a1.png';
+    case 'KEYWORD_TRACKING':
+    case 'LOCAL_SEO_KEYWORDS':
+      return 'assets/images/a3.png';
+    default:
+      return 'assets/images/a2.png';
   }
 }
 
@@ -1800,7 +3046,9 @@ class _TodayGooglePostCard extends StatelessWidget {
         ? false
         : _isPublishedGbpPost(nextPost);
     final isFailed = nextPost == null ? false : _isFailedGbpPost(nextPost);
-    final isPublishing = nextPost == null ? false : _isPublishingGbpPost(nextPost);
+    final isPublishing = nextPost == null
+        ? false
+        : _isPublishingGbpPost(nextPost);
 
     return _OperatorCard(
       title: posts.isEmpty
@@ -2018,126 +3266,519 @@ class _BusinessHealthReportCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final findings = _healthFindings(report).take(3).toList(growable: false);
     final score = _healthScore(report);
-    final grade = (report?['grade'] ?? 'Checking').toString();
-    final summary =
-        (report?['summary'] ??
-                'VisibloAI is checking reviews, posts, keywords and profile gaps.')
-            .toString();
+    final grade = (report?['grade'] ?? _healthGradeLabel(score)).toString();
+    final title = findings.isEmpty && report != null
+        ? 'Business health looks steady'
+        : 'VisibloAI found ${findings.length} growth gap${findings.length == 1 ? '' : 's'}';
 
-    return _OperatorCard(
-      title: findings.isEmpty && report != null
-          ? 'Business health looks steady'
-          : 'VisibloAI found ${findings.length} growth gap${findings.length == 1 ? '' : 's'}',
-      actionLabel: isLoading ? 'Checking' : 'Action plan',
-      onActionTap: isLoading ? () {} : onActionPlanTap,
-      child: isLoading && report == null
-          ? const _BusinessHealthLoading()
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF7FBFF),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2ECF8)),
-                  ),
-                  child: Row(
+    if (isLoading && report == null) {
+      return _OperatorCard(
+        title: 'VisibloAI is checking your growth gaps',
+        actionLabel: 'Checking',
+        onActionTap: () {},
+        child: const _BusinessHealthLoading(),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 15, 14, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFDDE6F2)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x160F2746),
+            blurRadius: 20,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        height: 1.1,
+                        color: Color(0xFF061A35),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      findings.isEmpty
+                          ? 'VisibloAI will keep monitoring reviews, posts, keywords and profile health.'
+                          : 'Fix these to improve your local visibility and get more customers.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.8,
+                        height: 1.25,
+                        color: Color(0xFF65748B),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              _ActionPlanButton(
+                isLoading: isLoading,
+                onTap: isLoading ? () {} : onActionPlanTap,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _ProfileStrengthHero(
+            score: score,
+            grade: grade,
+            gapCount: findings.length,
+            isLoading: isLoading,
+            onRefreshTap: onRefreshTap,
+          ),
+          const SizedBox(height: 12),
+          if (findings.isEmpty)
+            const _OperatorEmptyMessage(
+              icon: Icons.verified_rounded,
+              color: Color(0xFF18A85E),
+              text:
+                  'No urgent growth gaps found today. VisibloAI will keep checking and create actions when something needs attention.',
+            )
+          else
+            ...findings.map(
+              (finding) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _BusinessHealthFindingTile(
+                  finding: finding,
+                  onTap: () => _openHealthFindingDestination(finding),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionPlanButton extends StatelessWidget {
+  const _ActionPlanButton({required this.isLoading, required this.onTap});
+
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF4FF),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isLoading ? Icons.sync_rounded : Icons.fact_check_outlined,
+                color: AppColors.primary,
+                size: 18,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                isLoading ? 'Checking' : 'Action plan',
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 12.8,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (!isLoading) ...[
+                const SizedBox(width: 2),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.primary,
+                  size: 18,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileStrengthHero extends StatelessWidget {
+  const _ProfileStrengthHero({
+    required this.score,
+    required this.grade,
+    required this.gapCount,
+    required this.isLoading,
+    required this.onRefreshTap,
+  });
+
+  final int score;
+  final String grade;
+  final int gapCount;
+  final bool isLoading;
+  final VoidCallback onRefreshTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scoreColor = _healthScoreColor(score);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 13),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFEAF8FF), Color(0xFFF7FCFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFBDE8FF)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F80C8),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _ScoreRing(score: score, color: scoreColor),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _ProfileStrengthSummary(
+                  score: score,
+                  grade: grade,
+                  gapCount: gapCount,
+                  isLoading: isLoading,
+                  onRefreshTap: onRefreshTap,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _HeroBenefitPill(
+                icon: Icons.trending_up_rounded,
+                color: const Color(0xFF10A66A),
+                title: '$gapCount issue${gapCount == 1 ? '' : 's'}',
+                subtitle: 'Fix',
+              ),
+              const SizedBox(width: 7),
+              const _HeroBenefitPill(
+                icon: Icons.groups_rounded,
+                color: Color(0xFF1688D3),
+                title: 'Higher',
+                subtitle: 'Reach',
+              ),
+              const SizedBox(width: 7),
+              const _HeroBenefitPill(
+                icon: Icons.emoji_events_rounded,
+                color: Color(0xFFFF8A00),
+                title: 'More',
+                subtitle: 'Leads',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScoreRing extends StatelessWidget {
+  const _ScoreRing({required this.score, required this.color});
+
+  final int score;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 104,
+      height: 104,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            width: 94,
+            height: 94,
+            child: CircularProgressIndicator(
+              value: (score.clamp(0, 100)) / 100,
+              strokeWidth: 11,
+              strokeCap: StrokeCap.round,
+              backgroundColor: Colors.white,
+              color: color,
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$score',
+                style: const TextStyle(
+                  fontSize: 29,
+                  height: 0.95,
+                  color: Color(0xFF061A35),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 3),
+              const Text(
+                '/ 100',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: Color(0xFF65748B),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileStrengthSummary extends StatelessWidget {
+  const _ProfileStrengthSummary({
+    required this.score,
+    required this.grade,
+    required this.gapCount,
+    required this.isLoading,
+    required this.onRefreshTap,
+  });
+
+  final int score;
+  final String grade;
+  final int gapCount;
+  final bool isLoading;
+  final VoidCallback onRefreshTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'PROFILE STRENGTH',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10.2,
+                  letterSpacing: 1.0,
+                  color: Color(0xFF65748B),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 30,
+              height: 30,
+              child: IconButton(
+                tooltip: 'Refresh report',
+                padding: EdgeInsets.zero,
+                onPressed: isLoading ? null : onRefreshTap,
+                icon: isLoading
+                    ? const SizedBox(
+                        width: 15,
+                        height: 15,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(
+                        Icons.refresh_rounded,
+                        color: AppColors.brandBlue,
+                        size: 20,
+                      ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          grade,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 22,
+            height: 1.04,
+            color: Color(0xFF061A35),
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          gapCount == 0
+              ? 'Your visibility foundations look healthy today.'
+              : 'We found $gapCount growth gap${gapCount == 1 ? '' : 's'} affecting local visibility.',
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 12.1,
+            height: 1.25,
+            color: Color(0xFF65748B),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _HealthStatusBadge(score: score),
+      ],
+    );
+  }
+}
+
+class _HealthStatusBadge extends StatelessWidget {
+  const _HealthStatusBadge({required this.score});
+
+  final int score;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = score >= 85
+        ? 'Strong'
+        : score >= 70
+        ? 'Good'
+        : score >= 55
+        ? 'Below average'
+        : 'Needs focus';
+    final color = _healthScoreColor(score);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.bar_chart_rounded, color: color, size: 14),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10.8,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroBenefitPill extends StatelessWidget {
+  const _HeroBenefitPill({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 98;
+          final iconBox = Container(
+            width: compact ? 30 : 34,
+            height: compact ? 30 : 34,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: compact ? 18 : 20),
+          );
+          final labels = Column(
+            crossAxisAlignment: compact
+                ? CrossAxisAlignment.center
+                : CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: compact ? TextAlign.center : TextAlign.start,
+                style: const TextStyle(
+                  fontSize: 12.0,
+                  height: 1.0,
+                  color: Color(0xFF061A35),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: compact ? TextAlign.center : TextAlign.start,
+                style: const TextStyle(
+                  fontSize: 10.6,
+                  height: 1.0,
+                  color: Color(0xFF65748B),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          );
+
+          return Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 6 : 9,
+              vertical: compact ? 8 : 9,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.78),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white),
+            ),
+            child: compact
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [iconBox, const SizedBox(height: 6), labels],
+                  )
+                : Row(
                     children: [
-                      Container(
-                        width: 58,
-                        height: 58,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _healthScoreColor(score).withValues(
-                            alpha: 0.12,
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '$score',
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: _healthScoreColor(score),
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    'Profile strength: $grade',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 13.2,
-                                      color: Color(0xFF061A35),
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-                                if (isLoading) ...[
-                                  const SizedBox(width: 8),
-                                  const SizedBox(
-                                    width: 13,
-                                    height: 13,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              summary,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 11.8,
-                                height: 1.3,
-                                color: Color(0xFF65748B),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Refresh report',
-                        onPressed: isLoading ? null : onRefreshTap,
-                        icon: const Icon(
-                          Icons.refresh_rounded,
-                          color: AppColors.brandBlue,
-                        ),
-                      ),
+                      iconBox,
+                      const SizedBox(width: 7),
+                      Expanded(child: labels),
                     ],
                   ),
-                ),
-                const SizedBox(height: 10),
-                if (findings.isEmpty)
-                  const _OperatorEmptyMessage(
-                    icon: Icons.verified_rounded,
-                    color: Color(0xFF18A85E),
-                    text:
-                        'No urgent growth gaps found today. VisibloAI will keep monitoring and create actions when something needs attention.',
-                  )
-                else
-                  ...findings.map(
-                    (finding) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _BusinessHealthFindingTile(finding: finding),
-                    ),
-                  ),
-              ],
-            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -2180,78 +3821,193 @@ class _BusinessHealthLoading extends StatelessWidget {
 }
 
 class _BusinessHealthFindingTile extends StatelessWidget {
-  const _BusinessHealthFindingTile({required this.finding});
+  const _BusinessHealthFindingTile({
+    required this.finding,
+    required this.onTap,
+  });
 
   final Map<String, dynamic> finding;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final severity = (finding['severity'] ?? 'LOW').toString();
     final color = _healthSeverityColor(severity);
     final actionType = (finding['actionType'] ?? '').toString();
+    final title = (finding['title'] ?? 'Growth gap found').toString();
+    final description = (finding['description'] ?? '').toString();
+    final fix =
+        (finding['fix'] ?? 'VisibloAI will prepare the next fix for approval.')
+            .toString();
     final metricLabel = (finding['metricLabel'] ?? '').toString();
     final metricValue = (finding['metricValue'] ?? '').toString();
+    final ctaLabel = _healthFindingButtonLabel(finding);
 
     return Container(
-      padding: const EdgeInsets.all(11),
+      padding: const EdgeInsets.fromLTRB(13, 13, 13, 13),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFE),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xFFE8EEF7)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(_healthFindingIcon(actionType), color: color, size: 20),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE3ECF8)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0E0F2746),
+            blurRadius: 16,
+            offset: Offset(0, 8),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(
+                  _healthFindingIcon(actionType),
+                  color: color,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        (finding['title'] ?? 'Growth gap found').toString(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12.8,
-                          color: Color(0xFF061A35),
-                          fontWeight: FontWeight.w900,
-                        ),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15.4,
+                        height: 1.12,
+                        color: Color(0xFF061A35),
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                    if (metricLabel.isNotEmpty)
-                      _HealthMetricPill(
-                        label: metricLabel,
-                        value: metricValue,
-                        color: color,
+                    const SizedBox(height: 5),
+                    Text(
+                      description.isNotEmpty ? description : fix,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        height: 1.28,
+                        color: Color(0xFF65748B),
+                        fontWeight: FontWeight.w700,
                       ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  (finding['fix'] ??
-                          'VisibloAI will prepare the next fix for approval.')
-                      .toString(),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    height: 1.28,
-                    color: Color(0xFF65748B),
-                    fontWeight: FontWeight.w700,
-                  ),
+              ),
+              if (metricLabel.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                _HealthMetricPill(
+                  label: metricLabel,
+                  value: metricValue,
+                  color: color,
                 ),
               ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F7FF),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 310;
+                final solutionText = Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.lightbulb_outline_rounded,
+                      color: AppColors.primary,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'SOLUTION',
+                            style: TextStyle(
+                              fontSize: 10.4,
+                              letterSpacing: 0.9,
+                              color: Color(0xFF65748B),
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            fix,
+                            maxLines: compact ? 3 : 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12.4,
+                              height: 1.22,
+                              color: Color(0xFF4A5E7D),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+                final button = SizedBox(
+                  width: compact ? double.infinity : null,
+                  height: 42,
+                  child: FilledButton.icon(
+                    onPressed: onTap,
+                    iconAlignment: IconAlignment.end,
+                    icon: const Icon(Icons.chevron_right_rounded, size: 19),
+                    label: Text(ctaLabel, overflow: TextOverflow.ellipsis),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 12.0,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                );
+
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      solutionText,
+                      const SizedBox(height: 10),
+                      button,
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: solutionText),
+                    const SizedBox(width: 10),
+                    button,
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -2307,9 +4063,9 @@ class _AiWorkReportCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final workItems = _workReportItems(report).take(4).toList(growable: false);
-    final nextActions = _workReportNextActions(report).take(2).toList(
-      growable: false,
-    );
+    final nextActions = _workReportNextActions(
+      report,
+    ).take(2).toList(growable: false);
     final summary =
         (report?['summary'] ??
                 'VisibloAI is preparing your weekly business work report.')
@@ -4357,6 +6113,65 @@ Color _healthSeverityColor(String severity) {
   }
 }
 
+String _healthGradeLabel(int score) {
+  if (score >= 85) return 'Strong';
+  if (score >= 70) return 'Good';
+  if (score >= 55) return 'Needs Work';
+  return 'Needs Focus';
+}
+
+String _healthFindingButtonLabel(Map<String, dynamic> finding) {
+  final actionType = (finding['actionType'] ?? '').toString();
+  final text = '${finding['title'] ?? ''} ${finding['fix'] ?? ''}'
+      .toLowerCase();
+  if (actionType == 'GBP_CONTENT_CALENDAR' ||
+      actionType == 'GBP_POST_RECOVERY' ||
+      text.contains('post') ||
+      text.contains('calendar')) {
+    return 'Fix now';
+  }
+  if (actionType == 'SEO_KEYWORD' || text.contains('keyword')) {
+    return 'Add keywords';
+  }
+  if (actionType == 'REVIEW_GROWTH' ||
+      actionType == 'REVIEW_REPLY' ||
+      text.contains('review')) {
+    return 'Request reviews';
+  }
+  if (actionType == 'PROFILE_FIX' || text.contains('profile')) {
+    return 'Fix profile';
+  }
+  return 'Fix now';
+}
+
+void _openHealthFindingDestination(Map<String, dynamic> finding) {
+  final actionType = (finding['actionType'] ?? '').toString();
+  final text = '${finding['title'] ?? ''} ${finding['fix'] ?? ''}'
+      .toLowerCase();
+  if (actionType == 'GBP_CONTENT_CALENDAR' ||
+      actionType == 'GBP_POST_RECOVERY' ||
+      text.contains('post') ||
+      text.contains('calendar')) {
+    Get.toNamed(AppRoutes.aiContentCalendar);
+    return;
+  }
+  if (actionType == 'SEO_KEYWORD' || text.contains('keyword')) {
+    Get.toNamed(AppRoutes.keywordRanking);
+    return;
+  }
+  if (actionType == 'REVIEW_GROWTH' ||
+      actionType == 'REVIEW_REPLY' ||
+      text.contains('review')) {
+    Get.toNamed(AppRoutes.clientReviews);
+    return;
+  }
+  if (actionType == 'PROFILE_FIX' || text.contains('profile')) {
+    Get.toNamed(AppRoutes.audit);
+    return;
+  }
+  Get.toNamed(AppRoutes.audit);
+}
+
 IconData _healthFindingIcon(String actionType) {
   switch (actionType) {
     case 'REVIEW_REPLY':
@@ -4397,26 +6212,10 @@ List<Map<String, dynamic>> _workReportNextActions(
 
 Map<String, dynamic> _emptyWorkReportItem(int index) {
   const items = [
-    {
-      'code': 'POSTS_PUBLISHED',
-      'label': 'Google posts',
-      'value': 0,
-    },
-    {
-      'code': 'REVIEWS_REPLIED',
-      'label': 'Review replies',
-      'value': 0,
-    },
-    {
-      'code': 'KEYWORDS_ADDED',
-      'label': 'SEO keywords',
-      'value': 0,
-    },
-    {
-      'code': 'GAPS_FOUND',
-      'label': 'Gaps found',
-      'value': 0,
-    },
+    {'code': 'POSTS_PUBLISHED', 'label': 'Google posts', 'value': 0},
+    {'code': 'REVIEWS_REPLIED', 'label': 'Review replies', 'value': 0},
+    {'code': 'KEYWORDS_ADDED', 'label': 'SEO keywords', 'value': 0},
+    {'code': 'GAPS_FOUND', 'label': 'Gaps found', 'value': 0},
   ];
   return items[index.clamp(0, items.length - 1)];
 }

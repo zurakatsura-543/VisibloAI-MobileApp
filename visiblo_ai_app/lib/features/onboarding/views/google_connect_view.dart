@@ -15,31 +15,71 @@ class GoogleConnectView extends StatefulWidget {
   State<GoogleConnectView> createState() => _GoogleConnectViewState();
 }
 
-class _GoogleConnectViewState extends State<GoogleConnectView> {
+class _GoogleConnectViewState extends State<GoogleConnectView>
+    with WidgetsBindingObserver {
   final OnboardingController _controller = Get.find<OnboardingController>();
   Timer? _syncTimer;
   bool _awaitingSync = false;
   bool _syncInFlight = false;
+  bool _didInitialResumeCheck = false;
   int _syncAttempts = 0;
   static const int _maxBackgroundSyncAttempts = 6;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = Get.arguments;
       _awaitingSync =
           args is Map<String, dynamic> && args['awaitingSync'] == true;
       if (_awaitingSync) {
         _startBackgroundSync();
+      } else {
+        _checkConnectedOnResume();
       }
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _syncTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkConnectedOnResume();
+    }
+  }
+
+  Future<void> _checkConnectedOnResume() async {
+    if (!mounted || _syncInFlight) {
+      return;
+    }
+
+    if (_didInitialResumeCheck && !_awaitingSync) {
+      return;
+    }
+
+    _didInitialResumeCheck = true;
+    _syncInFlight = true;
+
+    try {
+      final connected = await _controller.refreshGoogleConnectionStatus(
+        showErrorSnack: false,
+        attempts: _awaitingSync ? 3 : 1,
+        delay: const Duration(seconds: 1),
+      );
+      if (connected) {
+        _syncTimer?.cancel();
+        return;
+      }
+    } finally {
+      _syncInFlight = false;
+    }
   }
 
   void _startBackgroundSync() {
@@ -68,6 +108,7 @@ class _GoogleConnectViewState extends State<GoogleConnectView> {
         );
         if (connected) {
           _syncTimer?.cancel();
+          return;
         }
       } finally {
         _syncInFlight = false;
@@ -323,7 +364,22 @@ class _GoogleConnectViewState extends State<GoogleConnectView> {
                       },
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 10),
+                  TextButton.icon(
+                    onPressed: () {
+                      _controller.refreshGoogleConnectionStatus();
+                    },
+                    icon: const Icon(Icons.check_circle_outline_rounded),
+                    label: const Text('I completed Google sign-in'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      textStyle: AppTypography.label(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Text(
                     'Why do we need this?',
                     textAlign: TextAlign.center,

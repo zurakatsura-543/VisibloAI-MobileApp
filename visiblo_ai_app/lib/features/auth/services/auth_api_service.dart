@@ -343,6 +343,27 @@ class AuthApiService extends GetxService {
     }
   }
 
+  Future<AuthMeResponse> updateAiBusinessProfile(
+    Map<String, dynamic> aiOnboardingProfile,
+  ) async {
+    try {
+      await _api.patch(
+        '/auth/ai-business-profile',
+        data: <String, dynamic>{'aiOnboardingProfile': aiOnboardingProfile},
+      );
+      return fetchMyData();
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to save AI business settings right now.',
+        ),
+      );
+    }
+  }
+
   Future<void> submitSurvey({
     required String role,
     required String seoExperience,
@@ -1316,6 +1337,78 @@ class AuthApiService extends GetxService {
     }
   }
 
+  Future<List<String>> fetchGbpServices(
+    String businessId, {
+    String expectedGmbLocationId = '',
+  }) async {
+    try {
+      final response = await _api.get(
+        '/gmb/locations',
+        queryParameters: {'businessId': businessId},
+      );
+      final locations = _asMap(response.data)['locations'] as List?;
+      if (locations == null || locations.isEmpty) {
+        return const <String>[];
+      }
+
+      final expected = expectedGmbLocationId.trim();
+      Map<String, dynamic> selected = _asMap(locations.first);
+      for (final rawLocation in locations) {
+        final candidate = _asMap(rawLocation);
+        final candidateId =
+            (candidate['gmbLocationId'] ??
+                    candidate['locationId'] ??
+                    candidate['name'] ??
+                    '')
+                .toString()
+                .trim();
+        if (expected.isNotEmpty &&
+            (candidateId == expected || candidateId.endsWith('/$expected'))) {
+          selected = candidate;
+          break;
+        }
+      }
+
+      final services = <String>[];
+      for (final key in const [
+        'services',
+        'serviceItems',
+        'products',
+        'productItems',
+      ]) {
+        final rawItems = selected[key];
+        if (rawItems is! List) continue;
+        for (final rawItem in rawItems) {
+          if (rawItem is Map) {
+            final item = _asMap(rawItem);
+            final name =
+                (item['name'] ??
+                        item['displayName'] ??
+                        item['serviceName'] ??
+                        item['title'] ??
+                        '')
+                    .toString()
+                    .trim();
+            if (name.isNotEmpty) services.add(name);
+          } else {
+            final name = rawItem.toString().trim();
+            if (name.isNotEmpty) services.add(name);
+          }
+        }
+      }
+      return services.toSet().toList(growable: false);
+    } on DioException catch (error) {
+      throw Exception(_readErrorMessage(error));
+    } catch (error) {
+      throw Exception(
+        _readUnexpectedError(
+          error,
+          fallback: 'Unable to fetch services from Google Business Profile.',
+        ),
+      );
+    }
+  }
+
   Future<List<GbpPost>> fetchGbpPosts(
     String businessId,
     String locationId,
@@ -1937,9 +2030,18 @@ class AuthApiService extends GetxService {
         '/business/locations/$locationId/reviews',
       );
       final data = _asMap(response.data);
-      final reviewsRaw = data['reviews'] as List?;
-      if (reviewsRaw == null) return [];
-      return reviewsRaw.map((r) => GbpReview.fromMap(_asMap(r))).toList();
+      final nestedData = _asMap(data['data']);
+      final reviewsRaw =
+          (data['reviews'] as List?) ??
+          (data['items'] as List?) ??
+          (nestedData['reviews'] as List?) ??
+          (nestedData['items'] as List?) ??
+          (data['data'] as List?) ??
+          (response.data is List ? response.data as List : null);
+      if (reviewsRaw == null) return const <GbpReview>[];
+      return reviewsRaw
+          .map((review) => GbpReview.fromMap(_asMap(review)))
+          .toList(growable: false);
     } catch (e) {
       debugPrint('Error fetching Live Reviews: $e');
       return [];
