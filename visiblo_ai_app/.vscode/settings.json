@@ -1,3 +1,6 @@
 {
-    "cmake.sourceDirectory": "/Users/solverixtechnologies/Desktop/Anurag/visiblo_ai_app 2/visiblo_ai_app 2/visiblo_ai_app/linux/flutter"
+    "cmake.sourceDirectory": "/Users/solverixtechnologies/Desktop/Anurag/visiblo_ai_app 2/visiblo_ai_app 2/visiblo_ai_app/linux/flutter",
+    "terminal.integrated.env.osx": {
+        "PATH": "${env:HOME}/development/flutter/bin:${env:PATH}"
+    }
 }

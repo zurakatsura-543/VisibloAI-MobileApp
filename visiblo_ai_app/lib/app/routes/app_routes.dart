@@ -26,7 +26,7 @@ abstract final class AppRoutes {
   static const socialCreatives = '/social/creatives';
   static const socialCalendar = '/social/calendar';
   static const socialScheduler = '/social/scheduler';
-  static const socialPosts = '/social/posts';
+  static const socialPosts  = '/social/posts';
   static const socialAnalytics = '/social/analytics';
   static const socialReports = '/social/reports';
   static const socialProfile = '/social/profile';
