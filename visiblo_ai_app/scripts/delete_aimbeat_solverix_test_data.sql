@@ -1,6 +1,6 @@
 \set ON_ERROR_STOP on
 
--- Deletes only the two explicitly named test accounts and their businesses.
+-- Deletes only the four explicitly named test accounts and their businesses.
 -- The transaction stops before deleting anything when a business is shared.
 BEGIN;
 
@@ -9,7 +9,9 @@ INSERT INTO target_users (id)
 SELECT id
 FROM "User"
 WHERE lower(email) IN (
+  'aimbeat@gmail.com',
   'aimbeatweb@gmail.com',
+  'sneha@aimbeat.com',
   'solverixtechnologies@gmail.com'
 );
 
@@ -28,8 +30,8 @@ ON CONFLICT DO NOTHING;
 
 DO $$
 BEGIN
-  IF (SELECT COUNT(*) FROM target_users) <> 2 THEN
-    RAISE EXCEPTION 'Safety stop: expected exactly two target user accounts.';
+  IF (SELECT COUNT(*) FROM target_users) <> 4 THEN
+    RAISE EXCEPTION 'Safety stop: expected exactly four target user accounts.';
   END IF;
 
   IF EXISTS (
@@ -57,7 +59,9 @@ WHERE "userId" IN (SELECT id FROM target_users)
    OR "businessId" IN (SELECT id FROM target_businesses);
 
 DELETE FROM user_sessions
-WHERE sess::text ILIKE '%aimbeatweb@gmail.com%'
+WHERE sess::text ILIKE '%aimbeat@gmail.com%'
+   OR sess::text ILIKE '%aimbeatweb@gmail.com%'
+   OR sess::text ILIKE '%sneha@aimbeat.com%'
    OR sess::text ILIKE '%solverixtechnologies@gmail.com%';
 
 DELETE FROM "CouponUsage"
@@ -115,7 +119,12 @@ DELETE FROM "_BusinessUsers"
 WHERE "A" IN (SELECT id FROM target_businesses)
    OR "B" IN (SELECT id FROM target_users);
 DELETE FROM "OtpVerification"
-WHERE lower(email) IN ('aimbeatweb@gmail.com', 'solverixtechnologies@gmail.com');
+WHERE lower(email) IN (
+  'aimbeat@gmail.com',
+  'aimbeatweb@gmail.com',
+  'sneha@aimbeat.com',
+  'solverixtechnologies@gmail.com'
+);
 DELETE FROM "DeviceToken" WHERE "userId" IN (SELECT id FROM target_users);
 DELETE FROM "LoginHistory" WHERE "userId" IN (SELECT id FROM target_users);
 DELETE FROM "Business" WHERE id IN (SELECT id FROM target_businesses);
