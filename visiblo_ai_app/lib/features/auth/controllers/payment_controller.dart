@@ -982,27 +982,20 @@ class PaymentController extends GetxController {
       return;
     }
 
-    // Web SaaS checkout for non-iOS platforms
-    try {
-      final uri = Uri.parse('https://www.visibloai.com/pricing');
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened) {
-        errorMessage.value =
-            'Could not open website. Please visit www.visibloai.com/pricing in your web browser.';
-      }
-    } catch (e) {
-      errorMessage.value = 'Could not open web pricing page: $e';
-    }
-
-    /*
-    // =========================================================================
-    // NATIVE / RAZORPAY / IAP CHECKOUT (COMMENTED OUT FOR WEB-FIRST BILLING)
-    // UNCOMMENT IF NATIVE IN-APP PURCHASES ARE RE-ENABLED
-    // =========================================================================
     if (!supportsNativeCheckout) {
-      errorMessage.value = isIosAppStoreBuild
-          ? 'This iOS app lets existing VisibloAI customers access their activated workspace. Subscription purchase is not available in this app build.'
-          : 'Razorpay mobile checkout is available on Android only.';
+      try {
+        final uri = Uri.parse('https://www.visibloai.com/pricing');
+        final opened = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (!opened) {
+          errorMessage.value =
+              'Could not open website. Please visit www.visibloai.com/pricing in your web browser.';
+        }
+      } catch (error) {
+        errorMessage.value = 'Could not open web pricing page: $error';
+      }
       return;
     }
 
@@ -1076,7 +1069,6 @@ class PaymentController extends GetxController {
         checkoutPlanCode.value = null;
       }
     }
-    */
   }
 
   void clearError() {
@@ -1357,7 +1349,7 @@ class PaymentController extends GetxController {
         syncSelectionToActivePlan: true,
       );
       if (hasActiveSubscription) {
-        Get.offAllNamed(AppRoutes.dashboard);
+        Get.offAllNamed(AppRoutes.unifiedDashboard);
         return;
       }
       infoMessage.value = autopayCheckout != null
