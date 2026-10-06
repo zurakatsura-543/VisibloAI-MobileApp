@@ -972,6 +972,11 @@ class PaymentController extends GetxController {
       return;
     }
 
+    if (couponResult.value?.skipPayment == true) {
+      await _applyFreeCoupon();
+      return;
+    }
+
     if (isIosAppStoreBuild) {
       await contactSupportForActivation();
       return;
@@ -994,11 +999,6 @@ class PaymentController extends GetxController {
     // NATIVE / RAZORPAY / IAP CHECKOUT (COMMENTED OUT FOR WEB-FIRST BILLING)
     // UNCOMMENT IF NATIVE IN-APP PURCHASES ARE RE-ENABLED
     // =========================================================================
-    if (couponResult.value?.skipPayment == true) {
-      await _applyFreeCoupon();
-      return;
-    }
-
     if (!supportsNativeCheckout) {
       errorMessage.value = isIosAppStoreBuild
           ? 'This iOS app lets existing VisibloAI customers access their activated workspace. Subscription purchase is not available in this app build.'
@@ -1141,6 +1141,59 @@ class PaymentController extends GetxController {
     razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
     _razorpay = razorpay;
+  }
+
+  Future<void> _applyFreeCoupon() async {
+    if (isCheckoutBusy) {
+      return;
+    }
+
+    final code = couponCode.value.trim().toUpperCase();
+    if (code.isEmpty) {
+      errorMessage.value =
+          'A valid coupon code is required to activate the free checkout path.';
+      return;
+    }
+
+    checkoutPlanCode.value = selectedPlan.code;
+    errorMessage.value = null;
+    infoMessage.value = null;
+
+    try {
+      await _authApiService.applyBillingCoupon(
+        code: code,
+        plan: selectedPlan.code,
+        billingCycle: selectedBillingCycle.value,
+        businessId: billingTargetBusinessId,
+      );
+      _clearCouponState(clearInput: true);
+      infoMessage.value =
+          'Plan activated successfully with coupon $code. Refreshing your account now...';
+      if (hasExternalBillingTarget) {
+        await _activateBillingTargetAfterSuccessfulPayment();
+        return;
+      }
+      await loadInitialData(
+        manualRefresh: true,
+        preserveInfoMessage: true,
+        syncSelectionToActivePlan: true,
+      );
+      if (hasActiveSubscription) {
+        infoMessage.value =
+            'Coupon applied successfully. Opening your dashboard...';
+        Get.offAllNamed(AppRoutes.unifiedDashboard);
+        return;
+      }
+      infoMessage.value =
+          'Coupon applied successfully. ${selectedPlan.name} is now active.';
+    } catch (error) {
+      errorMessage.value = _humanizeError(
+        error,
+        fallback: 'Unable to activate this coupon right now.',
+      );
+    } finally {
+      checkoutPlanCode.value = null;
+    }
   }
 
   Future<void> _startAutopayCheckout() async {
